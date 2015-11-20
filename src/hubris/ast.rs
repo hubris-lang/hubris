@@ -1,5 +1,11 @@
 pub type Name = String;
 
+#[derive(Debug)]
+pub struct Module {
+    pub name: Name,
+    pub defs: Vec<Definition>,
+}
+
 #[derive(PartialEq, Debug)]
 pub struct Schema {
     pub attrs: Vec<(Name, Type)>

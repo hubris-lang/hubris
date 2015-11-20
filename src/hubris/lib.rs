@@ -5,6 +5,7 @@ extern crate gcc;
 #[macro_use] extern crate log;
 
 pub mod ast;
+pub mod backend;
 pub mod parser;
 pub mod llvm;
 
@@ -43,14 +44,13 @@ fn type_check_def(_ty_cx: &TyCtxt, def: &ast::Definition) -> Result<(), ()> {
 }
 
 pub fn compile_file<T: AsRef<Path>>(path: T) {
-    let program = parser::from_file(path).unwrap();
+    let module = parser::from_file(path).unwrap();
     let ty_cx = TyCtxt::empty();
-    for def in &program {
+    for def in &module.defs {
         type_check_def(&ty_cx, def);
     }
-    println!("{:?}", program);
-    llvm::generate_ir("main_module".to_string(), "/Users/jroesch/Git/hubris/main.ll");
-    llvm::tools::llc("/Users/jroesch/Git/hubris/main.ll");
+    println!("{:?}", module);
+    backend::emit_module(module, "/Users/jroesch/Git/hubris/main.ll");
 
     Command::new("as")
            .arg("main.s")

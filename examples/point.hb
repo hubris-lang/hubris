@@ -1,3 +1,5 @@
+module MyPoint
+
 schema Point
   x : i32
   y : i32

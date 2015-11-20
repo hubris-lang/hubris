@@ -41,7 +41,7 @@ impl<'s> SourceMap<'s> {
     }
 }
 
-pub fn from_file<T: AsRef<Path>>(path: T) -> io::Result<Vec<super::ast::Definition>> {
+pub fn from_file<T: AsRef<Path>>(path: T) -> io::Result<super::ast::Module> {
     let path = path.as_ref();
 
     let mut file = try!(File::open(path));

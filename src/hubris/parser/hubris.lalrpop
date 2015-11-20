@@ -3,8 +3,12 @@ use std::str::FromStr;
 
 grammar;
 
-pub Module: Vec<Definition> =  {
-  <ds: (Def)*> => ds
+pub Module: Module =  {
+  "module" <n: Name> <ds: (Def)*> =>
+    Module {
+        name: n,
+        defs: ds,
+    },
 };
 
 Def: Definition = {
