@@ -1,0 +1,22 @@
+[package]
+name = "hubris"
+version = "0.1.0"
+authors = ["Jared Roesch <roeschinc@gmail.com>"]
+build = "build.rs"
+
+[lib]
+name = "hubris"
+path = "src/hubris/lib.rs"
+
+[[bin]]
+name = "hubris"
+path = "src/bin/hubris.rs"
+
+[dependencies.lalrpop-util]
+version = "0.7.0"
+
+[build-dependencies.lalrpop]
+version = "0.7.0"
+
+[dependencies]
+llvm-sys = "*"
