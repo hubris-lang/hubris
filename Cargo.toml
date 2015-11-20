@@ -20,3 +20,6 @@ version = "0.7.0"
 
 [dependencies]
 llvm-sys = "*"
+log = "*"
+env_logger = "*"
+gcc = "*"

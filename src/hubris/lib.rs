@@ -1,5 +1,8 @@
+#![feature(convert)]
 extern crate lalrpop_util;
 extern crate llvm_sys;
+extern crate gcc;
+#[macro_use] extern crate log;
 
 pub mod ast;
 pub mod parser;
@@ -7,6 +10,7 @@ pub mod llvm;
 
 use std::path::Path;
 use std::collections::HashMap;
+use std::process::Command;
 
 use ast::{Definition, Name, Schema, Function, Type};
 
@@ -45,9 +49,21 @@ pub fn compile_file<T: AsRef<Path>>(path: T) {
         type_check_def(&ty_cx, def);
     }
     println!("{:?}", program);
-    llvm::generate_ir("main_module".to_string(), "./");
-    llvm::tools::llc("./");
-    // run llc
-    // build C entry point
-    // link
+    llvm::generate_ir("main_module".to_string(), "/Users/jroesch/Git/hubris/main.ll");
+    llvm::tools::llc("/Users/jroesch/Git/hubris/main.ll");
+
+    Command::new("as")
+           .arg("main.s")
+           .arg("-o")
+           .arg("main.o")
+           .output()
+           .unwrap_or_else(|_| panic!("as failed"));
+
+    Command::new("gcc")
+           .arg("rt.c")
+           .arg("main.o")
+           .arg("-o")
+           .arg("prog")
+           .output()
+           .unwrap_or_else(|_| panic!("gcc failed"));
 }

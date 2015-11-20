@@ -31,10 +31,14 @@ impl Module {
     }
 
     pub fn print_to_file<P: AsRef<Path>>(&self, path: P) {
+        let output = path.as_ref()
+                         .as_os_str()
+                         .to_cstring()
+                         .unwrap();
         unsafe {
             llvm_sys::core::LLVMPrintModuleToFile(
                 self.as_ptr(),
-                b"out.ll\0".as_ptr() as *const _,
+                output.as_ptr() as *const _,
                 b"yolo.ll\0".as_ptr() as *mut _);
         }
     }

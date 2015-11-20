@@ -16,6 +16,12 @@ impl Context {
     pub unsafe fn as_ptr(&self) -> LLVMContextRef {
         self.ctxt_ref
     }
+
+    pub fn void_type(&self) -> LLVMTypeRef {
+        unsafe {
+            llvm_sys::core::LLVMVoidTypeInContext(self.as_ptr())
+        }
+    }
 }
 
 impl Drop for Context {

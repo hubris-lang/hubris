@@ -35,10 +35,13 @@ pub fn generate_ir<T: AsRef<Path>>(name: String, output: T) {
 
         // Create a basic block in the function and set our builder to generate
         // code in it.
-        let bb = llvm_sys::core::LLVMAppendBasicBlockInContext(context.as_ptr(), function.as_ptr(),
-                                                           b"entry\0".as_ptr() as *const _);
+        let bb = llvm_sys::core::LLVMAppendBasicBlockInContext(
+            context.as_ptr(), function.as_ptr(),
+            b"entry\0".as_ptr() as *const _);
 
         llvm_sys::core::LLVMPositionBuilderAtEnd(builder.as_ptr(), bb);
+
+        builder.emit_call(&efunction, vec![]);
 
         // Emit a `ret void` into the function
         llvm_sys::core::LLVMBuildRetVoid(builder.as_ptr());
