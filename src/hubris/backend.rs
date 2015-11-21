@@ -1,9 +1,9 @@
 use std::env;
 use std::fmt::Debug;
-use std::fs::File;
+use std::fs::{File, DirBuilder};
 use std::io::Write;
 use std::process::Command;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use ast;
 use llvm;
@@ -15,6 +15,7 @@ pub fn emit_module<P: AsRef<Path> + Debug>(module: &ast::Module, output: P) {
 
 pub fn in_build_path<P: AsRef<Path>, F, R>(build_path: P, f: F) -> R
     where F: Fn(&Path) -> R {
+
     let current_dir = env::current_dir().unwrap();
     env::set_current_dir(build_path.as_ref());
     let result = f(build_path.as_ref());
@@ -23,7 +24,15 @@ pub fn in_build_path<P: AsRef<Path>, F, R>(build_path: P, f: F) -> R
 }
 
 pub fn create_executable(module: &ast::Module, output: Option<&Path>) {
-    let exe = in_build_path("/tmp", |build_path| {
+    let tmp = PathBuf::from("/tmp");
+
+    Command::new("mkdir")
+           .arg("-p")
+           .arg("/tmp/hubris")
+           .output()
+           .unwrap_or_else(|_| panic!("as failed"));
+
+    let exe = in_build_path(tmp.join("hubris"), |build_path| {
         let file_name = module.file_name();
 
         emit_module(

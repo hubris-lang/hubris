@@ -1,4 +1,4 @@
-#![feature(convert)]
+#![feature(convert, dir_builder)]
 extern crate lalrpop_util;
 extern crate llvm_sys;
 extern crate gcc;
