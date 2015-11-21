@@ -10,7 +10,7 @@ pub struct Module {
 
 impl Module {
     pub fn file_name(&self) -> PathBuf {
-        PathBuf::from("main")
+        PathBuf::from(&self.name[..])
     }
 }
 
@@ -22,7 +22,9 @@ pub struct Schema {
 #[derive(Debug, PartialEq)]
 pub enum Definition {
     Schema(Schema),
-    Fn(Function)
+    Fn(Function),
+    Extern(Name, Type),
+    Comment(())
 }
 
 #[derive(Debug, PartialEq)]

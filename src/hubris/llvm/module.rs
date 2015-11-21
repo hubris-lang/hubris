@@ -1,4 +1,6 @@
 use std::path::Path;
+use std::ptr;
+use std::mem::transmute;
 
 use super::function::Function;
 
@@ -43,21 +45,32 @@ impl Module {
         }
     }
 
+    pub fn get_function(&self, mut name: String) -> Function {
+        unsafe {
+            let fname = name.clone();
+
+            name.push('\0');
+
+            let fun_ref = llvm_sys::core::LLVMGetNamedFunction(
+                self.as_ptr(),
+                name.as_ptr() as *const _);
+
+            // let fn_ty = llvm_sys::core::LLVMGetTypeByName(
+            //     self.as_ptr(),
+            //     name.as_ptr() as *const _);
+
+            Function {
+                name: fname,
+                ty: transmute(0 as i64),
+                function_ref: fun_ref,
+            }
+        }
+    }
+
     pub fn set_target(&self, mut triple: String) {
         triple.push('\0');
         unsafe {
             llvm_sys::core::LLVMSetTarget(self.as_ptr(), triple.as_ptr() as *const _)
-        }
-    }
-
-    pub fn add_function(&self, mut name: String, fn_ty: LLVMTypeRef) -> Function {
-        name.push('\0');
-        unsafe {
-            Function::from_ptr(
-                llvm_sys::core::LLVMAddFunction(
-                    self.as_ptr(),
-                    name.as_ptr() as *const _,
-                    fn_ty))
         }
     }
 }

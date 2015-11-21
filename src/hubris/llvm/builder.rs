@@ -2,7 +2,7 @@ use llvm_sys;
 use llvm_sys::prelude::*;
 
 use super::context::Context;
-use super::function::Function;
+use super::function::{Function, FunctionType};
 
 pub struct Builder {
     builder_ref: LLVMBuilderRef
@@ -29,6 +29,14 @@ impl Builder {
                 [].as_mut_ptr(), args.len() as u32,
                 b"\0".as_ptr() as *const _)
         }
+    }
+
+    pub fn emit_ret_void(&self) -> LLVMValueRef {
+        unsafe { llvm_sys::core::LLVMBuildRetVoid(self.as_ptr()) }
+    }
+
+    pub fn postition_at_end(&self, bb: LLVMBasicBlockRef) {
+        unsafe { llvm_sys::core::LLVMPositionBuilderAtEnd(self.as_ptr(), bb) }
     }
 }
 

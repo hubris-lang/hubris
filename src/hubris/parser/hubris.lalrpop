@@ -14,6 +14,8 @@ pub Module: Module =  {
 Def: Definition = {
   <s: Schema> => Definition::Schema(s),
   <f: Fn> => Definition::Fn(f),
+  <c: Comment> => Definition::Comment(()),
+  <e: Extern> => Definition::Extern(e.0, e.1),
 };
 
 Schema: Schema = {
@@ -33,6 +35,10 @@ Fn: Function = {
           ty: t,
           body: body,
       }
+};
+
+Extern: (Name, Type) = {
+    "extern" <n : Name> ":" <t : Type> => (n, t)
 };
 
 Arg: (Name, Type) = {
@@ -82,4 +88,8 @@ Name: String = {
 
 Expr: Expr = {
     r"[1-9][0-9]+" => Expr::Int(i64::from_str(<>).unwrap())
+};
+
+Comment: () = {
+    r"--[^\n]*\n" => ()
 };
