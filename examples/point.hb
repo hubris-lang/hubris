@@ -1,6 +1,6 @@
 module MyPoint
 
-schema Point
+record Point
   x : i32
   y : i32
 end

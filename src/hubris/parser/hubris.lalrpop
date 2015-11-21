@@ -17,7 +17,7 @@ Def: Definition = {
 };
 
 Schema: Schema = {
-  "schema" <n: Name> <attrs: (<Attribute>)*> "end" => Schema {
+  "record" <n: Name> <attrs: (<Attribute>)*> "end" => Schema {
       attrs: attrs
   }
 };

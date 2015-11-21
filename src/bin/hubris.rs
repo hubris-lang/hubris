@@ -9,5 +9,5 @@ fn main() {
     env_logger::init().unwrap();
     let mut args = env::args();
     args.next();
-    hubris::compile_file(&args.next().unwrap()[..]);
+    hubris::compile_file(&args.next().unwrap()[..], None);
 }

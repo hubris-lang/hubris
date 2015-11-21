@@ -1,9 +1,17 @@
+use std::path::PathBuf;
+
 pub type Name = String;
 
 #[derive(Debug)]
 pub struct Module {
     pub name: Name,
     pub defs: Vec<Definition>,
+}
+
+impl Module {
+    pub fn file_name(&self) -> PathBuf {
+        PathBuf::from("main")
+    }
 }
 
 #[derive(PartialEq, Debug)]
