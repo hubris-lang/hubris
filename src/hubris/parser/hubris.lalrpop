@@ -12,10 +12,21 @@ pub Module: Module =  {
 };
 
 Def: Definition = {
+  <d: Data> => Definition::Data(d),
   <s: Schema> => Definition::Schema(s),
   <f: Fn> => Definition::Fn(f),
   <c: Comment> => Definition::Comment(()),
-  <e: Extern> => Definition::Extern(e.0, e.1),
+  <e: Extern> => Definition::Extern(e),
+};
+
+Data: Schema = {
+  "data" <n: Name> <attrs: (<Constructor>)*> "end" => Schema {
+      attrs: attrs
+  }
+};
+
+Constructor: (Name, Term) = {
+    "|" <n: Name> ":" <t: Type> =>  (n, t)
 };
 
 Schema: Schema = {
@@ -24,7 +35,7 @@ Schema: Schema = {
   }
 };
 
-Attribute: (String, Type) = {
+Attribute: (Name, Term) = {
   <n: Name> ":" <t: Type> =>  (n, t)
 };
 
@@ -32,28 +43,32 @@ Fn: Function = {
     "fn" <n: Name> <args: (Arg*)> ":" <t: Type> ":=" <body: Term> "end" =>
       Function {
           name: n,
+          args: args,
           ty: t,
           body: body,
       }
 };
 
-Extern: (Name, Type) = {
-    "extern" <n : Name> ":" <t : Type> => (n, t)
+Extern: Extern = {
+    "extern" <n : Name> ":" <t : Type> => Extern(n, t)
 };
 
-Arg: (Name, Type) = {
+Arg: (Name, Term) = {
     "(" <n : Name> ":" <ty : Type> ")" => (n, ty)
 };
 
 Term: Term = {
+    "fun" <args: (Arg+)> ":" <t: Type> "=>" <body: Term0> =>
+      Term::Lambda(args, Box::new(t), Box::new(body)),
     <f: Term> <g: Term0> => Term::App(Box::new(f), Box::new(g)),
-    <m : Match> => Term::Match(Box::new(m.0), m.1),
     <t : Term0> => t,
-    <e : Expr> => Term::Expr(e),
 };
 
 Term0: Term = {
   <n : Name> => Term::Var(n),
+  <l : Literal> => Term::Literal(l),
+  <m : Match> => Term::Match(Box::new(m.0), m.1),
+  r"\?[a-zA-Z_][a-zA-Z0-9_]*" => Term::Metavar(<>.to_string()),
   "(" <t:Term> ")" => t,
 };
 
@@ -75,19 +90,29 @@ Pattern: Pattern = {
 
 PatternO: Pattern = {
     <n : Name> => Pattern::Name(n),
+    "_" => Pattern::Placeholder,
     "(" <p: Pattern> ")" => p,
 };
 
-Type: Type = {
-    <n: Name> => Type::Nominal(n)
+Type: Term = {
+    "Type" => Term::Type,
+    <t1: Type> "->" <t2: Type0> => Term::Forall("".to_string(), Box::new(t1), Box::new(t2)),
+    <t: Term0> => t,
+};
+
+Type0: Term = {
+    "Type" => Term::Type,
+    <n: Name> => Term::Var(n),
+    "(" <t: Type> ")" => t,
 };
 
 Name: String = {
     r"[a-zA-Z_][a-zA-Z0-9_]*" => <>.to_owned()
 };
 
-Expr: Expr = {
-    r"[1-9][0-9]+" => Expr::Int(i64::from_str(<>).unwrap())
+Literal: Literal = {
+    r"[1-9][0-9]+" => Literal::Int(i64::from_str(<>).unwrap()),
+    r"\(\)" => Literal::Unit,
 };
 
 Comment: () = {

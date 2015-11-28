@@ -16,35 +16,50 @@ impl Module {
 
 #[derive(PartialEq, Debug)]
 pub struct Schema {
-    pub attrs: Vec<(Name, Type)>
+    pub attrs: Vec<(Name, Term)>
 }
+
+#[derive(PartialEq, Debug)]
+pub struct Data {
+    pub attrs: Vec<(Name, Term)>
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Extern(pub Name, pub Term);
 
 #[derive(Debug, PartialEq)]
 pub enum Definition {
     Schema(Schema),
+    Data(Schema),
     Fn(Function),
-    Extern(Name, Type),
+    Extern(Extern),
     Comment(())
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Function {
     pub name: Name,
-    pub ty: Type,
+    pub args: Vec<(Name, Term)>,
+    pub ty: Term,
     pub body: Term,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Term {
+    Literal(Literal),
     Var(Name),
-    Expr(Expr),
     Match(Box<Term>, Vec<Case>),
     App(Box<Term>, Box<Term>),
+    Forall(Name, Box<Term>, Box<Term>),
+    Metavar(Name),
+    Lambda(Vec<(Name, Term)>, Box<Term>, Box<Term>),
+    Type,
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Expr {
-    Int(i64) // will need to revisit this decision
+pub enum Literal {
+    Int(i64), // will need to revisit this decision
+    Unit
 }
 
 #[derive(Debug, PartialEq)]
@@ -57,9 +72,5 @@ pub struct Case {
 pub enum Pattern {
     Name(Name),
     Constructor(Name, Vec<Pattern>),
-}
-
-#[derive(Debug, PartialEq)]
-pub enum Type {
-    Nominal(Name)
+    Placeholder,
 }

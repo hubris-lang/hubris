@@ -9,7 +9,7 @@ pub struct Builder {
 }
 
 impl Builder {
-    pub fn in_context(cx: &mut Context) -> Builder {
+    pub fn in_context(cx: &Context) -> Builder {
         Builder {
             builder_ref: unsafe {
                 llvm_sys::core::LLVMCreateBuilderInContext(cx.as_ptr())

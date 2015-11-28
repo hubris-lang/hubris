@@ -1,4 +1,4 @@
-#![feature(convert, dir_builder)]
+#![feature(convert)]
 extern crate lalrpop_util;
 extern crate llvm_sys;
 extern crate gcc;
@@ -10,13 +10,11 @@ pub mod parser;
 pub mod llvm;
 
 use std::env;
-use std::fs::File;
-use std::io::Write;
-use std::path::Path;
+use std::path::{PathBuf, Path};
 use std::collections::HashMap;
 use std::process::Command;
 
-use ast::{Definition, Name, Schema, Function, Type};
+use ast::{Definition, Name, Schema, Function, Term};
 
 /// A global context for type checking containing the necessary information
 /// needed across type checking all definitions.
@@ -36,7 +34,7 @@ impl TyCtxt {
 
 /// A type checking context representing in-scope names and their types.
 struct Context {
-    map: HashMap<Name, Type>
+    map: HashMap<Name, Term>
 }
 
 fn type_check_def(_ty_cx: &TyCtxt, def: &ast::Definition) -> Result<(), ()> {
@@ -46,7 +44,7 @@ fn type_check_def(_ty_cx: &TyCtxt, def: &ast::Definition) -> Result<(), ()> {
     }
 }
 
-pub fn compile_file<T: AsRef<Path>>(path: T, output: Option<&Path>) {
+pub fn compile_file<T: AsRef<Path>>(path: T, output: Option<PathBuf>) {
     let module = parser::from_file(path).unwrap();
     let ty_cx = TyCtxt::empty();
 
