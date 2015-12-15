@@ -6,7 +6,6 @@ extern crate rustc_serialize;
 extern crate docopt;
 
 use docopt::Docopt;
-use std::env;
 use std::path::PathBuf;
 
 const USAGE: &'static str = r#"
@@ -21,18 +20,21 @@ Hubris, version 0.0.1.
 
 Usage:
     hubris <file> [--output=<exe>]
+    hubris (-i | --interactive)
     hubris (-h | --help)
     hubris --version
 
 Options:
-    -h --help     Show this screen.
-    --version     Show version.
+    -i --interactive  Launch in interactive mode.
+    -h --help         Show this screen.
+    --version         Show version.
 "#;
 
 #[derive(Debug, RustcDecodable)]
 struct Args {
     arg_file: String,
     flag_output: Option<String>
+    flag_interactive: bool,
 }
 
 fn main() {
@@ -42,11 +44,15 @@ fn main() {
                             .and_then(|d| d.decode())
                             .unwrap_or_else(|e| e.exit());
 
-    debug!("main: compiling {} output to {:?}",
-        &args.arg_file[..],
-        args.arg_file);
+    if args.flag_interactive {
+        hubris::server::server_main();
+    } else {
+        debug!("main: compiling {} output to {:?}",
+               &args.arg_file[..],
+               args.arg_file);
 
-    hubris::compile_file(
-        &args.arg_file[..],
-        args.flag_output.map(|p| PathBuf::from(p)));
+        hubris::compile_file(
+            &args.arg_file[..],
+            args.flag_output.map(|p| PathBuf::from(p)));
+    }
 }

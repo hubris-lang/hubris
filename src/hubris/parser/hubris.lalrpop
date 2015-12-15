@@ -13,26 +13,20 @@ pub Module: Module =  {
 
 Def: Definition = {
   <d: Data> => Definition::Data(d),
-  <s: Schema> => Definition::Schema(s),
   <f: Fn> => Definition::Fn(f),
   <c: Comment> => Definition::Comment(()),
   <e: Extern> => Definition::Extern(e),
 };
 
-Data: Schema = {
-  "data" <n: Name> <attrs: (<Constructor>)*> "end" => Schema {
-      attrs: attrs
+Data: Data = {
+"data" <n: Name> <attrs: (<Constructor>)*> "end" => Data {
+      name: n,
+      ctors: attrs,
   }
 };
 
 Constructor: (Name, Term) = {
     "|" <n: Name> ":" <t: Type> =>  (n, t)
-};
-
-Schema: Schema = {
-  "record" <n: Name> <attrs: (<Attribute>)*> "end" => Schema {
-      attrs: attrs
-  }
 };
 
 Attribute: (Name, Term) = {

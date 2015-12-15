@@ -10,11 +10,6 @@ record Point
   y : i32
 end
 
-fn swap (A : Type) (B : Type) (C : Type)
-        (f : A -> B -> C) : B -> A -> C :=
-        fun (x : B) (y: A) : C => f y x
-end
-
 fn add_point (p : Point) (q : Point) : Point :=
   match p with
     | Point x y => match q with

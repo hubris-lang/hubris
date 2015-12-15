@@ -6,7 +6,8 @@ use std::io::Write;
 use std::process::Command;
 use std::path::{Path, PathBuf};
 
-use ast;
+use core;
+use cps;
 use llvm;
 use llvm_sys;
 
@@ -19,29 +20,29 @@ enum CodegenErr {
 struct ModuleCx<'cx, 'm> {
     cx: &'cx llvm::Context,
     module: llvm::Module,
-    ast_module: &'m ast::Module,
+    cps_module: &'m cps::Module,
 }
 
 impl<'cx, 'm> ModuleCx<'cx, 'm> {
-    fn new(cx: &'cx llvm::Context, m: &'m ast::Module) -> ModuleCx<'cx, 'm> {
+    fn new(cx: &'cx llvm::Context, m: &'m cps::Module) -> ModuleCx<'cx, 'm> {
         let module = llvm::Module::with_name(m.name.clone());
         module.set_target("x86_64-apple-darwin".to_string());
 
         ModuleCx {
             cx: cx,
             module: module,
-            ast_module: m,
+            cps_module: m,
         }
     }
 
     pub fn emit_module<P: AsRef<Path> + Debug>(&self, output: P) {
-        for def in &self.ast_module.defs {
+        for def in &self.cps_module.defs {
             match def {
-                &ast::Definition::Fn(ref fun) => {
+                &cps::Definition::Fn(ref fun) => {
                     let fcx = FunctionCx::new(self, fun);
                     fcx.emit_function();
                 }
-        //        &ast::Definition::Extern(ref e) => emit_extern(e),
+        //        &core::Definition::Extern(ref e) => emit_extern(e),
                 _ => {}
             }
         }
@@ -53,12 +54,12 @@ impl<'cx, 'm> ModuleCx<'cx, 'm> {
 
 struct FunctionCx<'cx, 'm:'cx, 'f> {
     mcx: &'cx ModuleCx<'cx, 'm>,
-    func: &'f ast::Function,
+    func: &'f cps::Function,
     builder: llvm::Builder,
 }
 
 impl<'cx, 'm, 'f> FunctionCx<'cx, 'm, 'f> {
-    fn new(module: &'cx ModuleCx<'cx, 'm>, func: &'f ast::Function) -> FunctionCx<'cx, 'm, 'f> {
+    fn new(module: &'cx ModuleCx<'cx, 'm>, func: &'f cps::Function) -> FunctionCx<'cx, 'm, 'f> {
         FunctionCx {
             mcx: module,
             func: func,
@@ -67,7 +68,7 @@ impl<'cx, 'm, 'f> FunctionCx<'cx, 'm, 'f> {
     }
 
     pub fn emit_function(&self) -> Result<(), CodegenErr> {
-        use ast::{Term, Literal};
+        use core::{Term, Literal};
 
         let fn_ty = llvm::FunctionType::new(self.mcx.cx.void_type(), vec![]);
 
@@ -87,58 +88,61 @@ impl<'cx, 'm, 'f> FunctionCx<'cx, 'm, 'f> {
 
         let return_value = self.emit_term(&self.func.body);
 
-        match self.func.ty {
-            Term::Literal(Literal::Unit) => { self.builder.emit_ret_void(); },
-            _ => panic!("return type doesn't work"),
-        }
+        self.builder.emit_ret_void();
+
+        // match self.func.ty {
+        //     Term::Literal(Literal::Unit) => { self.builder.emit_ret_void(); },
+        //     _ => panic!("return type doesn't work"),
+        // }
 
         Ok(())
     }
 
-    pub fn emit_term(&self, term: &ast::Term) -> Result<LLVMValueRef, CodegenErr> {
-        use ast::Term::*;
-
-        match term {
-            &Literal(ref l) => panic!(),
-            &Var(ref v) => {
-                Ok(unsafe { self.mcx.module.get_function(v.clone()).as_ptr() })
-            }
-            &Match(ref scrutinee, ref cases) => { panic!("can't emit match") }
-            &App(ref fun, ref arg) => {
-                let callee = self.emit_term(&**fun);
-
-                        // let function = match self.module.get_function(name) {
-                        //     Some(function) => function,
-                        //     None => return error("unknown function referenced")
-                        // };
-                        //
-                        // let arg = try!(arg.codegen(context, module_provider));
-                        //
-                        // Ok((context.builder.build_call(function.to_ref(),
-                        //                                [arg].as_mut_slice(),
-                        //                                "calltmp"),
-                        //        false))
-
-                panic!() // fix me Ok(self.builder.emit_call(&callee, vec![]))
-            }
-            &Type => {
-                panic!("can't code gen Type")
-            }
-            &Forall(..) => {
-                panic!("should not be trying to codegen a forall")
-            }
-            &Lambda(..) => {
-                panic!("can't codegen lambdas")
-            }
-            &Metavar(_) => {
-                panic!("can't codegen metavars")
-            }
-        }
+    pub fn emit_term(&self, term: &cps::Term) -> Result<LLVMValueRef, CodegenErr> {
+        panic!()
+        // use core::Term::*;
+        //
+        // match term {
+        //     &Literal(ref l) => panic!(),
+        //     &Var(ref v) => {
+        //         Ok(unsafe { self.mcx.module.get_function(v.clone()).as_ptr() })
+        //     }
+        //     &Match(ref scrutinee, ref cases) => { panic!("can't emit match") }
+        //     &App(ref fun, ref arg) => {
+        //         let callee = self.emit_term(&**fun);
+        //
+        //                 // let function = match self.module.get_function(name) {
+        //                 //     Some(function) => function,
+        //                 //     None => return error("unknown function referenced")
+        //                 // };
+        //                 //
+        //                 // let arg = try!(arg.codegen(context, module_provider));
+        //                 //
+        //                 // Ok((context.builder.build_call(function.to_ref(),
+        //                 //                                [arg].as_mut_slice(),
+        //                 //                                "calltmp"),
+        //                 //        false))
+        //
+        //         panic!() // fix me Ok(self.builder.emit_call(&callee, vec![]))
+        //     }
+        //     &Type => {
+        //         panic!("can't code gen Type")
+        //     }
+        //     &Forall(..) => {
+        //         panic!("should not be trying to codegen a forall")
+        //     }
+        //     &Lambda(..) => {
+        //         panic!("can't codegen lambdas")
+        //     }
+        //     &Metavar(_) => {
+        //         panic!("can't codegen metavars")
+        //     }
+        // }
     }
 
-    pub fn emit_literal(&self, lit: &ast::Literal) {}
+    pub fn emit_literal(&self, lit: &core::Literal) {}
 
-    pub fn emit_extern(&self, name: &ast::Name, ty: &ast::Term) {
+    pub fn emit_extern(&self, name: &core::Name, ty: &core::Term) {
         let mut context = llvm::Context::new();
         let builder = llvm::Builder::in_context(&mut context);
 
@@ -172,7 +176,7 @@ pub fn ensure_success(cmd: &mut Command) -> io::Result<()> {
     }
 }
 
-pub fn create_executable<P: AsRef<Path> + Debug>(module: &ast::Module, output: Option<P>) {
+pub fn create_executable<P: AsRef<Path> + Debug>(module: &cps::Module, output: Option<P>) {
     let current_dir = env::current_dir().unwrap();
     let output = output.as_ref().map(|x| x.as_ref()).unwrap_or(current_dir.as_ref());
     let tmp = PathBuf::from("/tmp");

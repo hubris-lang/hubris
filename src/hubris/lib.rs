@@ -6,53 +6,43 @@ extern crate gcc;
 
 pub mod ast;
 pub mod backend;
-pub mod parser;
+pub mod core;
+pub mod cps;
+pub mod elaborate;
 pub mod llvm;
+pub mod parser;
+pub mod server;
+pub mod typeck;
+
 
 use std::env;
 use std::path::{PathBuf, Path};
 use std::collections::HashMap;
 use std::process::Command;
 
-use ast::{Definition, Name, Schema, Function, Term};
-
-/// A global context for type checking containing the necessary information
-/// needed across type checking all definitions.
-pub struct TyCtxt {
-    types: HashMap<Name, Schema>,
-    functions: HashMap<Name, Function>
-}
-
-impl TyCtxt {
-    pub fn empty() -> TyCtxt {
-        TyCtxt {
-            types: HashMap::new(),
-            functions: HashMap::new(),
-        }
-    }
-}
+use ast::{Name, Term};
+use typeck::*;
 
 /// A type checking context representing in-scope names and their types.
 struct Context {
     map: HashMap<Name, Term>
 }
 
-fn type_check_def(_ty_cx: &TyCtxt, def: &ast::Definition) -> Result<(), ()> {
-    match def {
-        &Definition::Fn(_) => Ok(()),
-        _ => Ok(())
-    }
-}
-
 pub fn compile_file<T: AsRef<Path>>(path: T, output: Option<PathBuf>) {
     let module = parser::from_file(path).unwrap();
     let ty_cx = TyCtxt::empty();
 
-    for def in &module.defs {
-        type_check_def(&ty_cx, def);
+    let emodule = elaborate::elaborate_module(module);
+
+    for def in &emodule.defs {
+        match ty_cx.type_check_def(def) {
+            Err(err) => panic!("error encountered while type checking {:?}", 1),
+            Ok(_) => {}
+        }
     }
 
-    println!("{:?}", module);
+    let cps_module = cps::from_core_module(emodule);
+    println!("{:?}", cps_module);
 
-    backend::create_executable(&module, output);
+    backend::create_executable(&cps_module, output);
 }

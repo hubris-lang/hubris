@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-pub use core::{Name, Literal};
+pub type Name = String;
 
 #[derive(Debug)]
 pub struct Module {
@@ -14,24 +14,23 @@ impl Module {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct Data {
     pub name: Name,
     pub ctors: Vec<(Name, Term)>
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Extern(pub Name, pub Term);
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Definition {
     Data(Data),
     Fn(Function),
     Extern(Extern),
-    Comment(())
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Function {
     pub name: Name,
     pub args: Vec<(Name, Term)>,
@@ -39,25 +38,30 @@ pub struct Function {
     pub body: Term,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Term {
     Literal(Literal),
     Var(Name),
     Match(Box<Term>, Vec<Case>),
     App(Box<Term>, Box<Term>),
     Forall(Name, Box<Term>, Box<Term>),
-    Metavar(Name),
     Lambda(Vec<(Name, Term)>, Box<Term>, Box<Term>),
     Type,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
+pub enum Literal {
+    Int(i64), // will need to revisit this decision
+    Unit
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Case {
     pub pattern: Pattern,
     pub rhs: Term,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Pattern {
     Name(Name),
     Constructor(Name, Vec<Pattern>),
