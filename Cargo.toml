@@ -13,10 +13,10 @@ name = "hubris"
 path = "src/bin/hubris.rs"
 
 [dependencies.lalrpop-util]
-version = "0.7.0"
+version = "0.8.0"
 
 [build-dependencies.lalrpop]
-version = "0.7.0"
+version = "0.8.0"
 
 [dependencies]
 llvm-sys = "*"
@@ -24,8 +24,8 @@ log = "*"
 env_logger = "*"
 gcc = "*"
 docopt = "0.6"
+iron = "*"
 rustc-serialize = "0.3"
-websocket = "0.14.0"
 serde = "*"
 serde_json = "*"
 serde_macros = "*"

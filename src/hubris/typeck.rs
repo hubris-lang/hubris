@@ -2,7 +2,11 @@ use std::collections::HashMap;
 
 use core::*;
 
+#[derive(Debug, Clone)]
 pub enum Error {
+    ApplicationErr,
+    UnificationErr(Term, Term),
+    UnknownVariable(Name),
     MkErr
 }
 
@@ -10,7 +14,8 @@ pub enum Error {
 /// needed across type checking all definitions.
 pub struct TyCtxt {
     types: HashMap<Name, Data>,
-    functions: HashMap<Name, Function>
+    functions: HashMap<Name, Function>,
+    globals: HashMap<Name, Term>
 }
 
 pub struct LocalCx<'tcx> {
@@ -23,6 +28,7 @@ impl TyCtxt {
         TyCtxt {
             types: HashMap::new(),
             functions: HashMap::new(),
+            globals: HashMap::new(),
         }
     }
 
@@ -32,12 +38,14 @@ impl TyCtxt {
             match def {
                 &Definition::Data(ref d) => {
                     tycx.types.insert(d.name.clone(), d.clone());
+                    // TODO: add each constructor here
                 }
                 &Definition::Fn(ref f) => {
                     tycx.functions.insert(f.name.clone(), f.clone());
+                    tycx.globals.insert(f.name.clone(), f.ty());
                 }
                 &Definition::Extern(ref e) => {
-                    panic!()
+                    tycx.globals.insert(e.0.clone(), e.1.clone());
                 }
             }
         }
@@ -75,10 +83,13 @@ impl<'tcx> LocalCx<'tcx> {
         self
     }
 
-    fn lookup(&self, name: &Name) -> &Term {
+    fn lookup(&self, name: &Name) -> Result<&Term, Error> {
         match self.locals.get(name) {
-            None => panic!("can't find local variable"),
-            Some(t) => t
+            None => match self.ty_cx.globals.get(name) {
+                None => Err(Error::UnknownVariable(name.clone())),
+                Some(t) => Ok(t)
+            },
+            Some(t) => Ok(t)
         }
     }
 
@@ -86,44 +97,51 @@ impl<'tcx> LocalCx<'tcx> {
         if t == u {
             Ok(t.clone())
         } else {
-            Err(Error::MkErr)
+            Err(Error::UnificationErr(t.clone(), u.clone()))
         }
     }
 
     pub fn type_check_term(&self, term: &Term, ty: &Term) -> Result<Term, Error> {
-        match term {
-            &Term::Literal(ref lit) => self.type_check_lit(lit, ty),
-            &Term::Var(ref n) => self.unify(self.lookup(n), ty),
-            &Term::Match(..) => panic!(),
-            &Term::App(ref f, ref g) => {
-                // let g_ty = try!(self.type_infer_term(g));
-                // let f_ty = try!(self.type_infer_term(f));
-                // println!("{:?} {:?}", g_ty, f_ty);
-                Err(Error::MkErr)
-            }
-            &Term::Forall(..) => panic!(),
-            &Term::Lambda(..) => panic!(),
-            &Term::Type => self.unify(&Term::Type, ty),
-        }
+        let infer_ty = try!(self.type_infer_term(term));
+        self.unify(&infer_ty, ty)
+        // match term {
+        //     &Term::Literal(ref lit) => self.type_check_lit(lit, ty),
+        //     &Term::Var(ref n) => self.unify(self.lookup(n), ty),
+        //     &Term::Match(..) => panic!(),
+        //     &Term::App(ref f, ref g) => {
+        //         let g_ty = try!(self.type_infer_term(g));
+        //         let f_ty = try!(self.type_infer_term(f));
+        //         println!("typechecking app: {:?} {:?}", g_ty, f_ty);
+        //         Err(Error::MkErr)
+        //     }
+        //     &Term::Forall(..) => panic!(),
+        //     &Term::Lambda(..) => panic!(),
+        //     &Term::Type => self.unify(&Term::Type, ty),
+        // }
     }
 
     pub fn type_infer_term(&self, term: &Term) -> Result<Term, Error> {
         match term {
             &Term::Literal(ref lit) => match lit {
                 &Literal::Int(..) => Ok(panic!()),
-                &Literal::Unit => Ok(panic!()),
+                &Literal::Unit => Ok(Term::Var("Unit".to_string())),
             },
-            &Term::Var(ref n) => Ok(self.lookup(n).clone()),
+            &Term::Var(ref n) => Ok(try!(self.lookup(n)).clone()),
             &Term::Match(..) => panic!(),
-            &Term::App(ref f, ref g) => panic!(),
+            &Term::App(ref f, ref g) => {
+                match try!(self.type_infer_term(f)) {
+                    Term::Forall(n, arg_ty, body_ty) => {
+                        try!(self.type_check_term(g, &*arg_ty));
+                        // try!(self.evaluate())
+                        Ok(*body_ty)
+                    },
+                    _ => Err(Error::ApplicationErr),
+                }
+            }
             &Term::Forall(..) => panic!(),
             &Term::Lambda(..) => panic!(),
             &Term::Type => Ok(Term::Type),
         }
-    }
-
-    pub fn type_check_lit(&self, term: &Literal, ty: &Term) -> Result<Term, Error> {
-        panic!()
     }
 
     pub fn evaluate(&self, term: &Term) -> Term {

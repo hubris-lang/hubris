@@ -1,0 +1,10 @@
+.text-buffer {
+  background-color: white;
+  width: 400px;
+  height: 500px;
+  resize: horizontal;
+}
+
+.border {
+    padding: 25px;
+}

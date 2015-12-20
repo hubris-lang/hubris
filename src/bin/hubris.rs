@@ -20,21 +20,21 @@ Hubris, version 0.0.1.
 
 Usage:
     hubris <file> [--output=<exe>]
-    hubris (-i | --interactive)
+    hubris (-s | --server)
     hubris (-h | --help)
     hubris --version
 
 Options:
-    -i --interactive  Launch in interactive mode.
-    -h --help         Show this screen.
-    --version         Show version.
+    -s --server  Launch compiler in server mode.
+    -h --help    Show this screen.
+    --version    Show version.
 "#;
 
 #[derive(Debug, RustcDecodable)]
 struct Args {
     arg_file: String,
-    flag_output: Option<String>
-    flag_interactive: bool,
+    flag_output: Option<String>,
+    flag_server: bool,
 }
 
 fn main() {
@@ -44,7 +44,7 @@ fn main() {
                             .and_then(|d| d.decode())
                             .unwrap_or_else(|e| e.exit());
 
-    if args.flag_interactive {
+    if args.flag_server {
         hubris::server::server_main();
     } else {
         debug!("main: compiling {} output to {:?}",

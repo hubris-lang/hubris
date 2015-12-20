@@ -38,6 +38,19 @@ pub struct Function {
     pub body: Term,
 }
 
+impl Function {
+    pub fn ty(&self) -> Term {
+        let mut result = self.ty.clone();
+        for &(ref n, ref t) in &self.args {
+            result = Term::Forall(
+                n.clone(),
+                Box::new(t.clone()),
+                Box::new(result));
+        }
+        return result;
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Term {
     Literal(Literal),

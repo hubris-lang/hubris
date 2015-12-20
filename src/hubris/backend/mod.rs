@@ -13,7 +13,8 @@ use llvm_sys;
 
 use llvm_sys::prelude::LLVMValueRef;
 
-enum CodegenErr {
+#[derive(Debug, Clone)]
+enum Error {
     Err
 }
 
@@ -35,12 +36,12 @@ impl<'cx, 'm> ModuleCx<'cx, 'm> {
         }
     }
 
-    pub fn emit_module<P: AsRef<Path> + Debug>(&self, output: P) {
+    pub fn emit_module<P: AsRef<Path> + Debug>(&self, output: P) -> Result<(), Error> {
         for def in &self.cps_module.defs {
             match def {
                 &cps::Definition::Fn(ref fun) => {
                     let fcx = FunctionCx::new(self, fun);
-                    fcx.emit_function();
+                    try!(fcx.emit_function());
                 }
         //        &core::Definition::Extern(ref e) => emit_extern(e),
                 _ => {}
@@ -49,6 +50,8 @@ impl<'cx, 'm> ModuleCx<'cx, 'm> {
 
         self.module.dump();
         self.module.print_to_file(output);
+
+        Ok(())
     }
 }
 
@@ -67,7 +70,7 @@ impl<'cx, 'm, 'f> FunctionCx<'cx, 'm, 'f> {
         }
     }
 
-    pub fn emit_function(&self) -> Result<(), CodegenErr> {
+    pub fn emit_function(&self) -> Result<(), Error> {
         use core::{Term, Literal};
 
         let fn_ty = llvm::FunctionType::new(self.mcx.cx.void_type(), vec![]);
@@ -86,7 +89,7 @@ impl<'cx, 'm, 'f> FunctionCx<'cx, 'm, 'f> {
         let bb = function.append_bb_in_ctxt(&self.mcx.cx, "entry".to_string());
         self.builder.postition_at_end(bb);
 
-        let return_value = self.emit_term(&self.func.body);
+        // let return_value = try!(self.emit_term(&self.func.body));
 
         self.builder.emit_ret_void();
 
@@ -98,7 +101,7 @@ impl<'cx, 'm, 'f> FunctionCx<'cx, 'm, 'f> {
         Ok(())
     }
 
-    pub fn emit_term(&self, term: &cps::Term) -> Result<LLVMValueRef, CodegenErr> {
+    pub fn emit_term(&self, term: &cps::Term) -> Result<LLVMValueRef, Error> {
         panic!()
         // use core::Term::*;
         //
