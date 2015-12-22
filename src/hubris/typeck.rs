@@ -18,6 +18,7 @@ pub struct TyCtxt {
     globals: HashMap<Name, Term>
 }
 
+#[derive(Clone)]
 pub struct LocalCx<'tcx> {
     ty_cx: &'tcx TyCtxt,
     locals: HashMap<Name, Term>
@@ -86,7 +87,7 @@ impl<'tcx> LocalCx<'tcx> {
 
     fn ctors(&self, ty: &Term) -> Option<Vec<(Name, Term)>> {
         self.datatype(ty).map(|dt| {
-            dt.ctors
+            dt.ctors.clone()
         })
     }
 
@@ -144,8 +145,30 @@ impl<'tcx> LocalCx<'tcx> {
             &Term::Var(ref n) => Ok(try!(self.lookup(n)).clone()),
             &Term::Match(ref scrut, ref cases) => {
                 let scrut_ty = try!(self.type_infer_term(scrut));
-                let ctors = self.ctors(&scrut_ty);
-                
+                let ctors: HashMap<_, _> = self.ctors(&scrut_ty).unwrap().into_iter().collect();
+                let arm_types = cases.iter().map(|case| {
+                    match &case.pattern {
+                        &Pattern::Name(ref n) => {
+                            let cx = self.clone();
+                            let cx = cx.extend(vec![(n.clone(), scrut_ty.clone())]);
+                            cx.type_infer_term(&case.rhs)
+                        }
+                        &Pattern::Constructor(ref n, ref patterns) => {
+                            if patterns.len() == 0 {
+                                self.type_infer_term(&case.rhs)
+                            } else {
+                                let ctor = ctors.get(n).unwrap();
+                                self.bind_pattern(ctor, patterns, |cx| {
+                                    cx.type_infer_term(&case.rhs)
+                                })
+                            }
+                        }
+                        &Pattern::Placeholder => {
+                            self.type_infer_term(&case.rhs)
+                        }
+                    }
+                }).collect::<Vec<_>>();
+                arm_types[0].clone()
             }
             &Term::App(ref f, ref g) => {
                 match try!(self.type_infer_term(f)) {
@@ -160,6 +183,24 @@ impl<'tcx> LocalCx<'tcx> {
             &Term::Forall(..) => panic!(),
             &Term::Lambda(..) => panic!(),
             &Term::Type => Ok(Term::Type),
+        }
+    }
+
+    pub fn bind_pattern<R, F : FnOnce(LocalCx) -> R>(
+        &self,
+        ty: &Term,
+        patterns: &Vec<Pattern>,
+        f: F) -> R {
+        let mut ty = ty;
+        let mut pat_start = 0;
+
+        /* this is mostly definitely not right */
+        match ty {
+            &Term::Forall(ref n, ref dom, ref codom) => {
+                let cx = self.clone();
+                f(cx.extend(vec![(n.clone(), *dom.clone())]))
+            },
+            _ => panic!("invalid pattern binding")
         }
     }
 
