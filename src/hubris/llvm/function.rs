@@ -7,12 +7,13 @@ pub struct Function {
     pub name: String,
     pub ty: LLVMTypeRef,
     pub function_ref: LLVMValueRef,
+    pub entry_block: Option<LLVMBasicBlockRef>,
 }
 
 #[derive(Clone)]
 pub struct FunctionType {
     ret: LLVMTypeRef,
-    args: Vec<LLVMTypeRef>
+    args: Vec<LLVMTypeRef>,
 }
 
 impl FunctionType {
@@ -22,16 +23,22 @@ impl FunctionType {
             args: args,
         }
     }
+
+    pub fn to_value(mut self) -> LLVMTypeRef {
+        unsafe {
+            llvm_sys::core::LLVMFunctionType(
+                self.ret,
+                self.args.as_mut_ptr(),
+                self.args.len() as u32, 0)
+        }
+    }
 }
 
 impl Function {
     pub fn in_module(module: &super::module::Module,
                      mut name: String,
                      mut fn_ty: FunctionType) -> Function { unsafe {
-        let fn_ty = llvm_sys::core::LLVMFunctionType(
-            fn_ty.ret,
-            fn_ty.args.as_mut_ptr(),
-            fn_ty.args.len() as u32, 0);
+        let fn_ty = fn_ty.to_value();
 
         name.push('\0');
 
@@ -46,10 +53,17 @@ impl Function {
             name: name,
             ty: fn_ty,
             function_ref: function,
+            entry_block: None,
         }
     } }
 
-    pub fn append_bb_in_ctxt(&self, cx: &Context, mut label: String) -> LLVMBasicBlockRef {
+    pub fn create_entry_block(&mut self, cx: &Context) -> LLVMBasicBlockRef {
+        let bb = self.append_basic_block(cx, "entry".to_string());
+        self.entry_block = Some(bb);
+        return bb;
+    }
+
+    pub fn append_basic_block(&self, cx: &Context, mut label: String) -> LLVMBasicBlockRef {
         unsafe {
             label.push('\0');
             llvm_sys::core::LLVMAppendBasicBlockInContext(

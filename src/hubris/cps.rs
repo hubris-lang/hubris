@@ -75,8 +75,8 @@ fn from_core_term(core_term: core::Term) -> Term {
         core::Term::Var(n) => Term::Value(Value::Var(n)),
         core::Term::Literal(l) => Term::Value(Value::Literal(l)),
         core::Term::App(f, g) => {
-            bind_terms(vec![*f, *g], |names| {
-                Term::App(Value::Var(names[0].clone()), Value::Var(names[1].clone()))
+            bind_terms(vec![*f, *g], |values| {
+                Term::App(values[0].clone(), values[1].clone())
             })
         }
 
@@ -84,13 +84,22 @@ fn from_core_term(core_term: core::Term) -> Term {
     }
 }
 
-fn bind_terms<F: FnOnce(Vec<Name>) -> Term>(ts: Vec<core::Term>, body: F) -> Term {
-    let names = (0..ts.len()).map(|i| format!("arg{}", i)).collect();
+fn bind_terms<F: FnOnce(Vec<Value>) -> Term>(ts: Vec<core::Term>, body: F) -> Term {
+    let mut values = vec![];
+    let mut bindings = vec![];
 
-    let bindings = ts.into_iter()
-                     .enumerate()
-                     .map(|(i, t)| (format!("arg{}", i), vec![], Box::new(from_core_term(t))))
-                     .collect();
+    for (i, t) in ts.into_iter().enumerate() {
+        let name     = format!("arg{}", i);
+        let cps_term = from_core_term(t);
 
-    Term::Fix(bindings, Box::new(body(names)))
+        match cps_term {
+            Term::Value(v) => values.push(v),
+            t => {
+                bindings.push((format!("arg{}", i), vec![], Box::new(t)));
+                values.push(Value::Var(name));
+            }
+        }
+    }
+
+    Term::Fix(bindings, Box::new(body(values)))
 }

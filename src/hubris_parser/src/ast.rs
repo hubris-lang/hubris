@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-pub use core::{Name, Literal};
+pub type Name = String;
 
 #[derive(Debug)]
 pub struct Module {
@@ -62,4 +62,10 @@ pub enum Pattern {
     Name(Name),
     Constructor(Name, Vec<Pattern>),
     Placeholder,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Literal {
+    Int(i64), // will need to revisit this decision
+    Unit
 }

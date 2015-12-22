@@ -56,7 +56,7 @@ fn elaborate_extern(ext: ast::Extern) -> core::Extern {
 
 fn elaborate_term(term: ast::Term) -> core::Term {
     match term {
-        ast::Term::Literal(l) => core::Term::Literal(l),
+        ast::Term::Literal(l) => core::Term::Literal(elaborate_literal(l)),
         ast::Term::Var(n) => core::Term::Var(n),
         ast::Term::Match(scrutinee, cases) => {
             let escrutinee = Box::new(elaborate_term(*scrutinee));
@@ -77,6 +77,34 @@ fn elaborate_term(term: ast::Term) -> core::Term {
     }
 }
 
-fn elaborate_case(term: ast::Case) -> core::Case {
-    panic!()
+fn elaborate_literal(lit: ast::Literal) -> core::Literal {
+    match lit {
+        ast::Literal::Unit => core::Literal::Unit,
+        ast::Literal::Int(i) => core::Literal::Int(i),
+    }
+}
+fn elaboarte_name(n: ast::Name) -> core::Name {
+    n
+}
+
+fn elaborate_case(case: ast::Case) -> core::Case {
+    match case {
+        ast::Case { pattern, rhs } => core::Case {
+            pattern: elaborate_pattern(pattern),
+            rhs: elaborate_term(rhs),
+        }
+    }
+}
+
+fn elaborate_pattern(pattern: ast::Pattern) -> core::Pattern {
+    match pattern {
+        ast::Pattern::Name(n) => core::Pattern::Name(n),
+        ast::Pattern::Constructor(n, patterns) =>
+            core::Pattern::Constructor(
+                n,
+                patterns.into_iter()
+                        .map(elaborate_pattern)
+                        .collect()),
+        _ => panic!("elaboration error")
+    }
 }

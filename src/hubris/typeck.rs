@@ -75,6 +75,21 @@ impl<'tcx> LocalCx<'tcx> {
         }
     }
 
+    fn datatype(&self, ty: &Term) -> Option<&Data> {
+        match ty {
+            &Term::Var(ref n) => {
+                self.ty_cx.types.get(n)
+            }
+            _ => None
+        }
+    }
+
+    fn ctors(&self, ty: &Term) -> Option<Vec<(Name, Term)>> {
+        self.datatype(ty).map(|dt| {
+            dt.ctors
+        })
+    }
+
     fn extend(mut self, bindings: Vec<(Name, Term)>) -> LocalCx<'tcx> {
         for (x, t) in bindings {
             self.locals.insert(x, t);
@@ -127,7 +142,11 @@ impl<'tcx> LocalCx<'tcx> {
                 &Literal::Unit => Ok(Term::Var("Unit".to_string())),
             },
             &Term::Var(ref n) => Ok(try!(self.lookup(n)).clone()),
-            &Term::Match(..) => panic!(),
+            &Term::Match(ref scrut, ref cases) => {
+                let scrut_ty = try!(self.type_infer_term(scrut));
+                let ctors = self.ctors(&scrut_ty);
+                
+            }
             &Term::App(ref f, ref g) => {
                 match try!(self.type_infer_term(f)) {
                     Term::Forall(n, arg_ty, body_ty) => {

@@ -45,10 +45,8 @@ impl Module {
         }
     }
 
-    pub fn get_function(&self, mut name: String) -> Function {
+    pub fn get_function(&self, mut name: String) -> Option<Function> {
         unsafe {
-            let fname = name.clone();
-
             name.push('\0');
 
             let fun_ref = llvm_sys::core::LLVMGetNamedFunction(
@@ -59,11 +57,12 @@ impl Module {
             //     self.as_ptr(),
             //     name.as_ptr() as *const _);
 
-            Function {
-                name: fname,
+            Some(Function {
+                name: name,
                 ty: transmute(0 as i64),
                 function_ref: fun_ref,
-            }
+                entry_block: None,
+            })
         }
     }
 

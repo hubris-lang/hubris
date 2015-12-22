@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::env;
 use std::fmt::Debug;
 use std::fs::{File};
@@ -15,7 +16,7 @@ use llvm_sys::prelude::LLVMValueRef;
 
 #[derive(Debug, Clone)]
 enum Error {
-    Err
+    UnknownSymbol(String),
 }
 
 struct ModuleCx<'cx, 'm> {
@@ -40,10 +41,10 @@ impl<'cx, 'm> ModuleCx<'cx, 'm> {
         for def in &self.cps_module.defs {
             match def {
                 &cps::Definition::Fn(ref fun) => {
-                    let fcx = FunctionCx::new(self, fun);
+                    let mut fcx = FunctionCx::new(self, fun);
                     try!(fcx.emit_function());
                 }
-        //        &core::Definition::Extern(ref e) => emit_extern(e),
+                &cps::Definition::Extern(ref e) => self.emit_extern(&e.0, &e.1),
                 _ => {}
             }
         }
@@ -53,12 +54,25 @@ impl<'cx, 'm> ModuleCx<'cx, 'm> {
 
         Ok(())
     }
+
+    pub fn emit_extern(&self, name: &core::Name, ty: &core::Term) {
+        let i64_ty = self.cx.i64_type();
+        let fn_ty = llvm::FunctionType::new(i64_ty, vec![i64_ty]);
+
+        let efunction = llvm::Function::in_module(
+            &self.module,
+            name.clone(),
+            fn_ty);
+
+        efunction.set_linkage(llvm_sys::LLVMLinkage::LLVMExternalLinkage);
+    }
 }
 
 struct FunctionCx<'cx, 'm:'cx, 'f> {
     mcx: &'cx ModuleCx<'cx, 'm>,
     func: &'f cps::Function,
     builder: llvm::Builder,
+    vars: HashMap<String, LLVMValueRef>,
 }
 
 impl<'cx, 'm, 'f> FunctionCx<'cx, 'm, 'f> {
@@ -66,14 +80,17 @@ impl<'cx, 'm, 'f> FunctionCx<'cx, 'm, 'f> {
         FunctionCx {
             mcx: module,
             func: func,
-            builder: llvm::Builder::in_context(module.cx)
+            builder: llvm::Builder::in_context(module.cx),
+            vars: HashMap::new(),
         }
     }
 
-    pub fn emit_function(&self) -> Result<(), Error> {
-        use core::{Term, Literal};
+    pub fn emit_function(&mut self) -> Result<(), Error> {
+        let arg_tys = self.func.args.iter().map(|_| {
+            self.mcx.cx.i64_type()
+        }).collect();
 
-        let fn_ty = llvm::FunctionType::new(self.mcx.cx.void_type(), vec![]);
+        let fn_ty = llvm::FunctionType::new(self.mcx.cx.i64_type(), arg_tys);
 
         let fname = if self.func.name == "main" {
             "_hubris_main".to_string()
@@ -81,83 +98,110 @@ impl<'cx, 'm, 'f> FunctionCx<'cx, 'm, 'f> {
             self.func.name.clone()
         };
 
-        let function = llvm::Function::in_module(
+        let mut function = llvm::Function::in_module(
             &self.mcx.module,
             fname,
             fn_ty.clone());
 
-        let bb = function.append_bb_in_ctxt(&self.mcx.cx, "entry".to_string());
+        let bb = function.create_entry_block(&self.mcx.cx);
         self.builder.postition_at_end(bb);
 
-        // let return_value = try!(self.emit_term(&self.func.body));
+        debug!("emit_fucntion: emitting body");
+        let return_value = try!(self.emit_term(&self.func.body));
 
-        self.builder.emit_ret_void();
-
-        // match self.func.ty {
-        //     Term::Literal(Literal::Unit) => { self.builder.emit_ret_void(); },
-        //     _ => panic!("return type doesn't work"),
-        // }
+        debug!("emit_function: emitting return");
+        self.builder.emit_ret(return_value);
 
         Ok(())
     }
 
-    pub fn emit_term(&self, term: &cps::Term) -> Result<LLVMValueRef, Error> {
-        panic!()
-        // use core::Term::*;
-        //
-        // match term {
-        //     &Literal(ref l) => panic!(),
-        //     &Var(ref v) => {
-        //         Ok(unsafe { self.mcx.module.get_function(v.clone()).as_ptr() })
-        //     }
-        //     &Match(ref scrutinee, ref cases) => { panic!("can't emit match") }
-        //     &App(ref fun, ref arg) => {
-        //         let callee = self.emit_term(&**fun);
-        //
-        //                 // let function = match self.module.get_function(name) {
-        //                 //     Some(function) => function,
-        //                 //     None => return error("unknown function referenced")
-        //                 // };
-        //                 //
-        //                 // let arg = try!(arg.codegen(context, module_provider));
-        //                 //
-        //                 // Ok((context.builder.build_call(function.to_ref(),
-        //                 //                                [arg].as_mut_slice(),
-        //                 //                                "calltmp"),
-        //                 //        false))
-        //
-        //         panic!() // fix me Ok(self.builder.emit_call(&callee, vec![]))
-        //     }
-        //     &Type => {
-        //         panic!("can't code gen Type")
-        //     }
-        //     &Forall(..) => {
-        //         panic!("should not be trying to codegen a forall")
-        //     }
-        //     &Lambda(..) => {
-        //         panic!("can't codegen lambdas")
-        //     }
-        //     &Metavar(_) => {
-        //         panic!("can't codegen metavars")
-        //     }
-        // }
+    pub fn emit_term(&mut self, term: &cps::Term) -> Result<LLVMValueRef, Error> {
+        use cps::Term::*;
+
+        debug!("emit_term: term={:?}", term);
+
+        match term {
+            &Value(ref v) => self.emit_value(v),
+            &App(ref callee, ref arg) => {
+                debug!("emitting callee");
+                let callee = try!(self.emit_value(callee));
+                let arg = try!(self.emit_value(arg));
+
+                Ok(unsafe {
+                    llvm_sys::core::LLVMBuildCall(
+                        self.builder.as_ptr(), callee,
+                        [arg].as_mut_ptr(), 1 as u32,
+                        b"call_tmp\0".as_ptr() as *const _)
+                })
+            }
+            &Fix(ref bindings, ref body) => {
+                debug!("emitting args");
+                for &(ref n, ref args, ref term) in bindings {
+                    if args.len() == 0 {
+                        let i64_ty = self.mcx.cx.i64_type();
+                        debug!("before alloc");
+                        let alloca = self.builder.emit_alloca(i64_ty, n.clone());
+                        debug!("before value");
+                        let value = try!(self.emit_term(term));
+                        // let value = unsafe { llvm_sys::core::LLVMBuildPtrToInt(
+                        //     self.builder.as_ptr(),
+                        //     value, i64_ty, b"a\0".as_ptr() as *const _) };
+                        debug!("before store");
+                        debug!("{:?} {:?}", value, alloca);
+                        let sto = unsafe {
+                            llvm_sys::core::LLVMBuildStore(
+                                self.builder.as_ptr(),
+                                value,
+                                alloca)
+                        };
+                        self.vars.insert(n.clone(), alloca);
+                    } else {
+                        panic!("can't code gen local closures")
+                    }
+                }
+
+                debug!("emitting body");
+                self.emit_term(body)
+            }
+        }
     }
 
-    pub fn emit_literal(&self, lit: &core::Literal) {}
+    pub fn emit_value(&self, value: &cps::Value) -> Result<LLVMValueRef, Error> {
+        use cps::Value::*;
 
-    pub fn emit_extern(&self, name: &core::Name, ty: &core::Term) {
-        let mut context = llvm::Context::new();
-        let builder = llvm::Builder::in_context(&mut context);
+        debug!("emit_value: value={:?}", value);
 
-        let fn_ty = llvm::FunctionType::new(context.void_type(), vec![]);
-
-        let efunction = llvm::Function::in_module(
-            &self.mcx.module,
-            name.clone(),
-            fn_ty);
-
-        efunction.set_linkage(llvm_sys::LLVMLinkage::LLVMExternalLinkage);
+        match value {
+            &Literal(ref l) => self.emit_literal(l),
+            &Var(ref name) => match self.vars.get(name) {
+                None => match self.mcx.module.get_function(name.clone()) {
+                    Some(function) => Ok(unsafe { function.as_ptr() }),
+                    None => Err(Error::UnknownSymbol(name.clone())),
+                },
+                Some(v) => {
+                    Ok(unsafe {
+                        llvm_sys::core::LLVMBuildLoad(
+                            self.builder.as_ptr(),
+                            *v,
+                            name.as_ptr() as *const _)
+                    })
+                }
+            }
+        }
     }
+
+    pub fn emit_literal(&self, lit: &core::Literal) -> Result<LLVMValueRef, Error> {
+        use core::Literal;
+
+        match lit {
+            &Literal::Unit => unsafe {
+                let i64_ty = self.mcx.cx.i64_type();
+                Ok(llvm_sys::core::LLVMConstInt(i64_ty, 1, 0))
+            },
+            lit => panic!("can't compile {:?}", lit),
+        }
+    }
+
 }
 
 pub fn in_build_path<P: AsRef<Path>, F, R>(build_path: P, f: F) -> R

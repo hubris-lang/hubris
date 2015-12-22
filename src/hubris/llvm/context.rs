@@ -22,6 +22,12 @@ impl Context {
             llvm_sys::core::LLVMVoidTypeInContext(self.as_ptr())
         }
     }
+
+    pub fn i64_type(&self) -> LLVMTypeRef {
+        unsafe {
+            llvm_sys::core::LLVMInt64TypeInContext(self.as_ptr())
+        }
+    }
 }
 
 impl Drop for Context {

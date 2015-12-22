@@ -2,7 +2,7 @@ extern crate iron;
 // extern crate time;
 
 use iron::prelude::*;
-use iron::{BeforeMiddleware, AfterMiddleware, typemap};
+// use iron::{BeforeMiddleware, AfterMiddleware, typemap};
 // use time::precise_time_ns;
 //
 // struct ResponseTime;
@@ -29,7 +29,7 @@ fn hello_world(_: &mut Request) -> IronResult<Response> {
 }
 
 pub fn server_main() {
-    let mut chain = Chain::new(hello_world);
+    let chain = Chain::new(hello_world);
     // chain.link_before(ResponseTime);
     // chain.link_after(ResponseTime);
     Iron::new(chain).http("localhost:8001").unwrap();

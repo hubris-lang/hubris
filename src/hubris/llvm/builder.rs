@@ -26,13 +26,26 @@ impl Builder {
         unsafe {
             llvm_sys::core::LLVMBuildCall(
                 self.as_ptr(), fun.as_ptr(),
-                [].as_mut_ptr(), args.len() as u32,
-                b"\0".as_ptr() as *const _)
+                args.as_mut_ptr(), args.len() as u32,
+                b"bleh\0".as_ptr() as *const _)
         }
     }
 
     pub fn emit_ret_void(&self) -> LLVMValueRef {
         unsafe { llvm_sys::core::LLVMBuildRetVoid(self.as_ptr()) }
+    }
+
+    pub fn emit_ret(&self, value: LLVMValueRef) -> LLVMValueRef {
+        unsafe { llvm_sys::core::LLVMBuildRet(self.as_ptr(), value) }
+    }
+
+    pub fn emit_alloca(&self, ty: LLVMTypeRef, s: String) -> LLVMValueRef {
+        unsafe {
+            llvm_sys::core::LLVMBuildAlloca(
+                self.as_ptr(),
+                ty,
+                s.as_ptr() as *const _)
+        }
     }
 
     pub fn postition_at_end(&self, bb: LLVMBasicBlockRef) {

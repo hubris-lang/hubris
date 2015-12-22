@@ -4,14 +4,22 @@ extern crate llvm_sys;
 extern crate gcc;
 #[macro_use] extern crate log;
 extern crate iron;
+extern crate hubris_parser;
 
-pub mod ast;
+pub mod ast {
+    pub use hubris_parser::ast::*;
+}
+
 pub mod backend;
 pub mod core;
 pub mod cps;
 pub mod elaborate;
 pub mod llvm;
-pub mod parser;
+
+pub mod parser {
+    pub use hubris_parser::parser::*;
+}
+
 pub mod server;
 pub mod typeck;
 

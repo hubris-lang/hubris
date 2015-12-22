@@ -3,3 +3,5 @@ Cargo.lock
 src/hubris/parser/hubris.rs
 *.ll
 *.s
+editor/elm-stuff
+editor/elm.js
