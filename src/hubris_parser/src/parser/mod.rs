@@ -5,75 +5,54 @@ use std::io::Read;
 
 // The parser for our language.
 mod hubris;
+mod source_map;
 
 use lalrpop_util::ParseError;
+pub use self::source_map::SourceMap;
 
-struct SourceMap<'s> {
-    source: &'s str,
-    lines: Vec<(usize, usize)>
+pub struct Parser {
+    pub source_map: SourceMap,
 }
 
-impl<'s> SourceMap<'s> {
-    fn new(source: &'s str) -> SourceMap<'s> {
-        let mut line_start = 0;
-        let mut pos = 0;
-        let mut lines = Vec::new();
-
-        for c in source.chars() {
-            if c == '\n' {
-                lines.push((line_start, pos));
-                line_start = pos + 1;
-            }
-            pos += 1;
+impl Parser {
+    pub fn parse(&self) -> super::ast::Module {
+        match hubris::parse_Module(&self.source_map.source[..]) {
+            Err(e) => match e {
+                ParseError::InvalidToken { location } => {
+                    let (offset, line) = self.source_map.find_line(location).unwrap();
+                    let mut ptr = "\n".to_string();
+                    for _ in 0..offset {
+                        ptr.push(' ');
+                    }
+                    ptr.push('^');
+                    panic!("invalid_token on:\n {}{}", line, ptr);
+                }
+                ParseError::UnrecognizedToken { token, .. } => {
+                    let (start, token, end) = token.unwrap();
+                    let (offset, line) = self.source_map.find_line(start).unwrap();
+                    let mut ptr = "\n".to_string();
+                    for _ in 0..offset {
+                        ptr.push(' ');
+                    }
+                    ptr.push('^');
+                    panic!("unrecongnized_token {:?} on:\n {}{}", token, line, ptr);
+                }
+                e => panic!("{:?}", e),
+            },
+            Ok(v) => v
         }
-
-        SourceMap { source: source, lines: lines }
-    }
-
-    fn find_line(&self, index: usize) -> Option<(usize, &str)> {
-        for line in &self.lines {
-            if index >= line.0 && index <= line.1 {
-                return Some((index - line.0, &self.source[line.0..line.1]));
-            }
-        }
-
-        return None;
     }
 }
 
-pub fn from_file<T: AsRef<Path>>(path: T) -> io::Result<super::ast::Module> {
+pub fn from_file<T: AsRef<Path>>(path: T) -> io::Result<Parser> {
     let path = path.as_ref();
 
     let mut file = try!(File::open(path));
-    let mut s = String::new();
+    let mut contents = String::new();
 
-    try!(file.read_to_string(&mut s));
+    try!(file.read_to_string(&mut contents));
 
-    let source_map = SourceMap::new(&s[..]);
-
-    match hubris::parse_Module(&s[..]) {
-        Err(e) => match e {
-            ParseError::InvalidToken { location } => {
-                let (offset, line) = source_map.find_line(location).unwrap();
-                let mut ptr = "\n".to_string();
-                for _ in 0..offset {
-                    ptr.push(' ');
-                }
-                ptr.push('^');
-                panic!("invalid_token on:\n {}{}", line, ptr);
-            }
-            ParseError::UnrecognizedToken { token, .. } => {
-                let (start, token, end) = token.unwrap();
-                let (offset, line) = source_map.find_line(start).unwrap();
-                let mut ptr = "\n".to_string();
-                for _ in 0..offset {
-                    ptr.push(' ');
-                }
-                ptr.push('^');
-                panic!("unrecongnized_token {:?} on:\n {}{}", token, line, ptr);
-            }
-            e => panic!("{:?}", e),
-        },
-        Ok(v) => Ok(v)
-    }
+    Ok(Parser {
+        source_map: SourceMap::new(contents),
+    })
 }

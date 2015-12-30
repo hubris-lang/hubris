@@ -27,7 +27,7 @@ struct ModuleCx<'cx, 'm> {
 
 impl<'cx, 'm> ModuleCx<'cx, 'm> {
     fn new(cx: &'cx llvm::Context, m: &'m cps::Module) -> ModuleCx<'cx, 'm> {
-        let module = llvm::Module::with_name(m.name.clone());
+        let module = llvm::Module::with_name(m.name.to_string());
         module.set_target("x86_64-apple-darwin".to_string());
 
         ModuleCx {

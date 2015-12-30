@@ -10,9 +10,9 @@ pub mod ast {
     pub use hubris_parser::ast::*;
 }
 
-pub mod backend;
+// pub mod backend;
 pub mod core;
-pub mod cps;
+// pub mod cps;
 pub mod elaborate;
 pub mod llvm;
 
@@ -28,20 +28,20 @@ use std::path::{PathBuf, Path};
 use typeck::*;
 
 pub fn compile_file<T: AsRef<Path>>(path: T, output: Option<PathBuf>) {
-    let module = parser::from_file(path).unwrap();
+    let parser = parser::from_file(path).unwrap();
+    let module = parser.parse();
     let emodule = elaborate::elaborate_module(module);
-    let ty_cx = TyCtxt::from_module(&emodule);
+    let ty_cx = TyCtxt::from_module(&emodule, parser.source_map);
 
     for def in &emodule.defs {
         match ty_cx.type_check_def(def) {
-            Err(err) =>
-                panic!("error encountered while type checking: {:?}", err),
+            Err(err) => report_type_error(&ty_cx, err),
             Ok(_) => {}
         }
     }
 
-    let cps_module = cps::from_core_module(emodule);
-    println!("{:?}", cps_module);
+    // let cps_module = cps::from_core_module(emodule);
+    // println!("{:?}", cps_module);
 
-    backend::create_executable(&cps_module, output);
+    //backend::create_executable(&cps_module, output);
 }
