@@ -1,7 +1,7 @@
 [package]
 name = "hubris_parser"
 version = "0.1.0"
-authors = ["Jared Roesch <roeschinc@gmail.com>"]
+authors = ["Jared Roesch <jroesch@cs.uw.edu>"]
 build = "build.rs"
 
 [lib]
@@ -20,3 +20,4 @@ rustc-serialize = "0.3"
 serde = "*"
 serde_json = "*"
 serde_macros = "*"
+term = "*"

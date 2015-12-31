@@ -41,10 +41,16 @@ impl HasSpan for Name {
     fn get_span(&self) -> Span {
         self.span
     }
+
+    fn set_span(&mut self, span: Span) {
+        self.span = span;
+    }
 }
 
 #[derive(Debug)]
 pub struct Module {
+    // Eventually we should use ID's that map to files
+    pub file_name: PathBuf,
     pub name: Name,
     pub defs: Vec<Definition>,
 }
@@ -246,6 +252,20 @@ impl HasSpan for Term {
             &Forall { span, .. } => span,
             &Lambda { span, .. } => span,
             &Type => Span::dummy(),
+        }
+    }
+
+    fn set_span(&mut self, sp: Span) {
+        use self::Term::*;
+
+        match self {
+            &mut Literal { ref mut span, .. } => *span = sp,
+            &mut Var { ref mut name } => name.span = sp,
+            &mut Match { ref mut span, .. } => *span = sp,
+            &mut App { ref mut span, .. } => *span = sp,
+            &mut Forall { ref mut span, .. } => *span = sp,
+            &mut Lambda { ref mut span, .. } => *span = sp,
+            &mut Type => {},
         }
     }
 }

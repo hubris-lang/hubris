@@ -13,6 +13,13 @@ pub Module: Module =  {
 };
 
 Def: Definition = {
+  <lo:@L> <d: DefNoSpan> <hi:@R> => {
+    let mut d = d;
+    d.set_span(Span::new(lo, hi)); d
+  }
+};
+
+DefNoSpan: Definition = {
   <d: Data> => Definition::Data(d),
   <f: Fn> => Definition::Fn(f),
   <c: Comment> => Definition::Comment(()),
@@ -20,9 +27,9 @@ Def: Definition = {
 };
 
 Data: Data = {
-<lo:@L> "data" <n: Name> <ty: (":" Term)?> <attrs: (<Constructor>)*> "end" <hi:@R> =>
+ "data" <n: Name> <ty: (":" Term)?> <attrs: (<Constructor>)*> "end" =>
   Data {
-    span: Span::new(lo, hi),
+    span: Span::dummy(),
     name: n,
     ty: ty.map(|t| t.1).unwrap_or(Term::Type),
     ctors: attrs,
@@ -38,9 +45,9 @@ Attribute: (Name, Term) = {
 };
 
 Fn: Function = {
-    <lo:@L> "fn" <n: Name> <args: (Arg*)> ":" <t: Term> ":=" <body: Term> "end" <hi:@R> =>
+    "fn" <n: Name> <args: (Arg*)> ":" <t: Term> ":=" <body: Term> "end" =>
       Function {
-          span: Span::new(lo, hi),
+          span: Span::dummy(),
           name: n,
           args: args,
           ty: t,
@@ -49,9 +56,9 @@ Fn: Function = {
 };
 
 Extern: Extern = {
-    <lo:@L> "extern" <n : Name> ":" <t : Term> <hi:@R> =>
+   "extern" <n : Name> ":" <t : Term> =>
     Extern {
-      span: Span::new(lo, hi),
+      span: Span::dummy(),
       name: n,
       term: t,
     }
@@ -67,7 +74,7 @@ Binder: (Name, Term) = {
 
 
 Term: Term = {
-  "forall" <args: (Binder+)> "," <body: Term1> => {
+   "forall" <args: (Binder+)> "," <body: Term1> => {
       let mut result = body;
       for (n, t) in args {
           result = Term::Forall {
@@ -104,7 +111,16 @@ Term1: Term = {
     <t : Term0> => t,
 };
 
+
 Term0: Term = {
+  <lo:@L> <t: Term0US> <hi:@R>  => {
+    let mut t = t;
+    t.set_span(Span::new(lo, hi));
+    t
+  }
+};
+
+Term0US: Term = {
   <n : Name> => Term::Var { name: n },
   <l : Literal> => Term::Literal {
       span: Span::dummy(),
@@ -115,9 +131,9 @@ Term0: Term = {
     scrutinee: Box::new(m.0),
     cases: m.1
   },
-  <lo:@L> <s: r"\?[a-zA-Z_][a-zA-Z0-9_]*"> <hi:@R> => {
+  <s: r"\?[a-zA-Z_][a-zA-Z0-9_]*"> => {
       let name = Name {
-          span: Span::new(lo, hi),
+          span: Span::dummy(),
           repr: s.to_owned(),
       };
 
@@ -151,9 +167,9 @@ PatternO: Pattern = {
 };
 
 Name: Name = {
-    <lo:@L> <s: r"[a-zA-Z_][a-zA-Z0-9_]*"> <hi:@R> => {
+    <s: r"[a-zA-Z_][a-zA-Z0-9_]*"> => {
         Name {
-            span: Span::new(lo, hi),
+            span: Span::dummy(),
             repr: s.to_owned(),
         }
     }

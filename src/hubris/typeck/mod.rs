@@ -1,12 +1,13 @@
 mod error_reporting;
 
 use core::*;
-use super::ast::{SourceMap, Span};
+use super::ast::{SourceMap, Span, HasSpan};
 
 // Re-exports
 pub use self::error_reporting::*;
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub enum Error {
@@ -40,7 +41,7 @@ impl TyCtxt {
             types: HashMap::new(),
             functions: HashMap::new(),
             globals: HashMap::new(),
-            source_map: SourceMap::new("".to_string()),
+            source_map: SourceMap::new(PathBuf::new(), "".to_string()),
         }
     }
 
@@ -155,10 +156,10 @@ impl<'tcx> LocalCx<'tcx> {
             for &(ref x, ref y) in &needed_eqs {
                 match self.equalities.get(x) {
                     None =>
-                        return Err(Error::UnificationErr(Span::dummy(), t.clone(), u.clone())),
+                        return Err(Error::UnificationErr(span, t.clone(), u.clone())),
                     Some(yp) => {
                         if y != yp {
-                            return Err(Error::UnificationErr(Span::dummy(), t.clone(), u.clone()));
+                            return Err(Error::UnificationErr(span, t.clone(), u.clone()));
                         }
                     }
                 }
@@ -212,7 +213,7 @@ impl<'tcx> LocalCx<'tcx> {
                 debug!("type_check_term: checking {} againist the inferred type {}",
                     ty,
                     infer_ty);
-                self.unify(Span::dummy(), ty,  &infer_ty)
+                self.unify(term.get_span(), ty,  &infer_ty)
             }
         }
     }

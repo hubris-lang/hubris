@@ -1,7 +1,9 @@
 use ast;
 use core;
 
-pub fn elaborate_module(module: ast::Module) -> core::Module {
+use std::path::Path;
+
+pub fn elaborate_module<P: AsRef<Path>>(path: P, module: ast::Module) -> core::Module {
     let name = elaborate_name(module.name);
     let defs = module.defs
                      .into_iter()
@@ -9,6 +11,7 @@ pub fn elaborate_module(module: ast::Module) -> core::Module {
                      .collect();
 
     core::Module {
+        file_name: path.as_ref().to_owned(),
         name: name,
         defs: defs,
     }

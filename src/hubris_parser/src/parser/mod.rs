@@ -15,6 +15,7 @@ pub struct Parser {
 }
 
 impl Parser {
+    // TODO: Clean up token error handling
     pub fn parse(&self) -> super::ast::Module {
         match hubris::parse_Module(&self.source_map.source[..]) {
             Err(e) => match e {
@@ -53,6 +54,6 @@ pub fn from_file<T: AsRef<Path>>(path: T) -> io::Result<Parser> {
     try!(file.read_to_string(&mut contents));
 
     Ok(Parser {
-        source_map: SourceMap::new(contents),
+        source_map: SourceMap::new(path.to_owned(), contents),
     })
 }

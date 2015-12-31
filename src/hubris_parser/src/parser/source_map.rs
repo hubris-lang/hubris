@@ -1,12 +1,14 @@
 use super::super::ast::Span;
+use std::path::PathBuf;
 
 pub struct SourceMap {
+    pub file_name: PathBuf,
     pub source: String,
     lines: Vec<(usize, usize)>
 }
 
 impl SourceMap {
-    pub fn new(source: String) -> SourceMap {
+    pub fn new(file_name: PathBuf, source: String) -> SourceMap {
         let mut line_start = 0;
         let mut pos = 0;
         let mut lines = Vec::new();
@@ -19,7 +21,11 @@ impl SourceMap {
             pos += 1;
         }
 
-        SourceMap { source: source, lines: lines }
+        SourceMap {
+            file_name: file_name,
+            source: source,
+            lines: lines
+        }
     }
 
     // Given a span returns the line and column number information.
@@ -41,5 +47,25 @@ impl SourceMap {
         }
 
         return None;
+    }
+
+    pub fn underline_span(&self, span: Span) -> Option<(String, String)> {
+        self.find_line(span.lo).map(|(offset, line)| {
+            let mut line_with_padding = line.to_owned();
+            line_with_padding.push('\n');
+
+            // Add the correct # of spaces on the marker line
+            for _ in 0..offset {
+                line_with_padding.push(' ');
+            }
+
+            // Mark the start of the span.
+            let mut marker = "^".to_string();
+            for _ in 0..(span.hi - span.lo) {
+                marker.push('~');
+            }
+
+            (line_with_padding, marker)
+        })
     }
 }

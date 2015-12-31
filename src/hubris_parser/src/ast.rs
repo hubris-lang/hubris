@@ -4,6 +4,7 @@ pub use parser::SourceMap;
 
 pub trait HasSpan {
     fn get_span(&self) -> Span;
+    fn set_span(&mut self, span: Span);
 }
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -55,6 +56,38 @@ impl Module {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum Definition {
+    Data(Data),
+    Fn(Function),
+    Extern(Extern),
+    Comment(())
+}
+
+impl HasSpan for Definition {
+    fn get_span(&self) -> Span {
+        use self::Definition::*;
+
+        match self {
+            &Data(ref data) => data.span,
+            &Fn(ref fun) => fun.span,
+            &Extern(ref ext) => ext.span,
+            &Comment(_) => Span::dummy(),
+        }
+    }
+
+    fn set_span(&mut self, sp: Span) {
+        use self::Definition::*;
+
+        match self {
+            &mut Data(ref mut data) => data.span = sp,
+            &mut Fn(ref mut fun) => fun.span = sp,
+            &mut Extern(ref mut ext) => ext.span = sp,
+            &mut Comment(_) => {},
+        }
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub struct Data {
     pub span: Span,
@@ -68,14 +101,6 @@ pub struct Extern {
     pub span: Span,
     pub name: Name,
     pub term: Term,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum Definition {
-    Data(Data),
-    Fn(Function),
-    Extern(Extern),
-    Comment(())
 }
 
 #[derive(Debug, PartialEq)]
@@ -97,6 +122,38 @@ pub enum Term {
     Metavar { name: Name },
     Lambda { span: Span, args: Vec<(Name, Term)>, ret_ty: Box<Term>, body: Box<Term> },
     Type,
+}
+
+impl HasSpan for Term {
+    fn get_span(&self) -> Span {
+        use self::Term::*;
+
+        match self {
+            &Literal { span, .. } => span,
+            &Var { ref name } => name.span,
+            &Match { span, .. } => span,
+            &App { span, .. } => span,
+            &Forall { span, .. } => span,
+            &Lambda { span, .. } => span,
+            &Metavar { ref name } => name.span,
+            &Type => Span::dummy(),
+        }
+    }
+
+    fn set_span(&mut self, sp: Span) {
+        use self::Term::*;
+
+        match self {
+            &mut Literal { ref mut span, .. } => *span = sp,
+            &mut Var { ref mut name } => name.span = sp,
+            &mut Match { ref mut span, .. } => *span = sp,
+            &mut App { ref mut span, .. } => *span = sp,
+            &mut Forall { ref mut span, .. } => *span = sp,
+            &mut Lambda { ref mut span, .. } => *span = sp,
+            &mut Metavar { ref mut name } => name.span = sp,
+            &mut Type => {},
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]

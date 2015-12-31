@@ -5,6 +5,7 @@ extern crate gcc;
 #[macro_use] extern crate log;
 extern crate iron;
 extern crate hubris_parser;
+extern crate term;
 
 pub mod ast {
     pub use hubris_parser::ast::*;
@@ -23,19 +24,26 @@ pub mod parser {
 pub mod server;
 pub mod typeck;
 
-use std::path::{PathBuf, Path};
-
 use typeck::*;
 
-pub fn compile_file<T: AsRef<Path>>(path: T, output: Option<PathBuf>) {
-    let parser = parser::from_file(path).unwrap();
+use std::path::{PathBuf, Path};
+use std::io;
+use term::color;
+
+pub fn compile_file<T: AsRef<Path>>(path: T, output: Option<PathBuf>) -> io::Result<()> {
+    let parser = try!(parser::from_file(path.as_ref()));
     let module = parser.parse();
-    let emodule = elaborate::elaborate_module(module);
+    let emodule = elaborate::elaborate_module(path.as_ref(), module);
     let ty_cx = TyCtxt::from_module(&emodule, parser.source_map);
+
+    let term = term::stdout().unwrap();
 
     for def in &emodule.defs {
         match ty_cx.type_check_def(def) {
-            Err(err) => report_type_error(&ty_cx, err),
+            Err(err) => {
+                try!(report_type_error(&ty_cx, term, err));
+                return Ok(());
+            }
             Ok(_) => {}
         }
     }
@@ -44,4 +52,5 @@ pub fn compile_file<T: AsRef<Path>>(path: T, output: Option<PathBuf>) {
     // println!("{:?}", cps_module);
 
     //backend::create_executable(&cps_module, output);
+    Ok(())
 }
