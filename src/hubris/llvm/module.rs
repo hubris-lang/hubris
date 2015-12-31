@@ -1,5 +1,4 @@
 use std::path::Path;
-use std::ptr;
 use std::mem::transmute;
 
 use super::function::Function;
@@ -33,10 +32,8 @@ impl Module {
     }
 
     pub fn print_to_file<P: AsRef<Path>>(&self, path: P) {
-        let output = path.as_ref()
-                         .as_os_str()
-                         .to_cstring()
-                         .unwrap();
+        let output = format!("{}", path.as_ref().display());
+
         unsafe {
             llvm_sys::core::LLVMPrintModuleToFile(
                 self.as_ptr(),

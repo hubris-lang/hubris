@@ -1,12 +1,11 @@
 use super::ty::Type;
 
-use std::collections::HashMap;
-use llvm_sys;
+//use std::collections::HashMap;
 use llvm_sys::prelude::*;
 
 pub struct Struct {
-    field_map: HashMap<String, u32>,
-    ty_ref: LLVMTypeRef,
+    // field_map: HashMap<String, u32>,
+    // ty_ref: LLVMTypeRef,
 }
 
 impl Struct {

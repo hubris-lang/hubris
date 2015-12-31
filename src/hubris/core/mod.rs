@@ -17,6 +17,10 @@ impl Name {
             repr: s.to_owned(),
         }
     }
+
+    pub fn to_term(&self) -> Term {
+        Term::Var { name: self.clone() }
+    }
 }
 
 impl PartialEq for Name {
@@ -189,6 +193,7 @@ impl PartialEq for Term {
 impl Hash for Term {
     fn hash<H>(&self, state: &mut H) where H: Hasher {
         use self::Term::*;
+        debug!("hash: {}", self);
 
         match self {
             &Literal { ref lit, .. } =>
@@ -210,7 +215,7 @@ impl Hash for Term {
                 ret_ty.hash(state);
                 body.hash(state);
             },
-            &Type => Type.hash(state),
+            &Type => {},
         }
     }
 }
@@ -233,8 +238,14 @@ impl Display for Term {
                 } else {
                     write!(formatter, "forall ({} : {}), {}", name, ty, term)
                 },
-            &Lambda { ref args, ref ret_ty, ref body, .. } =>
-                write!(formatter, "lambda"),
+            &Lambda { ref args, ref ret_ty, ref body, .. } => {
+                try!(write!(formatter, "fun ("));
+                for &(ref name, ref ty) in args {
+                    try!(write!(formatter, "{} : {}", name, ty));
+                }
+                try!(write!(formatter, ") : {} =>", ret_ty));
+                write!(formatter, "{}", body)
+            }
             &Type => write!(formatter, "Type"),
         }
     }
@@ -308,7 +319,13 @@ impl Pattern {
                 return term;
             },
             &Pattern::Simple(ref simple_pattern) => {
-                panic!()
+                match simple_pattern {
+                    &SimplePattern::Name(ref n) => {
+                        Term::Var { name: n.clone() }
+                    }
+                    &SimplePattern::Placeholder =>
+                        panic!("cant convert placeholder")
+                }
             }
         }
     }

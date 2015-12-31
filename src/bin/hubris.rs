@@ -51,8 +51,13 @@ fn main() {
                &args.arg_file[..],
                args.arg_file);
 
-        hubris::compile_file(
+        let result = hubris::compile_file(
             &args.arg_file[..],
             args.flag_output.map(|p| PathBuf::from(p)));
+
+        match result {
+            Err(e) => panic!("failed with {:?}", e),
+            Ok(_) => {}
+        }
     }
 }

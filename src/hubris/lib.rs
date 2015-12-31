@@ -1,4 +1,3 @@
-#![feature(convert)]
 extern crate lalrpop_util;
 extern crate llvm_sys;
 extern crate gcc;
@@ -28,9 +27,8 @@ use typeck::*;
 
 use std::path::{PathBuf, Path};
 use std::io;
-use term::color;
 
-pub fn compile_file<T: AsRef<Path>>(path: T, output: Option<PathBuf>) -> io::Result<()> {
+pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> io::Result<()> {
     let parser = try!(parser::from_file(path.as_ref()));
     let module = parser.parse();
     let emodule = elaborate::elaborate_module(path.as_ref(), module);

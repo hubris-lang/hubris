@@ -37,17 +37,16 @@ impl FunctionType {
 impl Function {
     pub fn in_module(module: &super::module::Module,
                      mut name: String,
-                     mut fn_ty: FunctionType) -> Function { unsafe {
+                     fn_ty: FunctionType) -> Function { unsafe {
         let fn_ty = fn_ty.to_value();
 
         name.push('\0');
 
-        let function = unsafe {
+        let function =
             llvm_sys::core::LLVMAddFunction(
                     module.as_ptr(),
                     name.as_ptr() as *const _,
-                    fn_ty)
-        };
+                    fn_ty);
 
         Function {
             name: name,

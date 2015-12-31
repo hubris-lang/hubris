@@ -79,10 +79,9 @@ impl TyCtxt {
         match def {
             &Definition::Fn(ref fun) => {
                 let &Function {
-                    ref name,
                     ref args,
                     ref ty,
-                    ref body
+                    ref body, ..
                 } = fun;
 
                 let mut lcx = LocalCx::from_cx(self);
@@ -145,6 +144,7 @@ impl<'tcx> LocalCx<'tcx> {
 
     // This is super ugly, come back and do a second pass, sketching.
     pub fn unify(&self, span: Span, t: &Term, u: &Term) -> Result<Term, Error> {
+        debug!("unify: {} {}", t, u);
         if t == u {
             Ok(t.clone())
         } else {
@@ -213,7 +213,9 @@ impl<'tcx> LocalCx<'tcx> {
                 debug!("type_check_term: checking {} againist the inferred type {}",
                     ty,
                     infer_ty);
-                self.unify(term.get_span(), ty,  &infer_ty)
+                let term = try!(self.unify(term.get_span(), ty,  &infer_ty));
+                debug!("return from unify");
+                Ok(term)
             }
         }
     }
@@ -240,9 +242,9 @@ impl<'tcx> LocalCx<'tcx> {
                 }
             }
             &Term::Forall { ref name, ref ty, ref term, .. } => {
-                self.type_check_term(&*ty, &Term::Type);
+                try!(self.type_check_term(&*ty, &Term::Type));
                 let cx = self.clone().extend(vec![(name.clone(), *ty.clone())]);
-                cx.type_check_term(&*ty, &Term::Type);
+                try!(cx.type_check_term(&*term, &Term::Type));
                 Ok(Term::Type)
             }
             &Term::Type => Ok(Term::Type),
@@ -262,27 +264,27 @@ impl<'tcx> LocalCx<'tcx> {
 
         while quantifier_level < patterns.len() {
             /* this is mostly definitely not right */
-            match ty {
-                &Term::Forall { ref name, ref ty, ref term, .. } => {
+            quantifier = match quantifier {
+                Term::Forall { name, ty, term, .. } => {
                     match &patterns[quantifier_level] {
                         &SimplePattern::Name(ref n) => {
                             debug!("extending {} mapsto {:?}", n, ty);
                             cx = cx.extend(vec![(n.clone(), *ty.clone())]);
-                            quantifier = term.subst(name, &Term::Var { name: n.clone() });
+                            term.subst(&name, &Term::Var { name: n.clone() })
                         }
                         // Not sure about this case
                         &SimplePattern::Placeholder => {
-                            quantifier = *term.clone();
-                            continue;
+                            *term
                         }
                     }
 
                 },
                 _ => panic!("invalid pattern binding")
-            }
+            };
 
             quantifier_level += 1;
         }
+
         f(cx)
     }
 
@@ -294,6 +296,8 @@ impl<'tcx> LocalCx<'tcx> {
 fn equal_modulo(t1: &Term, t2: &Term, equalities: &mut Vec<(Term, Term)>) -> bool {
     use core::Term::*;
 
+    debug!("equal_modulo: {} == {}", t1, t2);
+
     match (t1, t2) {
         (&Match { .. },
          &Match {..}) => panic!(),
@@ -303,16 +307,16 @@ fn equal_modulo(t1: &Term, t2: &Term, equalities: &mut Vec<(Term, Term)>) -> boo
             equal_modulo(arg1, arg2, equalities),
         (&Forall { name: ref name1, ty: ref ty1, term: ref term1, .. },
          &Forall { name: ref name2, ty: ref ty2, term: ref term2, .. }) =>
-            // equal_modulo(Var { name: name1 }, Var { name: name2 }, equalities) &&
-            // equal_modulo(ty1, ty2, equalities) &&
-            // equal_modulo(term1, term2, equalities),
-            panic!(),
+            equal_modulo(&name1.to_term(), &name2.to_term(), equalities) &&
+            equal_modulo(ty1, ty2, equalities) &&
+            equal_modulo(term1, term2, equalities),
         (&Lambda { args: ref args1, ret_ty: ref ret_ty1, body: ref body1, .. },
          &Lambda { args: ref args2, ret_ty: ref ret_ty2, body: ref body2, ..}) =>
-            // equal_modulo(args1, args2, equalities) &&
-            // equal_modulo(ret_ty1, ret_ty2, equalities) &&
-            // equal_modulo(body1, body2, equalities),
-            panic!(),
+            args1.iter().zip(args2.iter()).all(|(a1, a2)|
+                equal_modulo(&a1.0.to_term(), &a2.0.to_term(), equalities) &&
+                equal_modulo(&a1.1, &a2.1, equalities)) &&
+            equal_modulo(ret_ty1, ret_ty2, equalities) &&
+            equal_modulo(body1, body2, equalities),
         (t, u) => {
             if t == u {
                 true

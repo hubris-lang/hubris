@@ -17,19 +17,12 @@ pub fn elaborate_module<P: AsRef<Path>>(path: P, module: ast::Module) -> core::M
     }
 }
 
-pub fn elaborate_name(name: ast::Name) -> core::Name {
-    core::Name {
-        span: name.span,
-        repr: name.repr,
-    }
-}
-
 pub fn elaborate_def(def: ast::Definition) -> Option<core::Definition> {
     match def {
         ast::Definition::Data(d) => Some(core::Definition::Data(elaborate_data(d))),
         ast::Definition::Fn(f) => Some(core::Definition::Fn(elaborate_fn(f))),
         ast::Definition::Extern(e) => Some(core::Definition::Extern(elaborate_extern(e))),
-        ast::Definition::Comment(c) => None
+        ast::Definition::Comment(_) => None
     }
 }
 
@@ -100,8 +93,21 @@ fn elaborate_term(term: ast::Term) -> core::Term {
                 ty: Box::new(elaborate_term(*ty)),
                 term: Box::new(elaborate_term(*term)),
             },
-        ast::Term::Metavar { name } => panic!("can't elaborate meta-variables"),
-        ast::Term::Lambda { args, ret_ty, body, .. } => panic!(),
+        ast::Term::Metavar { .. } => panic!("can't elaborate meta-variables"),
+        ast::Term::Lambda { args, ret_ty, body, span } => {
+            let eargs = args.into_iter().map(|(n, t)| {
+                (elaborate_name(n), elaborate_term(t))
+            }).collect();
+            let eret_ty = elaborate_term(*ret_ty);
+            let ebody = elaborate_term(*body);
+
+            core::Term::Lambda {
+                span: span,
+                args: eargs,
+                ret_ty: Box::new(eret_ty),
+                body: Box::new(ebody),
+            }
+        }
         ast::Term::Type => core::Term::Type,
     }
 }
@@ -113,7 +119,7 @@ fn elaborate_literal(lit: ast::Literal) -> core::Literal {
     }
 }
 
-fn elaboarte_name(n: ast::Name) -> core::Name {
+fn elaborate_name(n: ast::Name) -> core::Name {
     core::Name {
         repr: n.repr,
         span: n.span,
@@ -122,7 +128,7 @@ fn elaboarte_name(n: ast::Name) -> core::Name {
 
 fn elaborate_case(case: ast::Case) -> core::Case {
     match case {
-        ast::Case { span, pattern, rhs } => core::Case {
+        ast::Case { pattern, rhs, .. } => core::Case {
             pattern: elaborate_pattern(pattern),
             rhs: elaborate_term(rhs),
         }

@@ -2,7 +2,7 @@ use llvm_sys;
 use llvm_sys::prelude::*;
 
 use super::context::Context;
-use super::function::{Function, FunctionType};
+use super::function::{Function};
 
 pub struct Builder {
     builder_ref: LLVMBuilderRef
