@@ -174,37 +174,36 @@ impl<'tcx> LocalCx<'tcx> {
             &Term::Match { ref scrutinee, ref cases, .. } => {
                 let scrut_ty = try!(self.type_infer_term(scrutinee));
                 let ctors: HashMap<_, _> = self.ctors(&scrut_ty).unwrap().into_iter().collect();
-                panic!("match is hella broken")
 
-                // for case in cases.iter() {
-                //     match &case.pattern {
-                //         &Pattern::Simple(ref simple_pat) => match simple_pat {
-                //             &SimplePattern::Name(ref n) => {
-                //                 let mut cx = self.clone()
-                //                                  .extend(vec![(n.clone(), scrut_ty.clone())]);
-                //                 let pat_term = case.pattern.to_term();
-                //                 cx.equalities.insert(*scrutinee.clone(), pat_term);
-                //                 try!(cx.type_check_term(&case.rhs, ty));
-                //             }
-                //             &SimplePattern::Placeholder => {
-                //                 try!(self.type_check_term(&case.rhs, ty));
-                //             }
-                //         },
-                //         &Pattern::Constructor(ref n, ref patterns) => {
-                //             let pat_term = case.pattern.to_term();
-                //             let mut cx = self.clone();
-                //             cx.equalities.insert(*scrutinee.clone(), pat_term);
-                //             if patterns.len() == 0 {
-                //                 try!(cx.type_infer_term(&case.rhs));
-                //             } else {
-                //                 let ctor = ctors.get(n).unwrap();
-                //                 try!(cx.bind_pattern(ctor, patterns, |cx| {
-                //                     cx.type_check_term(&case.rhs, ty)
-                //                 }));
-                //             }
-                //         }
-                //     }
-                // }
+                for case in cases.iter() {
+                    match &case.pattern {
+                        &Pattern::Simple(ref simple_pat) => match simple_pat {
+                            &SimplePattern::Name(ref n) => {
+                                let mut cx = self.clone()
+                                                 .extend(vec![(n.clone(), scrut_ty.clone())]);
+                                let pat_term = case.pattern.to_term();
+                                cx.equalities.insert(*scrutinee.clone(), pat_term);
+                                try!(cx.type_check_term(&case.rhs, ty));
+                            }
+                            &SimplePattern::Placeholder => {
+                                try!(self.type_check_term(&case.rhs, ty));
+                            }
+                        },
+                        &Pattern::Constructor(ref n, ref patterns) => {
+                            let pat_term = case.pattern.to_term();
+                            let mut cx = self.clone();
+                            cx.equalities.insert(*scrutinee.clone(), pat_term);
+                            if patterns.len() == 0 {
+                                try!(cx.type_infer_term(&case.rhs));
+                            } else {
+                                let ctor = ctors.get(n).unwrap();
+                                try!(cx.bind_pattern(ctor, patterns, |cx| {
+                                    cx.type_check_term(&case.rhs, ty)
+                                }));
+                            }
+                        }
+                    }
+                }
 
                 Ok(ty.clone())
             },
