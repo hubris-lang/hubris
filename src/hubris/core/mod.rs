@@ -194,7 +194,12 @@ impl Display for Function {
 pub enum Term {
     Literal { span: Span, lit: Literal },
     Var { name: Name },
-    Match { span: Span, scrutinee: Box<Term>, cases: Vec<Case> },
+    Match {
+        span: Span,
+        scrutinee: Box<Term>,
+        return_predicate: Box<Term>,
+        cases: Vec<Case>
+    },
     App { span: Span, fun: Box<Term>, arg: Box<Term> },
     Forall { span: Span, name: Name, ty: Box<Term>, term: Box<Term> },
     // Metavar { name: Name },
