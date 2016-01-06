@@ -74,7 +74,7 @@ Binder: (Name, Term) = {
 
 
 Term: Term = {
-   "forall" <args: (Binder+)> "," <body: Term1> => {
+   "forall" <args: (Binder+)> "," <body: Term> => {
       let mut result = body;
       for (n, t) in args {
           result = Term::Forall {
@@ -86,7 +86,11 @@ Term: Term = {
       }
       result
   },
-  <t1: Term> "->" <t2: Term1> =>
+  <t: TermFnType> => t
+};
+
+TermFnType : Term = {
+  <t1: TermFnType> "->" <t2: Term1> =>
       Term::Forall {
         span: Span::dummy(),
         name: Name::from_str(""),
@@ -97,7 +101,7 @@ Term: Term = {
 };
 
 Term1: Term = {
-    "fun" <args: (Arg+)> ":" <t: Term0> "=>" <body: Term0> => Term::Lambda {
+    "fun" <args: (Arg+)> ":" <t: Term> "=>" <body: Term0> => Term::Lambda {
         span: Span::dummy(),
         args: args,
         ret_ty: Box::new(t),

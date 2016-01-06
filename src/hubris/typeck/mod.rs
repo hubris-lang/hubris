@@ -75,7 +75,7 @@ impl TyCtxt {
 
 
     pub fn type_check_def(&self, def: &Definition) -> Result<(), Error> {
-        debug!("type_check_def: def={:?}", def);
+        debug!("type_check_def: def={}", def);
         match def {
             &Definition::Fn(ref fun) => {
                 let &Function {
@@ -206,7 +206,6 @@ impl<'tcx> LocalCx<'tcx> {
 
                 Ok(ty.clone())
             },
-            &Term::Lambda { .. } => panic!("can't type check lambda's yet"),
             _ => {
                 debug!("type_check_term: infering the type of {}", term);
                 let infer_ty = try!(self.type_infer_term(term));
@@ -230,13 +229,11 @@ impl<'tcx> LocalCx<'tcx> {
             },
             &Term::Var { ref name, .. } => Ok(try!(self.lookup(name)).clone()),
             &Term::App { ref fun, ref arg, .. } => {
-                debug!("inside app {:?} {}", fun, arg);
                 match try!(self.type_infer_term(fun)) {
                     Term::Forall { name, ty, term, .. } => {
-                        debug!("inside forall: `{}` `{}` `{}`", name, ty, term);
                         try!(self.type_check_term(arg, &*ty));
                         // try!(self.evaluate())
-                        Ok(term.subst(&name, arg))
+                        Ok(term.subst(name.to_index(), arg))
                     },
                     _ => Err(Error::ApplicationErr),
                 }
@@ -246,6 +243,25 @@ impl<'tcx> LocalCx<'tcx> {
                 let cx = self.clone().extend(vec![(name.clone(), *ty.clone())]);
                 try!(cx.type_check_term(&*term, &Term::Type));
                 Ok(Term::Type)
+            }
+            &Term::Lambda { ref args, ref ret_ty, ref body, span, } => {
+                let lcx = self.clone()
+                              .extend(args.clone());
+
+                try!(lcx.type_check_term(body, ret_ty));
+
+                let mut pi_type = *body.clone();
+
+                for &(ref n, ref t) in args.iter().rev() {
+                    pi_type = Term::Forall {
+                        span: span,
+                        name: n.clone(),
+                        ty: Box::new(t.clone()),
+                        term: Box::new(pi_type),
+                    }
+                }
+
+                Ok(pi_type)
             }
             &Term::Type => Ok(Term::Type),
             _ => panic!("can only check type"),
@@ -270,7 +286,7 @@ impl<'tcx> LocalCx<'tcx> {
                         &SimplePattern::Name(ref n) => {
                             debug!("extending {} mapsto {:?}", n, ty);
                             cx = cx.extend(vec![(n.clone(), *ty.clone())]);
-                            term.subst(&name, &Term::Var { name: n.clone() })
+                            term.subst(name.to_index(), &Term::Var { name: n.clone() })
                         }
                         // Not sure about this case
                         &SimplePattern::Placeholder => {

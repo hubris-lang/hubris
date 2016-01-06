@@ -28,7 +28,8 @@ impl Parser {
                     ptr.push('^');
                     panic!("invalid_token on:\n {}{}", line, ptr);
                 }
-                ParseError::UnrecognizedToken { token, .. } => {
+                ParseError::UnrecognizedToken { token, expected } => {
+                    debug!("{:?} {:?}", token, expected);
                     let (start, token, end) = token.unwrap();
                     let (offset, line) = self.source_map.find_line(start).unwrap();
                     let mut ptr = "\n".to_string();

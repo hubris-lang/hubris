@@ -21,6 +21,9 @@ version = "0.8.0"
 [build-dependencies.lalrpop]
 version = "0.8.0"
 
+[dependencies.readline]
+git = "https://github.com/shaleh/rust-readline"
+
 [dependencies]
 llvm-sys = "*"
 log = "*"

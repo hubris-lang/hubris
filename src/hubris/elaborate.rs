@@ -1,14 +1,47 @@
 use ast;
 use core;
 
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::iter;
 
 pub fn elaborate_module<P: AsRef<Path>>(path: P, module: ast::Module) -> core::Module {
-    let name = elaborate_name(module.name);
-    let defs = module.defs
-                     .into_iter()
-                     .filter_map(elaborate_def)
-                     .collect();
+    // First let's split everything by type.
+    let mut fns = vec![];
+    let mut externs = vec![];
+    let mut data = vec![];
+
+    for def in &module.defs {
+        match def {
+            &ast::Definition::Data(ref d) =>
+                data.push(d.clone()),
+            &ast::Definition::Extern(ref e) =>
+                externs.push(e.clone()),
+            &ast::Definition::Fn(ref f) =>
+                fns.push(f.clone()),
+            _ => {}
+        }
+    }
+
+    // Collect all the constructors.
+    let mut ctors = vec![];
+    for d in data {
+        for ctor in d.ctors {
+            ctors.push(ctor.0.clone());
+        }
+    }
+
+    let ecx = ElabCx { module: module, constructors: ctors.into_iter().collect() };
+
+    let name = ecx.elaborate_global_name(ecx.module.name.clone());
+
+    // Might be able to avoid this allocation
+    let defs = ecx.module
+                  .defs
+                  .clone()
+                  .into_iter()
+                  .filter_map(|def| ecx.elaborate_def(def))
+                  .collect();
 
     core::Module {
         file_name: path.as_ref().to_owned(),
@@ -17,142 +50,259 @@ pub fn elaborate_module<P: AsRef<Path>>(path: P, module: ast::Module) -> core::M
     }
 }
 
-pub fn elaborate_def(def: ast::Definition) -> Option<core::Definition> {
-    match def {
-        ast::Definition::Data(d) => Some(core::Definition::Data(elaborate_data(d))),
-        ast::Definition::Fn(f) => Some(core::Definition::Fn(elaborate_fn(f))),
-        ast::Definition::Extern(e) => Some(core::Definition::Extern(elaborate_extern(e))),
-        ast::Definition::Comment(_) => None
-    }
+struct ElabCx {
+    module: ast::Module,
+    /// The set of declared constructor names in scope
+    /// we need this to differentiate between a name
+    /// binding or null-ary constructor in pattern
+    /// matching.
+    constructors: HashSet<ast::Name>,
 }
 
-fn elaborate_data(data: ast::Data) -> core::Data {
-    core::Data {
-        span: data.span,
-        name: elaborate_name(data.name),
-        ty: elaborate_term(data.ty),
-        ctors: data.ctors
-                   .into_iter()
-                   .map(|(k, v)| (elaborate_name(k), elaborate_term(v)))
-                   .collect()
+impl ElabCx {
+    pub fn elaborate_def(&self, def: ast::Definition) -> Option<core::Definition> {
+        match def {
+            ast::Definition::Data(d) =>
+                Some(core::Definition::Data(self.elaborate_data(d))),
+            ast::Definition::Fn(f) =>
+                Some(core::Definition::Fn(self.elaborate_fn(f))),
+            ast::Definition::Extern(e) =>
+                Some(core::Definition::Extern(self.elaborate_extern(e))),
+            ast::Definition::Comment(_) => None
+        }
     }
-}
 
-fn elaborate_fn(fun: ast::Function) -> core::Function {
-    core::Function {
-        name: elaborate_name(fun.name),
-        args: fun.args
-                 .into_iter()
-                 .map(|(k, v)| (elaborate_name(k), elaborate_term(v)))
-                 .collect(),
-        ty: elaborate_term(fun.ty),
-        body: elaborate_term(fun.body),
+    fn elaborate_data(&self, data: ast::Data) -> core::Data {
+        let mut lcx = LocalElabCx::from_elab_cx(self);
+        core::Data {
+            span: data.span,
+            name: self.elaborate_global_name(data.name),
+            ty: lcx.elaborate_term(data.ty),
+            ctors: data.ctors
+                       .into_iter()
+                       .map(|(k, v)| (self.elaborate_global_name(k), lcx.elaborate_term(v)))
+                       .collect()
+        }
     }
-}
 
-fn elaborate_extern(ext: ast::Extern) -> core::Extern {
-    let ast::Extern { span, name, term } = ext;
-    core::Extern {
-        span: span,
-        name: elaborate_name(name),
-        term: elaborate_term(term),
+    fn elaborate_fn(&self, fun: ast::Function) -> core::Function {
+        let mut lcx = LocalElabCx::from_elab_cx(self);
+
+        lcx.enter_scope(fun.args.clone(), move |lcx, args| {
+            let name = self.elaborate_global_name(fun.name);
+            let ty = lcx.elaborate_term(fun.ty);
+            let body = lcx.elaborate_term(fun.body);
+
+            core::Function {
+                name: name,
+                args: args,
+                ty: ty,
+                body: body,
+            }
+        })
     }
-}
 
-fn elaborate_term(term: ast::Term) -> core::Term {
-    match term {
-        ast::Term::Literal { span, lit } => core::Term::Literal {
+    fn elaborate_extern(&self, ext: ast::Extern) -> core::Extern {
+        let ast::Extern { span, name, term } = ext;
+        core::Extern {
             span: span,
-            lit: elaborate_literal(lit),
-        },
-        ast::Term::Var { name, .. } => core::Term::Var {
-            name: elaborate_name(name)
-        },
-        ast::Term::Match { span, scrutinee, cases } => {
-            let escrutinee = Box::new(elaborate_term(*scrutinee));
-            let ecases = cases.into_iter().map(elaborate_case).collect();
-            core::Term::Match {
-                span: span,
-                scrutinee: escrutinee,
-                cases: ecases
-            }
+            name: self.elaborate_global_name(name),
+            term: LocalElabCx::from_elab_cx(self)
+                             .elaborate_term(term),
         }
-        ast::Term::App { fun, arg, span } => {
-            let efun = elaborate_term(*fun);
-            let earg = elaborate_term(*arg);
-            core::Term::App {
+    }
+
+    fn elaborate_global_name(&self, n: ast::Name) -> core::Name {
+        core::Name::Qual {
+            components: vec![n.repr],
+            span: n.span,
+        }
+    }
+}
+
+struct LocalElabCx<'ecx> {
+    cx: &'ecx ElabCx,
+    // We use this to convert between named arguments,
+    // and de bruijn indicies.
+    binders: HashMap<ast::Name, usize>,
+    binder_level: usize
+}
+
+impl<'ecx> LocalElabCx<'ecx>  {
+    fn from_elab_cx(ecx: &'ecx ElabCx) -> LocalElabCx<'ecx> {
+        LocalElabCx { cx: ecx, binders: HashMap::new(), binder_level: 1 }
+    }
+
+    // We should enter introducing a name
+    fn enter_scope<F, R>(&mut self, binders: Vec<(ast::Name, ast::Term)>, body: F) -> R
+    where F : FnOnce(&mut LocalElabCx, Vec<(core::Name, core::Term)>) -> R {
+        // Bind the variable to the current level, then
+        // Names are the binder level - n + 1?
+        // If I'm the first binder, and my level is 2 then
+        // 1 + 1 = 2, 1 + 2 = 3
+        let mut ebinders = vec![];
+
+        let old_level = self.binder_level;
+        let old_binders = self.binders.clone();
+
+        for (name, t) in binders.clone() {
+            self.binders.insert(name.clone(), self.binder_level);
+            self.binder_level += 1;
+            let ename = self.elaborate_name(name);
+            let eterm = self.elaborate_term(t);
+            ebinders.push((ename, eterm));
+        }
+
+        let result = body(self, ebinders);
+
+        self.binder_level = old_level;
+        self.binders = old_binders;
+
+        result
+    }
+
+    // fun (x : Nat) (y : Nat) : Nat => x + y
+    // \x : Nat (\y : Nat => y + x)
+    // \x : Nat (\1 : Nat => 1 + x)
+    // \2 : Nat \1 : Nat => 1 + 2
+    fn elaborate_term(&mut self, term: ast::Term) -> core::Term {
+        match term {
+            ast::Term::Literal { span, lit } => core::Term::Literal {
                 span: span,
-                fun: Box::new(efun),
-                arg: Box::new(earg),
-            }
-        },
-        ast::Term::Forall { name, ty, term, span } =>
-            core::Term::Forall {
-                span: span,
-                name: elaborate_name(name),
-                ty: Box::new(elaborate_term(*ty)),
-                term: Box::new(elaborate_term(*term)),
+                lit: self.elaborate_literal(lit),
             },
-        ast::Term::Metavar { .. } => panic!("can't elaborate meta-variables"),
-        ast::Term::Lambda { args, ret_ty, body, span } => {
-            let eargs = args.into_iter().map(|(n, t)| {
-                (elaborate_name(n), elaborate_term(t))
-            }).collect();
-            let eret_ty = elaborate_term(*ret_ty);
-            let ebody = elaborate_term(*body);
+            ast::Term::Var { name, .. } => core::Term::Var {
+                name: self.elaborate_name(name)
+            },
+            ast::Term::Match { span, scrutinee, cases } => {
+                let escrutinee = Box::new(self.elaborate_term(*scrutinee));
+                let ecases = cases.into_iter().map(|c| self.elaborate_case(c)).collect();
+                core::Term::Match {
+                    span: span,
+                    scrutinee: escrutinee,
+                    cases: ecases
+                }
+            }
+            ast::Term::App { fun, arg, span } => {
+                let efun = self.elaborate_term(*fun);
+                let earg = self.elaborate_term(*arg);
+                core::Term::App {
+                    span: span,
+                    fun: Box::new(efun),
+                    arg: Box::new(earg),
+                }
+            },
+            ast::Term::Forall { name, ty, term, span } =>
+                self.enter_scope(vec![(name.clone(), *ty)], move |lcx, binder| {
+                    let (name, ty) = binder[0].clone();
+                    core::Term::Forall {
+                        span: span,
+                        name: name,
+                        ty: Box::new(ty),
+                        term: Box::new(lcx.elaborate_term(*term)),
+                    }
+                }),
+            ast::Term::Metavar { .. } => panic!("can't elaborate meta-variables"),
+            ast::Term::Lambda { args, ret_ty, body, span } => {
+                self.enter_scope(args, move |lcx, eargs| {
+                    let eret_ty = lcx.elaborate_term(*ret_ty);
+                    let ebody = lcx.elaborate_term(*body);
+                    core::Term::Lambda {
+                        span: span,
+                        args: eargs,
+                        ret_ty: Box::new(eret_ty),
+                        body: Box::new(ebody),
+                    }
+                })
+            }
+            ast::Term::Type => core::Term::Type,
+        }
+    }
 
-            core::Term::Lambda {
-                span: span,
-                args: eargs,
-                ret_ty: Box::new(eret_ty),
-                body: Box::new(ebody),
+    fn elaborate_literal(&self, lit: ast::Literal) -> core::Literal {
+        match lit {
+            ast::Literal::Unit => core::Literal::Unit,
+            ast::Literal::Int(i) => core::Literal::Int(i),
+        }
+    }
+
+    fn elaborate_case(&mut self, case: ast::Case) -> core::Case {
+        match case {
+            ast::Case { pattern, rhs, .. } => {
+                let names = self.bound_names(&pattern)
+                                .into_iter()
+                                .zip(iter::repeat(ast::Term::Type))
+                                .collect();
+
+                self.enter_scope(names, move |lcx, _| {
+                    core::Case {
+                        pattern: lcx.elaborate_pattern(pattern),
+                        rhs: lcx.elaborate_term(rhs)
+                    }
+                })
             }
         }
-        ast::Term::Type => core::Term::Type,
     }
-}
 
-fn elaborate_literal(lit: ast::Literal) -> core::Literal {
-    match lit {
-        ast::Literal::Unit => core::Literal::Unit,
-        ast::Literal::Int(i) => core::Literal::Int(i),
+    fn bound_names(&self, pat: &ast::Pattern) -> Vec<ast::Name> {
+        let mut result = vec![];
+        match pat {
+            &ast::Pattern::Name(ref n) => {
+                if !self.cx.constructors.contains(n) {
+                    result.push(n.clone())
+                }
+            },
+            &ast::Pattern::Constructor(_, ref pats) => {
+                for pat in pats {
+                    if let &ast::Pattern::Name(ref n) = pat {
+                        result.push(n.clone())
+                    } else {
+                        panic!("elaboration should of remove patterns of this form")
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        debug!("bound_names: result={:?}", result);
+        result
     }
-}
 
-fn elaborate_name(n: ast::Name) -> core::Name {
-    core::Name {
-        repr: n.repr,
-        span: n.span,
-    }
-}
-
-fn elaborate_case(case: ast::Case) -> core::Case {
-    match case {
-        ast::Case { pattern, rhs, .. } => core::Case {
-            pattern: elaborate_pattern(pattern),
-            rhs: elaborate_term(rhs),
+    fn elaborate_pattern(&self, pattern: ast::Pattern) -> core::Pattern {
+        match pattern {
+            ast::Pattern::Name(n) =>
+                core::Pattern::Simple(
+                    core::SimplePattern::Name(self.elaborate_name(n))),
+            ast::Pattern::Constructor(n, patterns) =>
+                core::Pattern::Constructor(
+                    self.elaborate_name(n),
+                    patterns.into_iter()
+                            .map(|p| self.elaborate_simple_pattern(p))
+                            .collect()),
+            _ => panic!("elaboration error")
         }
     }
-}
 
-fn elaborate_pattern(pattern: ast::Pattern) -> core::Pattern {
-    match pattern {
-        ast::Pattern::Name(n) =>
-            core::Pattern::Simple(
-                core::SimplePattern::Name(elaborate_name(n))),
-        ast::Pattern::Constructor(n, patterns) =>
-            core::Pattern::Constructor(
-                elaborate_name(n),
-                patterns.into_iter()
-                        .map(elaborate_simple_pattern)
-                        .collect()),
-        _ => panic!("elaboration error")
+    fn elaborate_simple_pattern(&self, pattern: ast::Pattern) -> core::SimplePattern {
+        match pattern {
+            ast::Pattern::Name(n) =>
+                core::SimplePattern::Name(self.elaborate_name(n)),
+            _ => panic!("elaboration error")
+        }
     }
-}
 
-fn elaborate_simple_pattern(pattern: ast::Pattern) -> core::SimplePattern {
-    match pattern {
-        ast::Pattern::Name(n) => core::SimplePattern::Name(elaborate_name(n)),
-        _ => panic!("elaboration error")
+    fn elaborate_name(&self, n: ast::Name) -> core::Name {
+        debug!("elaborate_name: binders={:?}", self.binders);
+        match self.binders.get(&n) {
+            None => core::Name::Qual {
+                span: n.span,
+                components: vec![n.repr],
+            },
+            Some(index) => core::Name::DeBruijn {
+                span: n.span,
+                index: *index,
+                repr: n.repr,
+            },
+        }
     }
 }

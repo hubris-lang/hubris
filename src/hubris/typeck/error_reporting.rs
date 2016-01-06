@@ -1,5 +1,5 @@
 use super::{Error, TyCtxt};
-use super::super::ast::Span;
+use super::super::ast::{Span, HasSpan};
 
 use std::io;
 use std::io::prelude::*;
@@ -66,7 +66,7 @@ pub fn report_type_error<O: Write>(
             span_error(
                 ty_cx,
                 out,
-                name.span,
+                name.get_span(),
                 format!("unknown variable `{}`", name))
         },
         Error::UnificationErr(span, t1, t2) => {

@@ -1,3 +1,4 @@
+use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
 pub use parser::SourceMap;
@@ -28,7 +29,7 @@ impl Span {
     }
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Eq, PartialOrd, Ord)]
 pub struct Name {
     pub span: Span,
     pub repr: String,
@@ -40,6 +41,18 @@ impl Name {
             span: Span::dummy(),
             repr: s.to_owned(),
         }
+    }
+}
+
+impl PartialEq for Name {
+    fn eq(&self, other: &Name) -> bool {
+        self.repr == other.repr
+    }
+}
+
+impl Hash for Name {
+    fn hash<H>(&self, state: &mut H) where H: Hasher {
+        self.repr.hash(state)
     }
 }
 
@@ -56,7 +69,7 @@ impl Module {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Definition {
     Data(Data),
     Fn(Function),
@@ -88,7 +101,7 @@ impl HasSpan for Definition {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Data {
     pub span: Span,
     pub name: Name,
@@ -96,14 +109,14 @@ pub struct Data {
     pub ctors: Vec<(Name, Term)>
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Extern {
     pub span: Span,
     pub name: Name,
     pub term: Term,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Function {
     pub span: Span,
     pub name: Name,
@@ -112,7 +125,7 @@ pub struct Function {
     pub body: Term,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Term {
     Literal { span: Span, lit: Literal },
     Var { name: Name },
@@ -156,14 +169,14 @@ impl HasSpan for Term {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Case {
     pub span: Span,
     pub pattern: Pattern,
     pub rhs: Term,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Pattern {
     Name(Name),
     Constructor(Name, Vec<Pattern>),
