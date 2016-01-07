@@ -8,6 +8,7 @@ use std::hash::{Hash, Hasher};
 pub enum Name {
     DeBruijn { index: usize, span: Span, repr: String },
     Qual { span: Span, components: Vec<String> },
+    Meta { number: usize }
 }
 
 impl Name {
@@ -54,8 +55,18 @@ impl Hash for Name {
         use self::Name::*;
 
         match self {
-            &DeBruijn { ref index, .. } => index.hash(state),
-            &Qual { ref components, .. } => components.hash(state),
+            &DeBruijn { ref index, .. } => {
+                0.hash(state);
+                index.hash(state);
+            },
+            &Qual { ref components, .. } => {
+                1.hash(state);
+                components.hash(state);
+            }
+            &Meta { ref number, .. } => {
+                2.hash(state);
+                number.hash(state);
+            }
         }
     }
 }
@@ -70,7 +81,9 @@ impl Display for Name {
             &Qual { ref components, .. } =>
                 for c in components {
                     try!(write!(formatter, "{}", c))
-                }
+                },
+            &Meta { number, .. } =>
+                try!(write!(formatter, "?{}", number))
         }
 
         Ok(())
@@ -84,6 +97,7 @@ impl HasSpan for Name {
         match self {
             &Qual { span, .. } => span,
             &DeBruijn { span, .. } => span,
+            &Meta { .. } => panic!(),
         }
     }
 
@@ -95,6 +109,7 @@ impl HasSpan for Name {
                 *span = sp,
             &mut Qual { ref mut span, ..} =>
                 *span = sp,
+            &mut Meta { .. } => panic!(),
         }
     }
 }
@@ -182,7 +197,7 @@ impl Display for Function {
 
         try!(write!(formatter, "fn {}(", name));
         for &(ref arg, ref arg_ty) in args {
-            try!(write!(formatter, "{} : {}", arg, arg_ty));
+            try!(write!(formatter, "{} : {},", arg, arg_ty));
         }
         try!(writeln!(formatter, ") : {} :=", ty));
         try!(writeln!(formatter, "{}", body));
@@ -372,8 +387,13 @@ impl Display for Term {
                 write!(formatter, "{:?}", lit),
             &Var { ref name, .. } =>
                 write!(formatter, "{}", name),
-            m @ &Match { .. } =>
-                write!(formatter, "{:?}", m),
+            &Match { ref scrutinee, ref cases, ref return_predicate, .. } => {
+                try!(writeln!(formatter, "match {} with return {}", scrutinee, return_predicate));
+                for case in cases {
+                    try!(writeln!(formatter, "{}", case));
+                }
+                writeln!(formatter, "end")
+            },
             &App { ref fun, ref arg, .. } =>
                 write!(formatter, "{} {}", fun, arg),
             &Forall { ref name, ref ty, ref term, .. } =>
@@ -438,6 +458,12 @@ pub struct Case {
     pub rhs: Term,
 }
 
+impl Display for Case {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        writeln!(formatter, "| {} => {}", self.pattern, self.rhs)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Pattern {
     Constructor(Name, Vec<SimplePattern>),
@@ -472,6 +498,19 @@ impl Pattern {
                         panic!("cant convert placeholder")
                 }
             }
+        }
+    }
+}
+
+impl Display for Pattern {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        use self::Pattern::*;
+
+        match self {
+            &Constructor(ref n, ref pats) =>
+                write!(formatter, "{} {:?}", n, pats),
+            &Simple(ref simple) =>
+                write!(formatter, "{:?}", simple),
         }
     }
 }

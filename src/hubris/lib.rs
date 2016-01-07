@@ -31,7 +31,7 @@ use std::io;
 pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> io::Result<()> {
     let parser = try!(parser::from_file(path.as_ref()));
     let module = parser.parse();
-    let emodule = elaborate::elaborate_module(path.as_ref(), module);
+    let emodule = elaborate::elaborate_module(path.as_ref(), module, parser.source_map.clone());
     let ty_cx = TyCtxt::from_module(&emodule, parser.source_map);
 
     let term = term::stdout().unwrap();

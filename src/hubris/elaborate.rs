@@ -1,37 +1,27 @@
-use ast;
+use ast::{self, SourceMap, Span, HasSpan};
 use core;
+use typeck::TyCtxt;
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::iter;
 
-pub fn elaborate_module<P: AsRef<Path>>(path: P, module: ast::Module) -> core::Module {
-    // First let's split everything by type.
-    let mut fns = vec![];
-    let mut externs = vec![];
-    let mut data = vec![];
+pub fn elaborate_module<P: AsRef<Path>>(
+    path: P,
+    module: ast::Module,
+    source_map: SourceMap) -> core::Module {
+    // Elaboration relies on type checking, so first we setup a typing context to use
+    // while elaborating the program. We will run the type checker in inference mode
+    // to setup constraints, and then we will solve the constraints, and check the
+    // term again.
+    let mut ty_cx = TyCtxt::empty();
+    ty_cx.source_map = source_map;
 
-    for def in &module.defs {
-        match def {
-            &ast::Definition::Data(ref d) =>
-                data.push(d.clone()),
-            &ast::Definition::Extern(ref e) =>
-                externs.push(e.clone()),
-            &ast::Definition::Fn(ref f) =>
-                fns.push(f.clone()),
-            _ => {}
-        }
-    }
-
-    // Collect all the constructors.
-    let mut ctors = vec![];
-    for d in data {
-        for ctor in d.ctors {
-            ctors.push(ctor.0.clone());
-        }
-    }
-
-    let ecx = ElabCx { module: module, constructors: ctors.into_iter().collect() };
+    let mut ecx = ElabCx {
+        module: module,
+        constructors: HashSet::new(),
+        ty_cx: ty_cx,
+    };
 
     let name = ecx.elaborate_global_name(ecx.module.name.clone());
 
@@ -40,8 +30,29 @@ pub fn elaborate_module<P: AsRef<Path>>(path: P, module: ast::Module) -> core::M
                   .defs
                   .clone()
                   .into_iter()
-                  .filter_map(|def| ecx.elaborate_def(def))
-                  .collect();
+                  .filter_map(|def| {
+                      match &def {
+                          &ast::Definition::Data(ref d) => {
+                              for ctor in &d.ctors {
+                                  ecx.constructors.insert(ctor.0.clone());
+                              }
+                          },
+                          _ => {}
+                      }
+
+                      ecx.elaborate_def(def).map(|edef| {
+                          match &edef {
+                              &core::Definition::Data(ref d) =>
+                                    ecx.ty_cx.declare_datatype(d),
+                              &core::Definition::Fn(ref f) =>
+                                    ecx.ty_cx.declare_def(f),
+                              &core::Definition::Extern(ref e) =>
+                                    ecx.ty_cx.declare_extern(e),
+                          }
+                          edef
+                      })
+                })
+                .collect();
 
     core::Module {
         file_name: path.as_ref().to_owned(),
@@ -57,17 +68,26 @@ struct ElabCx {
     /// binding or null-ary constructor in pattern
     /// matching.
     constructors: HashSet<ast::Name>,
+    ty_cx: TyCtxt,
 }
 
 impl ElabCx {
     pub fn elaborate_def(&self, def: ast::Definition) -> Option<core::Definition> {
         match def {
-            ast::Definition::Data(d) =>
-                Some(core::Definition::Data(self.elaborate_data(d))),
-            ast::Definition::Fn(f) =>
-                Some(core::Definition::Fn(self.elaborate_fn(f))),
-            ast::Definition::Extern(e) =>
-                Some(core::Definition::Extern(self.elaborate_extern(e))),
+            ast::Definition::Data(d) => {
+                let edata = core::Definition::Data(self.elaborate_data(d));
+                Some(edata)
+            }
+            ast::Definition::Fn(f) => {
+                let efn = core::Definition::Fn(self.elaborate_fn(f));
+                debug!("elaborate_def: fn={}", efn);
+                panic!();
+                Some(efn)
+            }
+            ast::Definition::Extern(e) => {
+                let ext = core::Definition::Extern(self.elaborate_extern(e));
+                Some(ext)
+            }
             ast::Definition::Comment(_) => None
         }
     }
@@ -90,8 +110,8 @@ impl ElabCx {
 
         lcx.enter_scope(fun.args.clone(), move |lcx, args| {
             let name = self.elaborate_global_name(fun.name);
-            let ty = lcx.elaborate_term(fun.ty);
-            let body = lcx.elaborate_term(fun.body);
+            let ty = lcx.elaborate_term(fun.ty.clone());
+            let body = lcx.elaborate_fn_body(fun.body, fun.ty);
 
             core::Function {
                 name: name,
@@ -125,12 +145,19 @@ struct LocalElabCx<'ecx> {
     // We use this to convert between named arguments,
     // and de bruijn indicies.
     binders: HashMap<ast::Name, usize>,
-    binder_level: usize
+    binder_level: usize,
+    metavar_counter: usize,
+    // return_ty: Option<ast::Term>,
 }
 
 impl<'ecx> LocalElabCx<'ecx>  {
     fn from_elab_cx(ecx: &'ecx ElabCx) -> LocalElabCx<'ecx> {
-        LocalElabCx { cx: ecx, binders: HashMap::new(), binder_level: 1 }
+        LocalElabCx {
+            cx: ecx,
+            binders: HashMap::new(),
+            binder_level: 1,
+            metavar_counter: 0
+        }
     }
 
     // We should enter introducing a name
@@ -161,6 +188,29 @@ impl<'ecx> LocalElabCx<'ecx>  {
         result
     }
 
+    fn new_metavar(&mut self) -> core::Name {
+        let result = core::Name::Meta { number: self.metavar_counter };
+        self.metavar_counter += 1;
+        result
+    }
+
+    fn elaborate_fn_body(&mut self, term: ast::Term, ret_ty: ast::Term) -> core::Term {
+        match term {
+            ast::Term::Match { span, scrutinee, cases } => {
+                let escrutinee = Box::new(self.elaborate_term(*scrutinee));
+                let ecases = cases.into_iter().map(|c| self.elaborate_case(c)).collect();
+
+                core::Term::Match {
+                    span: span,
+                    scrutinee: escrutinee,
+                    cases: ecases,
+                    return_predicate: Box::new(self.new_metavar().to_term()),
+                }
+            }
+            other => self.elaborate_term(other)
+        }
+    }
+
     // fun (x : Nat) (y : Nat) : Nat => x + y
     // \x : Nat (\y : Nat => y + x)
     // \x : Nat (\1 : Nat => 1 + x)
@@ -175,13 +225,14 @@ impl<'ecx> LocalElabCx<'ecx>  {
                 name: self.elaborate_name(name)
             },
             ast::Term::Match { span, scrutinee, cases } => {
-                let escrutinee = Box::new(self.elaborate_term(*scrutinee));
-                let ecases = cases.into_iter().map(|c| self.elaborate_case(c)).collect();
-                core::Term::Match {
-                    span: span,
-                    scrutinee: escrutinee,
-                    cases: ecases
-                }
+                // let escrutinee = Box::new(self.elaborate_term(*scrutinee));
+                // let ecases = cases.into_iter().map(|c| self.elaborate_case(c)).collect();
+                // // core::Term::Match {
+                // //     span: span,
+                // //     scrutinee: escrutinee,
+                // //     cases: ecases
+                // // }
+                panic!("match doesn't work right now")
             }
             ast::Term::App { fun, arg, span } => {
                 let efun = self.elaborate_term(*fun);

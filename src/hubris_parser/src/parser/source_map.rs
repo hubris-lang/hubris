@@ -1,6 +1,7 @@
 use super::super::ast::Span;
 use std::path::PathBuf;
 
+#[derive(Clone)]
 pub struct SourceMap {
     pub file_name: PathBuf,
     pub source: String,

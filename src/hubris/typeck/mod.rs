@@ -12,7 +12,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone)]
 pub enum Error {
     ApplicationErr,
-    UnificationErr(Span, Term, Term),
+    UnificationErr(Span, Term, Term, Vec<(Term, Term)>),
     UnknownVariable(Name),
     ElaborationError,
     MkErr
@@ -24,7 +24,7 @@ pub struct TyCtxt {
     types: HashMap<Name, Data>,
     functions: HashMap<Name, Function>,
     globals: HashMap<Name, Term>,
-    source_map: SourceMap,
+    pub source_map: SourceMap,
 }
 
 #[derive(Clone)]
@@ -46,33 +46,41 @@ impl TyCtxt {
     }
 
     pub fn from_module(module: &Module, source_map: SourceMap) -> TyCtxt {
-        let mut tycx = TyCtxt::empty();
-        tycx.source_map = source_map;
+        let mut ty_cx = TyCtxt::empty();
+        ty_cx.source_map = source_map;
 
         for def in &module.defs {
             match def {
-                &Definition::Data(ref d) => {
-                    tycx.types.insert(d.name.clone(), d.clone());
-                    tycx.globals.insert(d.name.clone(), d.ty.clone());
-                    for ctor in &d.ctors {
-                        tycx.globals.insert(
-                            ctor.0.clone(),
-                            ctor.1.clone());
-                    }
-                }
-                &Definition::Fn(ref f) => {
-                    tycx.functions.insert(f.name.clone(), f.clone());
-                    tycx.globals.insert(f.name.clone(), f.ty());
-                }
-                &Definition::Extern(ref e) => {
-                    tycx.globals.insert(e.name.clone(), e.term.clone());
-                }
+                &Definition::Data(ref d) =>
+                    ty_cx.declare_datatype(d),
+                &Definition::Fn(ref f) =>
+                    ty_cx.declare_def(f),
+                &Definition::Extern(ref e) =>
+                    ty_cx.declare_extern(e),
             }
         }
 
-        return tycx;
+        return ty_cx;
     }
 
+    pub fn declare_datatype(&mut self, data_type: &Data) {
+        self.types.insert(data_type.name.clone(), data_type.clone());
+        self.globals.insert(data_type.name.clone(), data_type.ty.clone());
+        for ctor in &data_type.ctors {
+            self.globals.insert(
+                ctor.0.clone(),
+                ctor.1.clone());
+        }
+    }
+
+    pub fn declare_def(&mut self, f: &Function) {
+        self.functions.insert(f.name.clone(), f.clone());
+        self.globals.insert(f.name.clone(), f.ty());
+    }
+
+    pub fn declare_extern(&mut self, e: &Extern) {
+        self.globals.insert(e.name.clone(), e.term.clone());
+    }
 
     pub fn type_check_def(&self, def: &Definition) -> Result<(), Error> {
         debug!("type_check_def: def={}", def);
@@ -148,30 +156,24 @@ impl<'tcx> LocalCx<'tcx> {
         if t == u {
             Ok(t.clone())
         } else {
-            for (x, y) in &self.equalities {
-                debug!("{} = {}", x, y);
-            }
-            let mut needed_eqs = vec![];
-            equal_modulo(t, u, &mut needed_eqs);
-            for &(ref x, ref y) in &needed_eqs {
-                match self.equalities.get(x) {
-                    None =>
-                        return Err(Error::UnificationErr(span, t.clone(), u.clone())),
-                    Some(yp) => {
-                        if y != yp {
-                            return Err(Error::UnificationErr(span, t.clone(), u.clone()));
-                        }
-                    }
-                }
-            }
-
-            return Ok(t.clone());
+            let mut inequalities = vec![];
+            equal_modulo(t, u, &mut inequalities);
+            Err(Error::UnificationErr(span, t.clone(), u.clone(), inequalities))
         }
     }
 
     pub fn type_check_term(&self, term: &Term, ty: &Term) -> Result<Term, Error> {
         match term {
-            &Term::Match { ref scrutinee, ref cases, .. } => {
+            // We currently borrow the typing rule from CIC:
+            //
+            // t : I pars t1 . . . tp
+            // y1 . . . yp, x : I pars y1 . . . yp ⊢ P : s'
+            // {x1 : A1 . . . xn : An ⊢ f : P[u1/y1, . . . , up/yp,(c x1 . . . xn)/x]}c
+            // match t as x in I y1 . . . yp return P
+            // with . . . | c x1 . . . xn ⇒ f| . . .
+            // end : P[t1/y1, . . . , tp/yp, t/x]
+            ///
+            &Term::Match { ref scrutinee, ref cases, ref return_predicate, .. } => {
                 let scrut_ty = try!(self.type_infer_term(scrutinee));
                 let ctors: HashMap<_, _> = self.ctors(&scrut_ty).unwrap().into_iter().collect();
 
@@ -181,29 +183,28 @@ impl<'tcx> LocalCx<'tcx> {
                             &SimplePattern::Name(ref n) => {
                                 let mut cx = self.clone()
                                                  .extend(vec![(n.clone(), scrut_ty.clone())]);
-                                let pat_term = case.pattern.to_term();
-                                cx.equalities.insert(*scrutinee.clone(), pat_term);
-                                try!(cx.type_check_term(&case.rhs, ty));
+                                try!(cx.type_check_term(&case.rhs, return_predicate));
                             }
                             &SimplePattern::Placeholder => {
-                                try!(self.type_check_term(&case.rhs, ty));
+                                try!(self.type_check_term(&case.rhs, return_predicate));
                             }
                         },
                         &Pattern::Constructor(ref n, ref patterns) => {
                             let pat_term = case.pattern.to_term();
                             let mut cx = self.clone();
-                            cx.equalities.insert(*scrutinee.clone(), pat_term);
                             if patterns.len() == 0 {
                                 try!(cx.type_infer_term(&case.rhs));
                             } else {
                                 let ctor = ctors.get(n).unwrap();
                                 try!(cx.bind_pattern(ctor, patterns, |cx| {
-                                    cx.type_check_term(&case.rhs, ty)
+                                    cx.type_check_term(&case.rhs, return_predicate)
                                 }));
                             }
                         }
                     }
                 }
+
+                try!(self.unify(ty.get_span(), return_predicate, ty));
 
                 Ok(ty.clone())
             },
