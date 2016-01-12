@@ -163,62 +163,14 @@ impl<'tcx> LocalCx<'tcx> {
     }
 
     pub fn type_check_term(&self, term: &Term, ty: &Term) -> Result<Term, Error> {
-        match term {
-            // We currently borrow the typing rule from CIC:
-            //
-            // t : I pars t1 . . . tp
-            // y1 . . . yp, x : I pars y1 . . . yp ⊢ P : s'
-            // {x1 : A1 . . . xn : An ⊢ f : P[u1/y1, . . . , up/yp,(c x1 . . . xn)/x]}c
-            // match t as x in I y1 . . . yp return P
-            // with . . . | c x1 . . . xn ⇒ f| . . .
-            // end : P[t1/y1, . . . , tp/yp, t/x]
-            ///
-            &Term::Match { ref scrutinee, ref cases, ref return_predicate, .. } => {
-                let scrut_ty = try!(self.type_infer_term(scrutinee));
-                let ctors: HashMap<_, _> = self.ctors(&scrut_ty).unwrap().into_iter().collect();
-
-                for case in cases.iter() {
-                    match &case.pattern {
-                        &Pattern::Simple(ref simple_pat) => match simple_pat {
-                            &SimplePattern::Name(ref n) => {
-                                let mut cx = self.clone()
-                                                 .extend(vec![(n.clone(), scrut_ty.clone())]);
-                                try!(cx.type_check_term(&case.rhs, return_predicate));
-                            }
-                            &SimplePattern::Placeholder => {
-                                try!(self.type_check_term(&case.rhs, return_predicate));
-                            }
-                        },
-                        &Pattern::Constructor(ref n, ref patterns) => {
-                            let pat_term = case.pattern.to_term();
-                            let mut cx = self.clone();
-                            if patterns.len() == 0 {
-                                try!(cx.type_infer_term(&case.rhs));
-                            } else {
-                                let ctor = ctors.get(n).unwrap();
-                                try!(cx.bind_pattern(ctor, patterns, |cx| {
-                                    cx.type_check_term(&case.rhs, return_predicate)
-                                }));
-                            }
-                        }
-                    }
-                }
-
-                try!(self.unify(ty.get_span(), return_predicate, ty));
-
-                Ok(ty.clone())
-            },
-            _ => {
-                debug!("type_check_term: infering the type of {}", term);
-                let infer_ty = try!(self.type_infer_term(term));
-                debug!("type_check_term: checking {} againist the inferred type {}",
-                    ty,
-                    infer_ty);
-                let term = try!(self.unify(term.get_span(), ty,  &infer_ty));
-                debug!("return from unify");
-                Ok(term)
-            }
-        }
+        debug!("type_check_term: infering the type of {}", term);
+        let infer_ty = try!(self.type_infer_term(term));
+        debug!("type_check_term: checking {} againist the inferred type {}",
+                ty,
+                infer_ty);
+        let term = try!(self.unify(term.get_span(), ty,  &infer_ty));
+        debug!("return from unify");
+        Ok(term)
     }
 
     pub fn type_infer_term(&self, term: &Term) -> Result<Term, Error> {
@@ -266,44 +218,7 @@ impl<'tcx> LocalCx<'tcx> {
                 Ok(pi_type)
             }
             &Term::Type => Ok(Term::Type),
-            _ => panic!("can only check type"),
         }
-    }
-
-    pub fn bind_pattern<R, F : FnOnce(LocalCx) -> R>(
-        &self,
-        ty: &Term,
-        patterns: &Vec<SimplePattern>,
-        f: F) -> R {
-        debug!("bind_pattern: {:?}", ty);
-        let mut quantifier = ty.clone();
-        let mut quantifier_level = 0;
-        let mut cx = self.clone();
-
-        while quantifier_level < patterns.len() {
-            /* this is mostly definitely not right */
-            quantifier = match quantifier {
-                Term::Forall { name, ty, term, .. } => {
-                    match &patterns[quantifier_level] {
-                        &SimplePattern::Name(ref n) => {
-                            debug!("extending {} mapsto {:?}", n, ty);
-                            cx = cx.extend(vec![(n.clone(), *ty.clone())]);
-                            term.subst(name.to_index(), &Term::Var { name: n.clone() })
-                        }
-                        // Not sure about this case
-                        &SimplePattern::Placeholder => {
-                            *term
-                        }
-                    }
-
-                },
-                _ => panic!("invalid pattern binding")
-            };
-
-            quantifier_level += 1;
-        }
-
-        f(cx)
     }
 
     pub fn evaluate(&self, term: &Term) -> Term {
@@ -317,8 +232,6 @@ fn equal_modulo(t1: &Term, t2: &Term, equalities: &mut Vec<(Term, Term)>) -> boo
     debug!("equal_modulo: {} == {}", t1, t2);
 
     match (t1, t2) {
-        (&Match { .. },
-         &Match {..}) => panic!(),
         (&App { fun: ref fun1, arg: ref arg1, .. },
          &App { fun: ref fun2, arg: ref arg2, .. }) =>
             equal_modulo(fun1, fun2, equalities) &&

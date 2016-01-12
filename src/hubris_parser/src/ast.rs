@@ -1,3 +1,4 @@
+use std::fmt::{self, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
@@ -32,14 +33,20 @@ impl Span {
 #[derive(Clone, Debug, Eq, PartialOrd, Ord)]
 pub struct Name {
     pub span: Span,
-    pub repr: String,
+    pub repr: NameKind,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum NameKind {
+    Unqualified(String),
+    Qualified(Vec<String>),
 }
 
 impl Name {
     pub fn from_str(s: &str) -> Name {
         Name {
             span: Span::dummy(),
-            repr: s.to_owned(),
+            repr: NameKind::Unqualified(s.to_owned()),
         }
     }
 }
@@ -56,6 +63,17 @@ impl Hash for Name {
     }
 }
 
+impl Display for Name {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        use self::NameKind::*;
+
+        match &self.repr {
+            &Unqualified(ref s) => write!(formatter, "{}", s),
+            &Qualified(ref qn) => write!(formatter, "{:?}", qn),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Module {
     pub span: Span,
@@ -65,7 +83,7 @@ pub struct Module {
 
 impl Module {
     pub fn file_name(&self) -> PathBuf {
-        PathBuf::from(&self.name.repr[..])
+        PathBuf::from(&self.name.to_string()[..])
     }
 }
 

@@ -136,10 +136,7 @@ Term0US: Term = {
     cases: m.1
   },
   <s: r"\?[a-zA-Z_][a-zA-Z0-9_]*"> => {
-      let name = Name {
-          span: Span::dummy(),
-          repr: s.to_owned(),
-      };
+      let name = Name::from_str(s);
 
       Term::Metavar { name: name }
   },
@@ -171,12 +168,28 @@ PatternO: Pattern = {
 };
 
 Name: Name = {
-    <s: r"[a-zA-Z_][a-zA-Z0-9_]*"> => {
+    <s : SimpleName> => {
         Name {
             span: Span::dummy(),
-            repr: s.to_owned(),
+            repr: NameKind::Unqualified(s),
+        }
+    },
+    <qn : QualName> => {
+        Name {
+            span: Span::dummy(),
+            repr: NameKind::Qualified(qn),
         }
     }
+};
+
+QualName: Vec<String> = {
+    <prefix : QualName> "." <end : SimpleName> => {
+        let mut prefix = prefix; prefix.push(end); prefix
+    },
+};
+
+SimpleName: String = {
+    <s: r"[a-zA-Z_][a-zA-Z0-9_]*"> => s.to_string()
 };
 
 Literal: Literal = {

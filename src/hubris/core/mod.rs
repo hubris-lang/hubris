@@ -7,8 +7,9 @@ use std::hash::{Hash, Hasher};
 #[derive(Clone, Debug, Eq)]
 pub enum Name {
     DeBruijn { index: usize, span: Span, repr: String },
+    Local { number: usize, repr: String, ty: Box<Term> },
     Qual { span: Span, components: Vec<String> },
-    Meta { number: usize }
+    Meta { number: usize, ty: Box<Term> }
 }
 
 impl Name {
@@ -67,6 +68,11 @@ impl Hash for Name {
                 2.hash(state);
                 number.hash(state);
             }
+            // WARNING may not be right
+            &Local { ref number, .. } => {
+                3.hash(state);
+                number.hash(state);
+            }
         }
     }
 }
@@ -83,7 +89,9 @@ impl Display for Name {
                     try!(write!(formatter, "{}", c))
                 },
             &Meta { number, .. } =>
-                try!(write!(formatter, "?{}", number))
+                try!(write!(formatter, "?{}", number)),
+            &Local { ref repr, .. } =>
+                try!(write!(formatter, "{}", repr)),
         }
 
         Ok(())
@@ -98,6 +106,7 @@ impl HasSpan for Name {
             &Qual { span, .. } => span,
             &DeBruijn { span, .. } => span,
             &Meta { .. } => panic!(),
+            &Local { .. } => panic!(),
         }
     }
 
@@ -110,6 +119,7 @@ impl HasSpan for Name {
             &mut Qual { ref mut span, ..} =>
                 *span = sp,
             &mut Meta { .. } => panic!(),
+            &mut Local { .. } => panic!(),
         }
     }
 }
@@ -209,20 +219,66 @@ impl Display for Function {
 pub enum Term {
     Literal { span: Span, lit: Literal },
     Var { name: Name },
-    Match {
-        span: Span,
-        scrutinee: Box<Term>,
-        return_predicate: Box<Term>,
-        cases: Vec<Case>
-    },
     App { span: Span, fun: Box<Term>, arg: Box<Term> },
     Forall { span: Span, name: Name, ty: Box<Term>, term: Box<Term> },
-    // Metavar { name: Name },
     Lambda { span: Span, args: Vec<(Name, Term)>, ret_ty: Box<Term>, body: Box<Term> },
     Type,
 }
 
 impl Term {
+    /// Abstracts a term, binding names for term.
+    pub fn abst(&self, index: usize, name: &Name, term: &Term) -> Term {
+        use self::Term::*;
+        use self::Name::*;
+
+        // debug!("subst: {} with {}", index, replacement);
+
+        match self {
+            &Literal { .. } => self.clone(),
+            &Var { name: ref vname } => match vname {
+                &Local { number, ref repr, ref ty } => {
+                    // if repr == name.repr() {
+                    //     DeBruijn {
+                    //         index: index,
+                    //         span: Span::dummy(),
+                    //         repr: repr.clone(),
+                    //     }
+                    // } else {
+                    //     self.clone()
+                    // }
+                    self.clone()
+                }
+                &Qual { .. } | &DeBruijn { .. } | &Meta { .. } =>
+                    self.clone(),
+            },
+            &App { ref fun, ref arg, span } =>
+                App {
+                    fun: Box::new(fun.abst(index, name, term)),
+                    arg: Box::new(arg.abst(index, name, term)),
+                    span: span,
+                },
+            &Forall { ref name, ref ty, ref term, span } =>
+                Forall {
+                    name: name.clone(),
+                    ty: Box::new(ty.abst(index, name, term)),
+                    term: Box::new(term.abst(index + 1, name, term)),
+                    span: span,
+                },
+            &Lambda {  ref args, ref ret_ty, ref body, span } =>
+                Lambda {
+                    args: args.clone(),
+                    ret_ty: ret_ty.clone(),
+                    body: Box::new(body.abst(index + 1, name, term)),
+                    span: span,
+                },
+            &Type => Type,
+        }
+    }
+
+    pub fn instantiate(&self, s: Term, term: Term) -> Term {
+        panic!()
+    }
+
     pub fn subst(&self, index: usize, replacement: &Term) -> Term {
         use self::Term::*;
         use self::Name::*;
@@ -243,8 +299,6 @@ impl Term {
                     n => Var { name: n.clone() }
                 }
             }
-            &Match { .. } =>
-                panic!("can't subst on match"),
             &App { ref fun, ref arg, span } =>
                 App {
                     fun: Box::new(fun.subst(index, replacement)),
@@ -291,8 +345,6 @@ impl Term {
 
                 Var { name: name }
             },
-            Match { .. } =>
-                panic!("can't subst on match"),
             App { ref fun, ref arg, span } =>
                 App {
                     fun: Box::new(fun.clone().shift(shift, cutoff)),
@@ -331,8 +383,6 @@ impl PartialEq for Term {
             (&Var { name: ref name1, .. },
              &Var { name: ref name2, .. }) =>
                 name1 == name2,
-            (&Match { .. },
-             &Match {..}) => panic!(),
             (&App { fun: ref fun1, arg: ref arg1, .. },
              &App { fun: ref fun2, arg: ref arg2, .. }) =>
                 fun1 == fun2 && arg1 == arg2,
@@ -358,7 +408,6 @@ impl Hash for Term {
                 lit.hash(state),
             &Var { ref name, .. } =>
                 name.hash(state),
-            &Match { .. } => panic!(),
             &App { ref fun, ref arg, .. } => {
                 fun.hash(state);
                 arg.hash(state);
@@ -387,13 +436,6 @@ impl Display for Term {
                 write!(formatter, "{:?}", lit),
             &Var { ref name, .. } =>
                 write!(formatter, "{}", name),
-            &Match { ref scrutinee, ref cases, ref return_predicate, .. } => {
-                try!(writeln!(formatter, "match {} with return {}", scrutinee, return_predicate));
-                for case in cases {
-                    try!(writeln!(formatter, "{}", case));
-                }
-                writeln!(formatter, "end")
-            },
             &App { ref fun, ref arg, .. } =>
                 write!(formatter, "{} {}", fun, arg),
             &Forall { ref name, ref ty, ref term, .. } =>
@@ -423,7 +465,6 @@ impl HasSpan for Term {
         match self {
             &Literal { span, .. } => span,
             &Var { ref name } => name.get_span(),
-            &Match { span, .. } => span,
             &App { span, .. } => span,
             &Forall { span, .. } => span,
             &Lambda { span, .. } => span,
@@ -437,7 +478,6 @@ impl HasSpan for Term {
         match self {
             &mut Literal { ref mut span, .. } => *span = sp,
             &mut Var { ref mut name } => name.set_span(sp),
-            &mut Match { ref mut span, .. } => *span = sp,
             &mut App { ref mut span, .. } => *span = sp,
             &mut Forall { ref mut span, .. } => *span = sp,
             &mut Lambda { ref mut span, .. } => *span = sp,
@@ -450,73 +490,4 @@ impl HasSpan for Term {
 pub enum Literal {
     Int(i64), // will need to revisit this decision
     Unit
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Case {
-    pub pattern: Pattern,
-    pub rhs: Term,
-}
-
-impl Display for Case {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        writeln!(formatter, "| {} => {}", self.pattern, self.rhs)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Pattern {
-    Constructor(Name, Vec<SimplePattern>),
-    Simple(SimplePattern),
-}
-
-impl Pattern {
-    pub fn to_term(&self) -> Term {
-        match self {
-            &Pattern::Constructor(ref n, ref pats) => {
-                let mut term = Term::Var { name: n.clone() };
-                for pat in pats.iter().rev() {
-                    match pat {
-                        &SimplePattern::Name(ref n) => {
-                            term = Term::App {
-                                fun: Box::new(term),
-                                arg: Box::new(Term::Var { name: n.clone() }),
-                                span: Span::dummy(),
-                            };
-                        }
-                        _ => panic!()
-                    }
-                }
-                return term;
-            },
-            &Pattern::Simple(ref simple_pattern) => {
-                match simple_pattern {
-                    &SimplePattern::Name(ref n) => {
-                        Term::Var { name: n.clone() }
-                    }
-                    &SimplePattern::Placeholder =>
-                        panic!("cant convert placeholder")
-                }
-            }
-        }
-    }
-}
-
-impl Display for Pattern {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        use self::Pattern::*;
-
-        match self {
-            &Constructor(ref n, ref pats) =>
-                write!(formatter, "{} {:?}", n, pats),
-            &Simple(ref simple) =>
-                write!(formatter, "{:?}", simple),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum SimplePattern {
-    Placeholder,
-    Name(Name),
 }

@@ -133,10 +133,11 @@ impl ElabCx {
     }
 
     fn elaborate_global_name(&self, n: ast::Name) -> core::Name {
-        core::Name::Qual {
-            components: vec![n.repr],
-            span: n.span,
-        }
+        // core::Name::Qual {
+        //     components: vec![n.repr],
+        //     span: n.span,
+        // }
+        panic!("bleh")
     }
 }
 
@@ -188,24 +189,25 @@ impl<'ecx> LocalElabCx<'ecx>  {
         result
     }
 
-    fn new_metavar(&mut self) -> core::Name {
-        let result = core::Name::Meta { number: self.metavar_counter };
-        self.metavar_counter += 1;
-        result
-    }
+    // fn new_metavar(&mut self) -> core::Name {
+    //     let result = core::Name::Meta { number: self.metavar_counter };
+    //     self.metavar_counter += 1;
+    //     result
+    // }
 
     fn elaborate_fn_body(&mut self, term: ast::Term, ret_ty: ast::Term) -> core::Term {
         match term {
             ast::Term::Match { span, scrutinee, cases } => {
-                let escrutinee = Box::new(self.elaborate_term(*scrutinee));
-                let ecases = cases.into_iter().map(|c| self.elaborate_case(c)).collect();
-
-                core::Term::Match {
-                    span: span,
-                    scrutinee: escrutinee,
-                    cases: ecases,
-                    return_predicate: Box::new(self.new_metavar().to_term()),
-                }
+                // let escrutinee = Box::new(self.elaborate_term(*scrutinee));
+                // let ecases = cases.into_iter().map(|c| self.elaborate_case(c)).collect();
+                //
+                // core::Term::Match {
+                //     span: span,
+                //     scrutinee: escrutinee,
+                //     cases: ecases,
+                //     return_predicate: Box::new(self.new_metavar().to_term()),
+                // }
+                panic!("can't elaborate match currently")
             }
             other => self.elaborate_term(other)
         }
@@ -277,83 +279,84 @@ impl<'ecx> LocalElabCx<'ecx>  {
         }
     }
 
-    fn elaborate_case(&mut self, case: ast::Case) -> core::Case {
-        match case {
-            ast::Case { pattern, rhs, .. } => {
-                let names = self.bound_names(&pattern)
-                                .into_iter()
-                                .zip(iter::repeat(ast::Term::Type))
-                                .collect();
+    // fn elaborate_case(&mut self, case: ast::Case) -> core::Case {
+    //     match case {
+    //         ast::Case { pattern, rhs, .. } => {
+    //             let names = self.bound_names(&pattern)
+    //                             .into_iter()
+    //                             .zip(iter::repeat(ast::Term::Type))
+    //                             .collect();
+    //
+    //             self.enter_scope(names, move |lcx, _| {
+    //                 core::Case {
+    //                     pattern: lcx.elaborate_pattern(pattern),
+    //                     rhs: lcx.elaborate_term(rhs)
+    //                 }
+    //             })
+    //         }
+    //     }
+    // }
 
-                self.enter_scope(names, move |lcx, _| {
-                    core::Case {
-                        pattern: lcx.elaborate_pattern(pattern),
-                        rhs: lcx.elaborate_term(rhs)
-                    }
-                })
-            }
-        }
-    }
-
-    fn bound_names(&self, pat: &ast::Pattern) -> Vec<ast::Name> {
-        let mut result = vec![];
-        match pat {
-            &ast::Pattern::Name(ref n) => {
-                if !self.cx.constructors.contains(n) {
-                    result.push(n.clone())
-                }
-            },
-            &ast::Pattern::Constructor(_, ref pats) => {
-                for pat in pats {
-                    if let &ast::Pattern::Name(ref n) = pat {
-                        result.push(n.clone())
-                    } else {
-                        panic!("elaboration should of remove patterns of this form")
-                    }
-                }
-            }
-            _ => {}
-        }
-
-        debug!("bound_names: result={:?}", result);
-        result
-    }
-
-    fn elaborate_pattern(&self, pattern: ast::Pattern) -> core::Pattern {
-        match pattern {
-            ast::Pattern::Name(n) =>
-                core::Pattern::Simple(
-                    core::SimplePattern::Name(self.elaborate_name(n))),
-            ast::Pattern::Constructor(n, patterns) =>
-                core::Pattern::Constructor(
-                    self.elaborate_name(n),
-                    patterns.into_iter()
-                            .map(|p| self.elaborate_simple_pattern(p))
-                            .collect()),
-            _ => panic!("elaboration error")
-        }
-    }
-
-    fn elaborate_simple_pattern(&self, pattern: ast::Pattern) -> core::SimplePattern {
-        match pattern {
-            ast::Pattern::Name(n) =>
-                core::SimplePattern::Name(self.elaborate_name(n)),
-            _ => panic!("elaboration error")
-        }
-    }
+    // fn bound_names(&self, pat: &ast::Pattern) -> Vec<ast::Name> {
+    //     let mut result = vec![];
+    //     match pat {
+    //         &ast::Pattern::Name(ref n) => {
+    //             if !self.cx.constructors.contains(n) {
+    //                 result.push(n.clone())
+    //             }
+    //         },
+    //         &ast::Pattern::Constructor(_, ref pats) => {
+    //             for pat in pats {
+    //                 if let &ast::Pattern::Name(ref n) = pat {
+    //                     result.push(n.clone())
+    //                 } else {
+    //                     panic!("elaboration should of remove patterns of this form")
+    //                 }
+    //             }
+    //         }
+    //         _ => {}
+    //     }
+    //
+    //     debug!("bound_names: result={:?}", result);
+    //     result
+    // }
+    //
+    // fn elaborate_pattern(&self, pattern: ast::Pattern) -> core::Pattern {
+    //     match pattern {
+    //         ast::Pattern::Name(n) =>
+    //             core::Pattern::Simple(
+    //                 core::SimplePattern::Name(self.elaborate_name(n))),
+    //         ast::Pattern::Constructor(n, patterns) =>
+    //             core::Pattern::Constructor(
+    //                 self.elaborate_name(n),
+    //                 patterns.into_iter()
+    //                         .map(|p| self.elaborate_simple_pattern(p))
+    //                         .collect()),
+    //         _ => panic!("elaboration error")
+    //     }
+    // }
+    //
+    // fn elaborate_simple_pattern(&self, pattern: ast::Pattern) -> core::SimplePattern {
+    //     match pattern {
+    //         ast::Pattern::Name(n) =>
+    //             core::SimplePattern::Name(self.elaborate_name(n)),
+    //         _ => panic!("elaboration error")
+    //     }
+    // }
 
     fn elaborate_name(&self, n: ast::Name) -> core::Name {
         debug!("elaborate_name: binders={:?}", self.binders);
-        match self.binders.get(&n) {
-            None => core::Name::Qual {
-                span: n.span,
-                components: vec![n.repr],
-            },
-            Some(index) => core::Name::DeBruijn {
-                span: n.span,
-                index: *index,
-                repr: n.repr,
-            },
-        }
+        // match self.binders.get(&n) {
+        //     None => core::Name::Qual {
+        //         span: n.span,
+        //         components: vec![n.repr],
+        //     },
+        //     Some(index) => core::Name::DeBruijn {
+        //         span: n.span,
+        //         index: *index,
+        //         repr: n.repr,
+        //     },
+        // }
+        panic!()
     }
 }
