@@ -86,11 +86,17 @@ Term: Term = {
       }
       result
   },
+  "fun" <args: (Binder+)> ":" <t: Term> "=>" <body: Term> => Term::Lambda {
+      span: Span::dummy(),
+      args: args,
+      ret_ty: Box::new(t),
+      body: Box::new(body)
+  },
   <t: TermFnType> => t
 };
 
 TermFnType : Term = {
-  <t1: TermFnType> "->" <t2: Term1> =>
+  <t1: Term1> "->" <t2: TermFnType> =>
       Term::Forall {
         span: Span::dummy(),
         name: Name::from_str(""),
@@ -101,12 +107,6 @@ TermFnType : Term = {
 };
 
 Term1: Term = {
-    "fun" <args: (Arg+)> ":" <t: Term> "=>" <body: Term0> => Term::Lambda {
-        span: Span::dummy(),
-        args: args,
-        ret_ty: Box::new(t),
-        body: Box::new(body)
-    },
     <f: Term1> <g: Term0> => Term::App {
       span: Span::dummy(),
       fun: Box::new(f),
@@ -168,24 +168,24 @@ PatternO: Pattern = {
 };
 
 Name: Name = {
-    <s : SimpleName> => {
+    <nk : NameKind> => {
         Name {
             span: Span::dummy(),
-            repr: NameKind::Unqualified(s),
+            repr: if nk.len() == 1 {
+                let unqual = nk[0].clone();
+                NameKind::Unqualified(unqual)
+            } else {
+                NameKind::Qualified(nk)
+            }
         }
     },
-    <qn : QualName> => {
-        Name {
-            span: Span::dummy(),
-            repr: NameKind::Qualified(qn),
-        }
-    }
 };
 
-QualName: Vec<String> = {
-    <prefix : QualName> "." <end : SimpleName> => {
+NameKind: Vec<String> = {
+    <prefix : NameKind> "." <end : SimpleName> => {
         let mut prefix = prefix; prefix.push(end); prefix
     },
+    <s : SimpleName> => vec![s],
 };
 
 SimpleName: String = {

@@ -5,7 +5,11 @@ data Nat
   | S : Nat -> Nat
 end
 
-fn add (n : Nat) (m : Nat) : Nat :=
-  Nat.rec (fun (x : Nat) => Nat)
-    m (fun (e : Nat) (sum : Nat) => S sum) n
+fn add : Nat -> Nat -> Nat :=
+  fun (n : Nat) (m : Nat) : Nat =>
+    Nat_rec
+    (fun (c : Nat) : Type => Nat)
+    m
+    (fun (nprime : Nat) (pN : Nat) : Nat => S pn)
+    n
 end

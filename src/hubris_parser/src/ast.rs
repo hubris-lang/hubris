@@ -74,6 +74,16 @@ impl Display for Name {
     }
 }
 
+impl HasSpan for Name {
+    fn get_span(&self) -> Span {
+        self.span
+    }
+
+    fn set_span(&mut self, sp: Span) {
+        self.span = sp
+    }
+}
+
 #[derive(Debug)]
 pub struct Module {
     pub span: Span,
@@ -124,8 +134,10 @@ pub struct Data {
     pub span: Span,
     pub name: Name,
     pub ty: Term,
-    pub ctors: Vec<(Name, Term)>
+    pub ctors: Vec<Constructor>
 }
+
+pub type Constructor = (Name, Term);
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Extern {
