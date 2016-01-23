@@ -13,3 +13,7 @@ fn add : Nat -> Nat -> Nat :=
     (fun (nprime : Nat) (pN : Nat) : Nat => S pn)
     n
 end
+
+fn main : Nat :=
+  add (S (S Z)) (S (S Z))
+end

@@ -13,7 +13,7 @@ pub enum Term {
     App { span: Span, fun: Box<Term>, arg: Box<Term> },
     Forall { span: Span, name: Name, ty: Box<Term>, term: Box<Term> },
     Lambda { span: Span, name: Name, ty: Box<Term>, body: Box<Term> },
-    Recursor(Name),
+    Recursor(Name, Vec<Term>),
     Type,
 }
 
@@ -114,7 +114,9 @@ impl Term {
                     body: Box::new(body.abst(index + 1, x)),
                     span: span,
                 },
-            &Recursor(..) => panic!(),
+            &Recursor(ref name, ref ts) =>
+                Recursor(name.clone(),
+                    ts.iter().map(|t| t.abst(index, x)).collect()),
             &Type => Type,
         }
     }
@@ -166,7 +168,8 @@ impl Term {
                     body: Box::new(body.replace(index + 1, subst)),
                     span: span,
                 },
-            &Recursor(..) => panic!(),
+            &Recursor(ref name, ref ts) =>
+                Recursor(name.clone(), ts.iter().map(|t| t.replace(index, subst)).collect()),
             &Type => Type,
         }
     }
@@ -241,6 +244,34 @@ impl Term {
             &Recursor(..) =>
                 panic!(),
             t => t.clone(),
+        }
+    }
+
+    // Replace all sub-terms satisfying pred.
+    pub fn replace_term<F: Fn(&Term) -> bool>(&mut self, replacement: &Term, pred: &F) {
+        use self::Term::*;
+
+        if pred(self) {
+            *self = replacement.clone();
+        } else {
+            match self {
+                &mut App { ref mut fun, ref mut arg, span } => {
+                    fun.replace_term(&replacement, pred);
+                    arg.replace_term(&replacement, pred);
+                }
+                &mut Forall { ref mut ty, ref mut term, .. } => {
+                    ty.replace_term(&replacement, pred);
+                    term.replace_term(&replacement, pred);
+                }
+                &mut Lambda { ref mut ty, ref mut body, .. } => {
+                    ty.replace_term(&replacement, pred);
+                    body.replace_term(&replacement, pred);
+                }
+                &mut Recursor(..) => {
+                    panic!()
+                }
+                _ => {}
+            }
         }
     }
 }
@@ -341,7 +372,13 @@ impl Display for Term {
             &Lambda { ref name, ref ty, ref body, .. } => {
                 write!(formatter, "fun ({} : {}) => {}", name, ty, body)
             }
-            &Recursor(..) => panic!(),
+            &Recursor(ref name, ref ts) => {
+                try!(writeln!(formatter, "recursor for {}", name));
+                for t in ts {
+                    try!(writeln!(formatter, "{}", t));
+                }
+                Ok(())
+            }
             &Type => write!(formatter, "Type"),
         }
     }

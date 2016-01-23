@@ -65,6 +65,11 @@ impl TyCtxt {
         return ty_cx;
     }
 
+    pub fn get_main_body(&self) -> &Term {
+        let f = self.functions.get(&Name::from_str("main")).unwrap();
+        return &f.body;
+    }
+
     pub fn declare_datatype(&mut self, data_type: &Data) {
         // Currently we use types/functions for metadata, do we need them?
         self.types.insert(data_type.name.clone(), data_type.clone());
@@ -129,7 +134,7 @@ impl TyCtxt {
             premises.push(premise);
         }
 
-        let premises = premises.into_iter()
+        let premises: Vec<_> = premises.into_iter()
                                .map(|p| self.local_with_repr("".to_string(), p))
                                .collect();
 
@@ -153,14 +158,26 @@ impl TyCtxt {
 
         let recursor_ty = Term::abstract_pi(
             vec![local_c.clone()],
-            Term::abstract_pi(premises,
+            Term::abstract_pi(premises.clone(),
             Term::abstract_pi(tys,
                 Term::apply_all(local_c.to_term(), tys_terms))));
 
         println!("declare_datatype: recursor_ty={}", recursor_ty);
 
+        let mut inner_terms = vec![local_c.clone().to_term()];
+        inner_terms.extend(premises.clone().into_iter().map(|x| x.to_term()));
+
+        let recursor_body =
+            Term::abstract_lambda(
+                vec![local_c.clone()],
+                Term::abstract_lambda(
+                    premises,
+                    Term::Recursor(
+                        data_type.name.clone(),
+                        inner_terms)));
+
         self.definitions.insert(Name::from_str("Nat_rec"),
-            (recursor_ty, Term::Recursor(data_type.name.clone())));
+            (recursor_ty, recursor_body));
     }
 
     pub fn declare_def(&mut self, f: &Function) {
@@ -231,6 +248,125 @@ impl TyCtxt {
 
         new_local
     }
+
+    /// Will try to unfold a name if it is unfoldable
+    pub fn unfold_name(&self, n: &Name) -> Result<Term, Error> {
+        use core::Name::*;
+
+        match n {
+            q @ &Qual { .. } => {
+                // TODO: also check axioms and report an error about unfolding axioms
+                // TODO: we actually need to know whether a name is Opaque or not
+                // Or we can't implement this
+                match self.definitions.get(q) {
+                    None => Ok(n.to_term()), // panic!("failed to lookup name {}", q),
+                    Some(t) => Ok(t.1.clone()),
+                }
+            },
+            &DeBruijn { .. } |
+            &Meta { .. } |
+            &Local { .. } => {
+                Ok(n.to_term())
+            }
+        }
+    }
+
+    pub fn unfold(&self, mut t: Term, n: &Name) -> Result<Term, Error> {
+        let def_rhs = try!(self.unfold_name(n));
+        let nt = n.to_term();
+
+        t.replace_term(&def_rhs, &|term| {
+            self.def_eq(Span::dummy(), term, &nt).is_err()
+        });
+
+        Ok(t)
+    }
+
+    pub fn eval(&self, term: &Term) -> Result<Term, Error> {
+        use core::Term::*;
+
+        debug!("eval: {}", term);
+
+        let result = match term {
+            &App { ref fun, ref arg, span } => {
+                let earg = try!(self.eval(arg));
+                let efun = try!(self.eval(fun));
+
+                match &efun {
+                    &Term::Forall { term: ref term, .. } |
+                    &Term::Lambda { body: ref term, .. } =>
+                        self.eval(&term.instantiate(&earg)),
+                    &Recursor(ref name, ref ts) =>
+                        match self.types.get(&name) {
+                            None => panic!(),
+                            Some(dt) => {
+                                // Super hack-y right now, need to account for
+                                // the type formers, probably should just
+                                // store an offset into the vector of
+                                // terms to keep this model simple.
+                                //
+                                // We need to have all the binding structure
+                                // of the type in order of the substitions
+                                // to correctly work.
+                                for (i, ctor) in dt.ctors.iter().enumerate() {
+                                    let name = &ctor.0;
+                                    println!("name of ctor: {}", name);
+                                    println!("arg to recursor: {}", earg);
+                                    if name.to_term() == earg {
+                                        return Ok(ts[i + 1].clone());// BIG HACK just want to see this work
+                                    }
+                                }
+                                panic!("this shouldn't happen")
+                            }
+                        },
+                    _ => Ok(App {
+                        fun: Box::new(efun.clone()),
+                        arg: Box::new(earg),
+                        span: Span::dummy(),
+                    })
+                }
+            },
+            &Term::Var { ref name } => {
+                self.unfold_name(name)
+            }
+            // &Forall { ref name, ref ty, ref term, span } => {
+            //     Term::Forall {
+            //         name: name.clone(),
+            //         ty: Box::new(ty.whnf()),
+            //         term: Box::new(term.whnf()),
+            //         span: span,
+            //     }
+            // }
+            // &Lambda { ref name, ref ty, ref body, span } => {
+            //     Term::Lambda {
+            //         name: name.clone(),
+            //         ty: Box::new(ty.whnf()),
+            //         body: Box::new(body.whnf()),
+            //         span: span,
+            //     }
+            // }
+            t => Ok(t.clone()),
+        };
+
+        debug!("eval result {:?}", result);
+
+        result
+    }
+
+    pub fn def_eq(&self, span: Span, t: &Term, u: &Term) -> Result<Term, Error> {
+        debug!("unify: {} {}", t, u);
+        let t = t.whnf();
+        let u = u.whnf();
+
+        let mut inequalities = vec![];
+        let is_def_eq = def_eq_modulo(&t, &u, &mut inequalities);
+        if is_def_eq {
+            assert_eq!(inequalities.len(), 0);
+            Ok(t.clone())
+        } else {
+            Err(Error::UnificationErr(span, t.clone(), u.clone(), inequalities))
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -256,20 +392,6 @@ impl<'tcx> LocalCx<'tcx> {
         self.ty_cx.local(name, ty)
     }
 
-    pub fn def_eq(&self, span: Span, t: &Term, u: &Term) -> Result<Term, Error> {
-        debug!("unify: {} {}", t, u);
-        let t = t.whnf();
-        let u = u.whnf();
-
-        let mut inequalities = vec![];
-        let is_def_eq = def_eq_modulo(&t, &u, &mut inequalities);
-        if is_def_eq {
-            assert_eq!(inequalities.len(), 0);
-            Ok(t.clone())
-        } else {
-            Err(Error::UnificationErr(span, t.clone(), u.clone(), inequalities))
-        }
-    }
 
     pub fn type_check_term(&mut self, term: &Term, ty: &Term) -> Result<Term, Error> {
         debug!("type_check_term: infering the type of {}", term);
@@ -277,7 +399,7 @@ impl<'tcx> LocalCx<'tcx> {
         debug!("type_check_term: checking {} againist the inferred type {}",
                 ty,
                 infer_ty);
-        let term = try!(self.def_eq(term.get_span(), ty,  &infer_ty));
+        let term = try!(self.ty_cx.def_eq(term.get_span(), ty,  &infer_ty));
         debug!("return from unify");
         Ok(term)
     }

@@ -51,7 +51,11 @@ pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> io::Re
                 try!(report_type_error(&ty_cx, term, err));
                 return Ok(());
             }
-            Ok(_) => {}
+            Ok(_) => {
+                let t = ty_cx.get_main_body();
+                println!("main={}",
+                    ty_cx.eval(t).unwrap());
+            }
         }
     }
 
