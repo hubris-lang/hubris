@@ -13,7 +13,7 @@ pub enum Term {
     App { span: Span, fun: Box<Term>, arg: Box<Term> },
     Forall { span: Span, name: Name, ty: Box<Term>, term: Box<Term> },
     Lambda { span: Span, name: Name, ty: Box<Term>, body: Box<Term> },
-    Recursor(Name, Vec<Term>),
+    Recursor(Name, usize, Vec<Term>),
     Type,
 }
 
@@ -114,8 +114,8 @@ impl Term {
                     body: Box::new(body.abst(index + 1, x)),
                     span: span,
                 },
-            &Recursor(ref name, ref ts) =>
-                Recursor(name.clone(),
+            &Recursor(ref name, offset, ref ts) =>
+                Recursor(name.clone(), offset,
                     ts.iter().map(|t| t.abst(index, x)).collect()),
             &Type => Type,
         }
@@ -168,8 +168,8 @@ impl Term {
                     body: Box::new(body.replace(index + 1, subst)),
                     span: span,
                 },
-            &Recursor(ref name, ref ts) =>
-                Recursor(name.clone(), ts.iter().map(|t| t.replace(index, subst)).collect()),
+            &Recursor(ref name, offset, ref ts) =>
+                Recursor(name.clone(), offset, ts.iter().map(|t| t.replace(index, subst)).collect()),
             &Type => Type,
         }
     }
@@ -244,6 +244,25 @@ impl Term {
             &Recursor(..) =>
                 panic!(),
             t => t.clone(),
+        }
+    }
+
+    /// Will return the "head" of a term
+    pub fn head(&self) -> Option<Term> {
+        use self::Term::*;
+        match self {
+            &App { ref fun, ref arg, span } => {
+                let mut result : &Term = &**fun;
+                while let &App { ref fun, .. } = result {
+                    result = &**fun;
+                }
+                Some(result.clone())
+            },
+            f @ &Forall { .. } => Some(f.clone()),
+            l @ &Lambda { .. } => Some(l.clone()),
+            &Recursor(..) =>
+                panic!(),
+            t => None,
         }
     }
 
@@ -372,7 +391,7 @@ impl Display for Term {
             &Lambda { ref name, ref ty, ref body, .. } => {
                 write!(formatter, "fun ({} : {}) => {}", name, ty, body)
             }
-            &Recursor(ref name, ref ts) => {
+            &Recursor(ref name, offset, ref ts) => {
                 try!(writeln!(formatter, "recursor for {}", name));
                 for t in ts {
                     try!(writeln!(formatter, "{}", t));

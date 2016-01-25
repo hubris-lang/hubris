@@ -258,6 +258,8 @@ impl<'ecx> LocalElabCx<'ecx>  {
 
         let span = n.get_span();
         match self.locals.get(&n) {
+            // TODO: this causes unknown names to be elaborated instead of throwing an
+            // error
             None => match n.repr {
                 ast::NameKind::Qualified(components) => Ok(core::Name::Qual {
                     span: span,

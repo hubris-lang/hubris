@@ -174,6 +174,7 @@ impl TyCtxt {
                     premises,
                     Term::Recursor(
                         data_type.name.clone(),
+                        1,
                         inner_terms)));
 
         self.definitions.insert(Name::from_str("Nat_rec"),
@@ -296,7 +297,7 @@ impl TyCtxt {
                     &Term::Forall { term: ref term, .. } |
                     &Term::Lambda { body: ref term, .. } =>
                         self.eval(&term.instantiate(&earg)),
-                    &Recursor(ref name, ref ts) =>
+                    &Recursor(ref name, offset, ref ts) =>
                         match self.types.get(&name) {
                             None => panic!(),
                             Some(dt) => {
@@ -310,10 +311,13 @@ impl TyCtxt {
                                 // to correctly work.
                                 for (i, ctor) in dt.ctors.iter().enumerate() {
                                     let name = &ctor.0;
-                                    println!("name of ctor: {}", name);
-                                    println!("arg to recursor: {}", earg);
-                                    if name.to_term() == earg {
-                                        return Ok(ts[i + 1].clone());// BIG HACK just want to see this work
+                                    debug!("name of ctor: {}", name);
+                                    debug!("arg to recursor: {:?}", earg.head());
+                                    match earg.head() {
+                                        None => panic!("arg to recursor must be in (w)hnf"),
+                                        Some(head) => if name.to_term() == head {
+                                            return Ok(ts[i + offset].clone());
+                                        }
                                     }
                                 }
                                 panic!("this shouldn't happen")
