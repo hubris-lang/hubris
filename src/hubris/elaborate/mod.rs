@@ -1,14 +1,14 @@
-use ast::{self, SourceMap, Span, HasSpan};
+use ast::{self, SourceMap};
 use core;
 use typeck::TyCtxt;
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use std::iter;
 
 #[derive(Clone, Debug)]
 pub enum Error {
     UnexpectedQualifiedName,
+    UnknownVariable(ast::Name),
 }
 
 pub fn elaborate_module<P: AsRef<Path>>(
@@ -25,6 +25,7 @@ pub fn elaborate_module<P: AsRef<Path>>(
     let mut ecx = ElabCx {
         module: module,
         constructors: HashSet::new(),
+        globals: HashMap::new(),
         ty_cx: ty_cx,
     };
 
@@ -81,11 +82,14 @@ struct ElabCx {
     /// binding or null-ary constructor in pattern
     /// matching.
     constructors: HashSet<ast::Name>,
+    globals: HashMap<ast::Name, core::Name>,
     ty_cx: TyCtxt,
 }
 
 impl ElabCx {
     pub fn elaborate_def(&mut self, def: ast::Definition) -> Result<Option<core::Definition>, Error> {
+        debug!("elaborate_def: def={:?}", def);
+
         match def {
             ast::Definition::Data(d) => {
                 let edata = core::Definition::Data(try!(self.elaborate_data(d)));
@@ -129,9 +133,11 @@ impl ElabCx {
             let ty = try!(lcx.elaborate_term(fun.ty.clone()));
             let ebody = try!(lcx.elaborate_term(fun.body));
 
+            debug!("elaborate_fn: ty={} body={}", ty, ebody);
+
             Ok(core::Function {
                 name: name,
-                args: vec![],
+                args: args,
                 ret_ty: ty,
                 body: ebody,
             })
@@ -209,6 +215,8 @@ impl<'ecx> LocalElabCx<'ecx>  {
     }
 
     fn elaborate_term(&mut self, term: ast::Term) -> Result<core::Term, Error> {
+        debug!("elaborate_term: term={:?}", term);
+
         match term {
             ast::Term::Literal { span, lit } => Ok(core::Term::Literal {
                 span: span,
@@ -238,7 +246,7 @@ impl<'ecx> LocalElabCx<'ecx>  {
             ast::Term::Metavar { .. } => panic!("can't elaborate meta-variables"),
             ast::Term::Lambda { args, body, span, .. } => {
                 self.enter_scope(args, move |lcx, locals| {
-                    let mut ebody = try!(lcx.elaborate_term(*body));
+                    let ebody = try!(lcx.elaborate_term(*body));
                     Ok(core::Term::abstract_lambda(locals, ebody))
                 })
             }
@@ -253,27 +261,15 @@ impl<'ecx> LocalElabCx<'ecx>  {
         }
     }
 
-    fn elaborate_name(&self, n: ast::Name) -> Result<core::Name, Error> {
-        debug!("elaborate_name: n={}, locals={:?}", n, self.locals);
+    fn elaborate_name(&self, name: ast::Name) -> Result<core::Name, Error> {
+        debug!("elaborate_name: name={}", name);
 
-        let span = n.get_span();
-        match self.locals.get(&n) {
-            // TODO: this causes unknown names to be elaborated instead of throwing an
-            // error
-            None => match n.repr {
-                ast::NameKind::Qualified(components) => Ok(core::Name::Qual {
-                    span: span,
-                    components: components,
-                }),
-                ast::NameKind::Unqualified(s) => Ok(core::Name::Qual {
-                    span:span,
-                    components: vec![s],
-                })
+        match self.locals.get(&name) {
+            None => match self.cx.globals.get(&name) {
+                None => Err(Error::UnknownVariable(name.clone())),
+                Some(nn) => Ok(nn.clone()),
             },
-            Some(local) => match n.repr {
-                ast::NameKind::Qualified(components) => panic!(),
-                ast::NameKind::Unqualified(s) => Ok(local.clone()),
-            },
+            Some(local) => Ok(local.clone())
         }
     }
 }

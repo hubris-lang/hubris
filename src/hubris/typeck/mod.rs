@@ -9,7 +9,6 @@ pub use self::error_reporting::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::iter;
 
 #[derive(Debug, Clone)]
 pub enum Error {
@@ -105,7 +104,7 @@ impl TyCtxt {
             let mut names = Vec::new();
 
 
-            while let &Term::Forall { ref name, ref ty, ref term, .. } = ctor_ty {
+            while let &Term::Forall { ref ty, ref term, .. } = ctor_ty {
                 let local_n = self.local_with_repr(
                     "n".to_string(),
                     *ty.clone());
@@ -141,7 +140,7 @@ impl TyCtxt {
         let mut result = data_type.ty.clone();
 
         let mut tys = Vec::new();
-        while let Term::Forall { name, ty, term, .. } = result {
+        while let Term::Forall { ty, term, .. } = result {
             tys.push(*ty.clone());
             result = *term;
         }
@@ -183,7 +182,7 @@ impl TyCtxt {
 
     pub fn declare_def(&mut self, f: &Function) {
         self.functions.insert(f.name.clone(), f.clone());
-        self.definitions.insert(f.name.clone(), (f.ty(), f.body.clone()));
+        self.definitions.insert(f.name.clone(), (f.ret_ty.clone(), f.body.clone()));
     }
 
     /// Declaring an external function creates an axiom in the type checker
@@ -200,18 +199,11 @@ impl TyCtxt {
         match def {
             &Definition::Fn(ref fun) => {
                 let &Function {
-                    ref args,
                     ref ret_ty,
                     ref body, ..
                 } = fun;
 
                 let mut lcx = LocalCx::from_cx(self);
-
-                for &(ref n, ref arg_ty) in args {
-                    debug!("type_check_def: checking args={:?}", args);
-                    try!(lcx.type_check_term(arg_ty, &Term::Type));
-                }
-
                 try!(lcx.type_check_term(&body, &ret_ty));
                 Ok(())
             }
@@ -289,12 +281,12 @@ impl TyCtxt {
         debug!("eval: {}", term);
 
         let result = match term {
-            &App { ref fun, ref arg, span } => {
+            &App { ref fun, ref arg, .. } => {
                 let earg = try!(self.eval(arg));
                 let efun = try!(self.eval(fun));
 
                 match &efun {
-                    &Term::Forall { term: ref term, .. } |
+                    &Term::Forall { ref term, .. } |
                     &Term::Lambda { body: ref term, .. } =>
                         self.eval(&term.instantiate(&earg)),
                     &Recursor(ref name, offset, ref ts) =>
@@ -428,7 +420,8 @@ impl<'tcx> LocalCx<'tcx> {
             },
             &Term::App { ref fun, ref arg, .. } => {
                 match try!(self.type_infer_term(fun)) {
-                    Term::Forall { name, ty, term, .. } => {
+                    // This is still broken, need to get everything else working first
+                    Term::Forall { term, .. } => {
                         // try!(self.type_infer_term(arg));
                         Ok(term.instantiate(arg))
                     },

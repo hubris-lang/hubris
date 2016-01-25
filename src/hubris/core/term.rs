@@ -1,7 +1,6 @@
 use hubris_parser::ast::{Span, HasSpan};
 
 use std::fmt::{self, Display, Formatter};
-use std::path::{Path, PathBuf};
 use std::hash::{Hash, Hasher};
 
 use super::Name;
@@ -183,11 +182,11 @@ impl Term {
                 &DeBruijn { .. } | &Qual { .. } | &Meta { .. } => true,
                 &Local { .. } => true,
             },
-            &App { ref fun, ref arg, span } =>
+            &App { ref fun, ref arg, .. } =>
                 fun.is_closed() && arg.is_closed(),
-            &Forall { ref name, ref ty, ref term, span } =>
+            &Forall { ref ty, ref term, .. } =>
                 ty.is_closed() && term.is_closed(),
-            &Lambda { ref name, ref ty, ref body, span } =>
+            &Lambda { ref ty, ref body,.. } =>
                 ty.is_closed() && body.is_closed(),
             &Recursor(..) =>
                 panic!(),
@@ -219,8 +218,8 @@ impl Term {
         use self::Term::*;
 
         match self {
-            &App { ref fun, ref arg, span } => match &**fun {
-                &Term::Forall { term: ref term, .. } |
+            &App { ref fun, ref arg, .. } => match &**fun {
+                &Term::Forall { ref term, .. } |
                 &Term::Lambda { body: ref term, .. } =>
                     term.instantiate(arg).whnf(),
                 _ => self.clone(),
@@ -251,7 +250,7 @@ impl Term {
     pub fn head(&self) -> Option<Term> {
         use self::Term::*;
         match self {
-            &App { ref fun, ref arg, span } => {
+            &App { ref fun, .. } => {
                 let mut result : &Term = &**fun;
                 while let &App { ref fun, .. } = result {
                     result = &**fun;
@@ -262,7 +261,7 @@ impl Term {
             l @ &Lambda { .. } => Some(l.clone()),
             &Recursor(..) =>
                 panic!(),
-            t => None,
+            _ => None,
         }
     }
 
@@ -274,7 +273,7 @@ impl Term {
             *self = replacement.clone();
         } else {
             match self {
-                &mut App { ref mut fun, ref mut arg, span } => {
+                &mut App { ref mut fun, ref mut arg, .. } => {
                     fun.replace_term(&replacement, pred);
                     arg.replace_term(&replacement, pred);
                 }
@@ -391,7 +390,7 @@ impl Display for Term {
             &Lambda { ref name, ref ty, ref body, .. } => {
                 write!(formatter, "fun ({} : {}) => {}", name, ty, body)
             }
-            &Recursor(ref name, offset, ref ts) => {
+            &Recursor(ref name, _, ref ts) => {
                 try!(writeln!(formatter, "recursor for {}", name));
                 for t in ts {
                     try!(writeln!(formatter, "{}", t));

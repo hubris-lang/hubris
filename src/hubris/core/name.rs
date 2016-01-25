@@ -1,7 +1,6 @@
 use hubris_parser::ast::{Span, HasSpan};
 
 use std::fmt::{self, Display, Formatter};
-use std::path::{Path, PathBuf};
 use std::hash::{Hash, Hasher};
 
 use super::Term;
@@ -70,8 +69,7 @@ impl Hash for Name {
                 2.hash(state);
                 number.hash(state);
             }
-            // WARNING may not be right
-            &Local { ref number, ref repr, .. } => {
+            &Local { ref number, .. } => {
                 3.hash(state);
                 number.hash(state);
             }
@@ -84,7 +82,7 @@ impl Display for Name {
         use self::Name::*;
 
         match self {
-            &DeBruijn { ref index, ref repr, .. } =>
+            &DeBruijn { ref repr, .. } =>
                 try!(write!(formatter, "{}", repr)),
             &Qual { ref components, .. } =>
                 if components.len() == 1 {

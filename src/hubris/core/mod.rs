@@ -2,7 +2,7 @@ use hubris_parser::ast::{Span};
 
 use std::fmt::{self, Display, Formatter};
 use std::path::{Path, PathBuf};
-use std::hash::{Hash, Hasher};
+use std::hash::{Hasher};
 
 pub mod name;
 pub mod term;
@@ -65,33 +65,18 @@ impl Display for Definition {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Function {
     pub name: Name,
-    pub args: Vec<(Name, Term)>,
+    pub args: Vec<Name>,
     pub ret_ty: Term,
     pub body: Term,
-}
-
-impl Function {
-    pub fn ty(&self) -> Term {
-        let mut result = self.ret_ty.clone();
-        for &(ref n, ref t) in self.args.iter().rev() {
-            result = Term::Forall {
-                span: Span::dummy(),
-                name: n.clone(),
-                ty: Box::new(t.clone()),
-                term: Box::new(result)
-            };
-        }
-        return result;
-    }
 }
 
 impl Display for Function {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
         let &Function {
             ref name,
-            ref args,
             ref ret_ty,
-            ref body
+            ref body,
+            ..
         } = self;
 
         try!(write!(formatter, "fn {}(", name));

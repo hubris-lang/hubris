@@ -69,12 +69,23 @@ pub fn report_type_error<O: Write>(
                 name.get_span(),
                 format!("unknown variable `{}`", name))
         },
-        Error::UnificationErr(span, t1, t2, inequalities) => {
+        Error::UnificationErr(span, t1, t2, disequalities) => {
+            let mut msg = format!(
+                "the term `{}` is not equivalent to `{}`",
+                t1,
+                t2);
+
+            msg.push_str("\n\nparticularly:");
+
+            for (t, u) in disequalities {
+                msg.push_str(&format!("    {} not equal to {}", t, u));
+            }
+
             span_error(
                 ty_cx,
                 out,
                 span,
-                format!("unification failed `{}` is not equivalent to `{}`", t1, t2))
+                msg)
         }
         err => panic!("error encountered while type checking: {:?}", err),
     }
