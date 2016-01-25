@@ -49,6 +49,13 @@ impl Name {
             repr: NameKind::Unqualified(s.to_owned()),
         }
     }
+
+    pub fn qualified(components: Vec<String>) -> Name {
+        Name {
+            span: Span::dummy(),
+            repr: NameKind::Qualified(components),
+        }
+    }
 }
 
 impl PartialEq for Name {

@@ -34,6 +34,13 @@ impl Name {
             _ => false
         }
     }
+
+    pub fn qualified(components: Vec<String>) -> Name {
+        Name::Qual {
+            span: Span::dummy(),
+            components: components,
+        }
+    }
 }
 
 impl PartialEq for Name {

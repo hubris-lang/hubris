@@ -7,7 +7,7 @@ end
 
 fn add : Nat -> Nat -> Nat :=
   fun (n : Nat) (m : Nat) : Nat =>
-    Nat_rec
+    Nat.rec
     (fun (c : Nat) : Type => Nat)
     m
     (fun (nprime : Nat) (pN : Nat) : Nat => S pN)

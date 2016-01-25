@@ -12,7 +12,7 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub enum Error {
-    ApplicationErr,
+    ApplicationMismatch(Span, Term, Term),
     UnificationErr(Span, Term, Term, Vec<(Term, Term)>),
     UnknownVariable(Name),
     ElaborationError,
@@ -176,7 +176,7 @@ impl TyCtxt {
                         1,
                         inner_terms)));
 
-        self.definitions.insert(Name::from_str("Nat_rec"),
+        self.definitions.insert(Name::qualified(vec!["Nat".to_string(), "rec".to_string()]),
             (recursor_ty, recursor_body));
     }
 
@@ -425,7 +425,10 @@ impl<'tcx> LocalCx<'tcx> {
                         // try!(self.type_infer_term(arg));
                         Ok(term.instantiate(arg))
                     },
-                _ => Err(Error::ApplicationErr),
+                _ => Err(Error::ApplicationMismatch(
+                        Span::dummy(),
+                        *fun.clone(),
+                        *arg.clone()))
                 }
             }
             &Term::Forall { ref name, ref ty, ref term, .. } => {

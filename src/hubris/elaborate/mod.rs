@@ -9,6 +9,7 @@ use std::path::Path;
 pub enum Error {
     UnexpectedQualifiedName,
     UnknownVariable(ast::Name),
+    Many(Vec<Error>),
 }
 
 pub fn elaborate_module<P: AsRef<Path>>(
@@ -29,7 +30,9 @@ pub fn elaborate_module<P: AsRef<Path>>(
         ty_cx: ty_cx,
     };
 
-    let name = try!(ecx.elaborate_global_name(ecx.module.name.clone()));
+    let module_name = ecx.module.name.clone();
+
+    let name = try!(ecx.elaborate_global_name(module_name));
 
     let mut errors = vec![];
     let mut defs = vec![];
@@ -68,11 +71,15 @@ pub fn elaborate_module<P: AsRef<Path>>(
         }
     }
 
-    Ok(core::Module {
-        file_name: path.as_ref().to_owned(),
-        name: name,
-        defs: defs,
-    })
+    if errors.len() != 0 {
+        Err(Error::Many(errors))
+    } else {
+        Ok(core::Module {
+            file_name: path.as_ref().to_owned(),
+            name: name,
+            defs: defs,
+        })
+    }
 }
 
 struct ElabCx {
@@ -109,6 +116,13 @@ impl ElabCx {
     }
 
     fn elaborate_data(&mut self, data: ast::Data) -> Result<core::Data, Error> {
+        self.globals.insert(
+            ast::Name::qualified(vec!["Nat".to_string(), "rec".to_string()]),
+            core::Name::Qual {
+                span: ast::Span::dummy(),
+                components: vec!["Nat".to_string(), "rec".to_string()],
+            });
+
         let mut lcx = LocalElabCx::from_elab_cx(self);
         let mut ctors = Vec::new();
 
@@ -154,14 +168,20 @@ impl ElabCx {
         })
     }
 
-    fn elaborate_global_name(&self, n: ast::Name) -> Result<core::Name, Error> {
-        match n.repr {
+    fn elaborate_global_name(&mut self, n: ast::Name) -> Result<core::Name, Error> {
+        match n.repr.clone() {
             ast::NameKind::Qualified(_) =>
                 Err(Error::UnexpectedQualifiedName),
-            ast::NameKind::Unqualified(name) => Ok(core::Name::Qual {
-                span: n.span,
-                components: vec![name],
-            })
+            ast::NameKind::Unqualified(name) => {
+                let qn = core::Name::Qual {
+                    span: n.span,
+                    components: vec![name]
+                };
+
+                self.globals.insert(n.clone(), qn.clone());
+
+                Ok(qn)
+            }
         }
     }
 }

@@ -87,6 +87,9 @@ pub fn report_type_error<O: Write>(
                 span,
                 msg)
         }
-        err => panic!("error encountered while type checking: {:?}", err),
+        Error::ApplicationMismatch(span, t, u) => {
+            panic!("{} {}", t, u);
+        }
+        _ => panic!("unhandled error")
     }
 }
