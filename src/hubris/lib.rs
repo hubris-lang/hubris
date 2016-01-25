@@ -48,7 +48,7 @@ pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> io::Re
     for def in &emodule.defs {
         match ty_cx.type_check_def(def) {
             Err(err) => {
-                try!(report_type_error(&ty_cx, term, err));
+                report_type_error(&ty_cx, term, err).unwrap(); // handle this properly 
                 return Ok(());
             }
             Ok(_) => {

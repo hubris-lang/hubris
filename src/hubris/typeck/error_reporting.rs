@@ -3,12 +3,12 @@ use super::super::ast::{Span, HasSpan};
 
 use std::io;
 use std::io::prelude::*;
-use term::{Terminal, color};
+use term::{Terminal, color, Result as TResult};
 
 pub fn span_error<O: Write>(ty_cx: &TyCtxt,
                             mut term: Box<Terminal<Output=O>>,
                             span: Span,
-                            message: String) -> io::Result<()> {
+                            message: String) -> TResult<()> {
     let (line_no, col_no) = ty_cx.source_map.position(span).unwrap();
     let (line_with_padding, marker) =
         ty_cx.source_map.underline_span(span).unwrap();
@@ -59,7 +59,7 @@ pub fn span_error<O: Write>(ty_cx: &TyCtxt,
 pub fn report_type_error<O: Write>(
     ty_cx: &TyCtxt,
     out: Box<Terminal<Output=O>>,
-    e: Error) -> io::Result<()>
+    e: Error) -> TResult<()>
 {
     match e {
         Error::UnknownVariable(name) => {

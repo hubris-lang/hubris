@@ -16,7 +16,7 @@ version = "0.8.0"
 [dependencies]
 log = "*"
 gcc = "*"
-rustc-serialize = "0.3"
+rustc-serialize = "*"
 serde = "*"
 serde_json = "*"
 serde_macros = "*"
