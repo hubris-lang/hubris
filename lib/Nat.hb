@@ -15,5 +15,5 @@ fn add : Nat -> Nat -> Nat :=
 end
 
 fn main : Nat :=
-  add (S (S Z)) (S (S Z))
+  add (S Z) Z
 end

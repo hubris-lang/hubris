@@ -189,7 +189,7 @@ impl Term {
             &Lambda { ref ty, ref body,.. } =>
                 ty.is_closed() && body.is_closed(),
             &Recursor(..) =>
-                panic!(),
+                true,
             &Literal { .. } | &Type => true
         }
     }
@@ -261,6 +261,22 @@ impl Term {
             l @ &Lambda { .. } => Some(l.clone()),
             &Recursor(..) =>
                 panic!(),
+            _ => None,
+        }
+    }
+
+    pub fn args(&self) -> Option<Vec<Term>> {
+        use self::Term::*;
+        match self {
+            &App { ref fun, ref arg, ..} => {
+                let mut f = &**fun;
+                let mut result = vec![*arg.clone()];
+                while let &App { ref fun, ref arg, .. } = f {
+                    f = &**fun;
+                    result.push(*arg.clone());
+                }
+                Some(result.into_iter().rev().collect())
+            },
             _ => None,
         }
     }
@@ -391,10 +407,11 @@ impl Display for Term {
                 write!(formatter, "fun ({} : {}) => {}", name, ty, body)
             }
             &Recursor(ref name, _, ref ts) => {
-                try!(writeln!(formatter, "recursor for {}", name));
+                try!(writeln!(formatter, "recursor({}): {{", name));
                 for t in ts {
                     try!(writeln!(formatter, "{}", t));
                 }
+                try!(writeln!(formatter, "}}"));
                 Ok(())
             }
             &Type => write!(formatter, "Type"),

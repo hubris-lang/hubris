@@ -308,7 +308,14 @@ impl TyCtxt {
                                     match earg.head() {
                                         None => panic!("arg to recursor must be in (w)hnf"),
                                         Some(head) => if name.to_term() == head {
-                                            return Ok(ts[i + offset].clone());
+                                            let premise = ts[i + offset].clone();
+                                            let mut args = earg.args().unwrap();
+                                            let mut tsprime = ts.clone();
+                                            let idx = tsprime.len() - 1;
+                                            tsprime[idx] = args[0].clone();
+                                            let rec = Recursor(name.clone(), offset, tsprime);
+                                            args.push(rec);
+                                            return self.eval(&Term::apply_all(premise, args));
                                         }
                                     }
                                 }
