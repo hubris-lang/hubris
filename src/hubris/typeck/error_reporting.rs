@@ -6,7 +6,7 @@ use std::io::prelude::*;
 use term::{Terminal, color, Result as TResult};
 
 pub fn span_error<O: Write>(ty_cx: &TyCtxt,
-                            mut term: Box<Terminal<Output=O>>,
+                            term: &mut Box<Terminal<Output=O>>,
                             span: Span,
                             message: String) -> TResult<()> {
     let (line_no, col_no) = ty_cx.source_map.position(span).unwrap();
@@ -58,14 +58,14 @@ pub fn span_error<O: Write>(ty_cx: &TyCtxt,
 
 pub fn report_type_error<O: Write>(
     ty_cx: &TyCtxt,
-    out: Box<Terminal<Output=O>>,
+    mut out: Box<Terminal<Output=O>>,
     e: Error) -> TResult<()>
 {
     match e {
         Error::UnknownVariable(name) => {
             span_error(
                 ty_cx,
-                out,
+                &mut out,
                 name.get_span(),
                 format!("unknown variable `{}`", name))
         },
@@ -75,17 +75,21 @@ pub fn report_type_error<O: Write>(
                 t1,
                 t2);
 
-            msg.push_str("\n\nparticularly:");
+            try!(span_error(
+                ty_cx,
+                &mut out,
+                span,
+                msg));
 
-            for (t, u) in disequalities {
-                msg.push_str(&format!("    {} not equal to {}", t, u));
+            if disequalities.len() > 1 {
+                try!(writeln!(out, "in particular:"));
+
+                for (t, u) in disequalities {
+                    try!(writeln!(out, "    {} not equal to {}", t, u));
+                }
             }
 
-            span_error(
-                ty_cx,
-                out,
-                span,
-                msg)
+            Ok(())
         }
         Error::ApplicationMismatch(span, t, u) => {
             panic!("{} {}", t, u);
