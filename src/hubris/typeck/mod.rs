@@ -1,10 +1,5 @@
-mod error_reporting;
-
 use core::*;
 use super::ast::{SourceMap, Span, HasSpan};
-
-// Re-exports
-pub use self::error_reporting::*;
 
 use std::cell::RefCell;
 use std::collections::HashMap;

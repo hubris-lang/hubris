@@ -9,8 +9,7 @@ inductive Eq : forall (A : Type), A -> A -> Type
   | Refl : forall (A : Type), forall (x : A), Eq A x x
 end
 
-def add : Nat -> Nat -> Nat :=
-  fun (n : Nat) (m : Nat) : Nat =>
+def add (n : Nat) (m : Nat) : Nat :=
     Nat.rec
     (fun (c : Nat) : Type => Nat)
     m

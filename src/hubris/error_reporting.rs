@@ -1,5 +1,5 @@
-use super::{Error, TyCtxt};
-use super::super::ast::{Span, HasSpan};
+use typeck::{Error as TypeCkError, TyCtxt};
+use super::ast::{Span, HasSpan};
 
 use std::io;
 use std::io::prelude::*;
@@ -59,18 +59,18 @@ pub fn span_error<O: Write>(ty_cx: &TyCtxt,
 pub fn report_type_error<O: Write>(
     ty_cx: &TyCtxt,
     mut out: Box<Terminal<Output=O>>,
-    e: Error) -> TResult<()>
+    e: TypeCkError) -> TResult<()>
 {
     match e {
-        Error::UnknownVariable(name) => {
+        TypeCkError::UnknownVariable(name) => {
             span_error(
                 ty_cx,
                 &mut out,
                 name.get_span(),
                 format!("unknown variable `{}`", name))
         },
-        Error::UnificationErr(span, t1, t2, disequalities) => {
-            let mut msg = format!(
+        TypeCkError::UnificationErr(span, t1, t2, disequalities) => {
+            let msg = format!(
                 "the term `{}` is not equivalent to `{}`",
                 t1,
                 t2);
@@ -91,9 +91,14 @@ pub fn report_type_error<O: Write>(
 
             Ok(())
         }
-        Error::ApplicationMismatch(span, t, u) => {
+        TypeCkError::ApplicationMismatch(span, t, u) => {
             panic!("{} {}", t, u);
         }
-        _ => panic!("unhandled error")
+        e => panic!("error with printing support: {:?}", e),
+        // Error::Many(errs) => {
+        //     for err in errs {
+        //         try!(report_type_error(ty_cx, &mut out, err));
+        //     }
+        // }
     }
 }

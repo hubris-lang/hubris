@@ -13,6 +13,7 @@ pub mod ast {
 // pub mod backend;
 pub mod core;
 // pub mod cps;
+pub mod error_reporting;
 pub mod elaborate;
 pub mod llvm;
 
@@ -23,6 +24,7 @@ pub mod parser {
 pub mod server;
 pub mod typeck;
 
+use error_reporting::*;
 use typeck::*;
 
 use std::path::{PathBuf, Path};
@@ -48,7 +50,7 @@ pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> io::Re
     for def in &emodule.defs {
         match ty_cx.type_check_def(def) {
             Err(err) => {
-                report_type_error(&ty_cx, term, err).unwrap(); // handle this properly 
+                report_type_error(&ty_cx, term, err).unwrap(); // handle this properly
                 return Ok(());
             }
             Ok(_) => {

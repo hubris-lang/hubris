@@ -152,9 +152,14 @@ impl ElabCx {
 
             Ok(core::Function {
                 name: name,
-                args: args,
-                ret_ty: ty,
-                body: ebody,
+                args: args.clone(),
+                // We compute the full type of the function here
+                // by taking the return type and abstracting
+                // over the arguments.
+                ret_ty: core::Term::abstract_pi(args.clone(), ty),
+                // We construct a lambda representing the body
+                // with all of the function's parameters abstracted.
+                body: core::Term::abstract_lambda(args, ebody),
             })
         })
     }
