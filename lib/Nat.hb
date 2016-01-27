@@ -1,11 +1,15 @@
 module Nat
 
-data Nat
+inductive Nat
   | Z : Nat
   | S : Nat -> Nat
 end
 
-fn add : Nat -> Nat -> Nat :=
+inductive Eq : forall (A : Type), A -> A -> Type
+  | Refl : forall (A : Type), forall (x : A), Eq A x x
+end
+
+def add : Nat -> Nat -> Nat :=
   fun (n : Nat) (m : Nat) : Nat =>
     Nat.rec
     (fun (c : Nat) : Type => Nat)
@@ -14,6 +18,6 @@ fn add : Nat -> Nat -> Nat :=
     n
 end
 
-fn main : Nat :=
+def main : Nat :=
   add (S (S Z)) (S (S Z))
 end

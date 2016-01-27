@@ -56,6 +56,26 @@ impl Name {
             repr: NameKind::Qualified(components),
         }
     }
+
+    pub fn in_scope(&self, component: String) -> Option<Name> {
+        match &self.repr {
+            &NameKind::Qualified(ref components) => {
+                let mut components = components.clone();
+                components.push(component);
+
+                Some(Name {
+                    span: self.span,
+                    repr: NameKind::Qualified(components),
+                })
+            }
+            &NameKind::Unqualified(ref n) => {
+                Some(Name {
+                    span: self.span,
+                    repr: NameKind::Qualified(vec![n.clone(), component]),
+                })
+            }
+        }
+    }
 }
 
 impl PartialEq for Name {

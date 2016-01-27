@@ -27,7 +27,7 @@ DefNoSpan: Definition = {
 };
 
 Data: Data = {
- "data" <n: Name> <ty: (":" Term)?> <attrs: (<Constructor>)*> "end" =>
+ "inductive" <n: Name> <ty: (":" Term)?> <attrs: (<Constructor>)*> "end" =>
   Data {
     span: Span::dummy(),
     name: n,
@@ -45,7 +45,7 @@ Attribute: (Name, Term) = {
 };
 
 Fn: Function = {
-    "fn" <n: Name> <args: (Arg*)> ":" <t: Term> ":=" <body: Term> "end" =>
+    "def" <n: Name> <args: (Arg*)> ":" <t: Term> ":=" <body: Term> "end" =>
       Function {
           span: Span::dummy(),
           name: n,

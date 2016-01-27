@@ -179,7 +179,7 @@ impl TyCtxt {
                             1,
                             inner_terms))));
 
-        self.definitions.insert(Name::qualified(vec!["Nat".to_string(), "rec".to_string()]),
+        self.definitions.insert(data_type.name.in_scope("rec".to_string()).unwrap(),
             (recursor_ty, recursor_body));
     }
 

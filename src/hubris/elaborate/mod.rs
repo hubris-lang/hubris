@@ -116,12 +116,13 @@ impl ElabCx {
     }
 
     fn elaborate_data(&mut self, data: ast::Data) -> Result<core::Data, Error> {
+        let rec_name = data.name.in_scope("rec".to_string()).unwrap();
+        let ty_name = try!(self.elaborate_global_name(data.name));
+
+        // Pre-declare the recursor for the time being.
         self.globals.insert(
-            ast::Name::qualified(vec!["Nat".to_string(), "rec".to_string()]),
-            core::Name::Qual {
-                span: ast::Span::dummy(),
-                components: vec!["Nat".to_string(), "rec".to_string()],
-            });
+            rec_name,
+            ty_name.in_scope("rec".to_string()).unwrap());
 
         let mut lcx = LocalElabCx::from_elab_cx(self);
         let mut ctors = Vec::new();
@@ -133,7 +134,7 @@ impl ElabCx {
 
         Ok(core::Data {
             span: data.span,
-            name: try!(lcx.cx.elaborate_global_name(data.name)),
+            name: ty_name,
             ty: try!(lcx.elaborate_term(data.ty)),
             ctors: ctors,
         })

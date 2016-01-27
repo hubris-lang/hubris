@@ -41,6 +41,21 @@ impl Name {
             components: components,
         }
     }
+
+    pub fn in_scope(&self, component: String) -> Option<Name> {
+        match self {
+            &Name::Qual { span, ref components } => {
+                let mut components = components.clone();
+                components.push(component);
+
+                Some(Name::Qual {
+                    span: span,
+                    components: components
+                })
+            }
+            _ => None
+        }
+    }
 }
 
 impl PartialEq for Name {
