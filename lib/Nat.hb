@@ -5,9 +5,6 @@ data Nat
   | S : Nat -> Nat
 end
 
-fn bleh : () := Z
-end
-
 fn add : Nat -> Nat -> Nat :=
   fun (n : Nat) (m : Nat) : Nat =>
     Nat.rec
@@ -18,5 +15,5 @@ fn add : Nat -> Nat -> Nat :=
 end
 
 fn main : Nat :=
-  add (S Z) Z
+  add (S (S Z)) (S (S Z))
 end

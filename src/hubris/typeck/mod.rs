@@ -153,28 +153,31 @@ impl TyCtxt {
                      .map(|(i, ty)| self.local_with_repr(format!("a{}", i), ty))
                      .collect();
 
-        let tys_terms = tys.iter().map(|t| t.to_term()).collect();
+        let tys_terms: Vec<_> = tys.iter().map(|t| t.to_term()).collect();
 
         let recursor_ty = Term::abstract_pi(
             vec![local_c.clone()],
             Term::abstract_pi(premises.clone(),
-            Term::abstract_pi(tys,
-                Term::apply_all(local_c.to_term(), tys_terms))));
+            Term::abstract_pi(tys.clone(),
+                Term::apply_all(local_c.to_term(), tys_terms.clone()))));
 
         println!("declare_datatype: recursor_ty={}", recursor_ty);
 
         let mut inner_terms = vec![local_c.clone().to_term()];
         inner_terms.extend(premises.clone().into_iter().map(|x| x.to_term()));
+        inner_terms.extend(tys_terms.clone().into_iter());
 
         let recursor_body =
             Term::abstract_lambda(
                 vec![local_c.clone()],
                 Term::abstract_lambda(
                     premises,
-                    Term::Recursor(
-                        data_type.name.clone(),
-                        1,
-                        inner_terms)));
+                    Term::abstract_lambda(
+                        tys,
+                        Term::Recursor(
+                            data_type.name.clone(),
+                            1,
+                            inner_terms))));
 
         self.definitions.insert(Name::qualified(vec!["Nat".to_string(), "rec".to_string()]),
             (recursor_ty, recursor_body));
@@ -289,65 +292,62 @@ impl TyCtxt {
                     &Term::Forall { ref term, .. } |
                     &Term::Lambda { body: ref term, .. } =>
                         self.eval(&term.instantiate(&earg)),
-                    &Recursor(ref name, offset, ref ts) =>
-                        match self.types.get(&name) {
-                            None => panic!(),
-                            Some(dt) => {
-                                // Super hack-y right now, need to account for
-                                // the type formers, probably should just
-                                // store an offset into the vector of
-                                // terms to keep this model simple.
-                                //
-                                // We need to have all the binding structure
-                                // of the type in order of the substitions
-                                // to correctly work.
-                                for (i, ctor) in dt.ctors.iter().enumerate() {
-                                    let name = &ctor.0;
-                                    debug!("name of ctor: {}", name);
-                                    debug!("arg to recursor: {:?}", earg.head());
-                                    match earg.head() {
-                                        None => panic!("arg to recursor must be in (w)hnf"),
-                                        Some(head) => if name.to_term() == head {
-                                            let premise = ts[i + offset].clone();
-                                            let mut args = earg.args().unwrap();
-                                            let mut tsprime = ts.clone();
-                                            let idx = tsprime.len() - 1;
-                                            tsprime[idx] = args[0].clone();
-                                            let rec = Recursor(name.clone(), offset, tsprime);
-                                            args.push(rec);
-                                            return self.eval(&Term::apply_all(premise, args));
-                                        }
-                                    }
-                                }
-                                panic!("this shouldn't happen")
-                            }
-                        },
-                    _ => Ok(App {
-                        fun: Box::new(efun.clone()),
+                    v @ &Term::Var { .. } => Ok(App {
+                        fun: Box::new(v.clone()),
                         arg: Box::new(earg),
                         span: Span::dummy(),
-                    })
+                    }),
+                    t => panic!("this means there was a type checker bug {}", t),
                 }
             },
             &Term::Var { ref name } => {
                 self.unfold_name(name)
             }
-            // &Forall { ref name, ref ty, ref term, span } => {
-            //     Term::Forall {
-            //         name: name.clone(),
-            //         ty: Box::new(ty.whnf()),
-            //         term: Box::new(term.whnf()),
-            //         span: span,
-            //     }
-            // }
-            // &Lambda { ref name, ref ty, ref body, span } => {
-            //     Term::Lambda {
-            //         name: name.clone(),
-            //         ty: Box::new(ty.whnf()),
-            //         body: Box::new(body.whnf()),
-            //         span: span,
-            //     }
-            // }
+            &Term::Recursor(ref ty_name, offset, ref ts) => {
+                for t in ts {
+                    println!("ARG: {}", t);
+                }
+
+                match self.types.get(&ty_name) {
+                    None => panic!("can not find decl for {}", ty_name),
+                    Some(dt) => {
+                        let scrutinee = try!(self.eval(&ts[ts.len() - 1]));
+                        // Super hack-y right now, need to account for
+                        // the type formers, probably should just
+                        // store an offset into the vector of
+                        // terms to keep this model simple.
+                        //
+                        // We need to have all the binding structure
+                        // of the type in order of the substitions
+                        // to correctly work.
+                        for (i, ctor) in dt.ctors.iter().enumerate() {
+                            let name = &ctor.0;
+                            debug!("name of ctor: {}", name);
+                            debug!("arg to recursor: {}", scrutinee);
+                            match scrutinee.head() {
+                                None => panic!("arg to recursor must be in (w)hnf"),
+                                    Some(head) => if name.to_term() == head {
+                                        let premise = ts[i + offset].clone();
+                                        // I think instead we need to figure out if
+                                        // this is recursive contructor case.
+                                        match scrutinee.args() {
+                                            None => return Ok(premise),
+                                            Some(mut args) => {
+                                                let mut tsprime = ts.clone();
+                                                let idx = tsprime.len() - 1;
+                                                tsprime[idx] = args[0].clone();
+                                                let rec = Recursor(ty_name.clone(), offset, tsprime);
+                                                args.push(rec);
+                                                return self.eval(&Term::apply_all(premise, args));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            panic!("this shouldn't happen")
+                        }
+                    }
+            }
             t => Ok(t.clone()),
         };
 

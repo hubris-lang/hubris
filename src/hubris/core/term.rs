@@ -259,6 +259,7 @@ impl Term {
             },
             f @ &Forall { .. } => Some(f.clone()),
             l @ &Lambda { .. } => Some(l.clone()),
+            v @ &Var { .. } => Some(v.clone()),
             &Recursor(..) =>
                 panic!(),
             _ => None,
