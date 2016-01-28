@@ -122,6 +122,14 @@ impl Module {
     pub fn file_name(&self) -> PathBuf {
         PathBuf::from(&self.name.to_string()[..])
     }
+
+    pub fn empty() -> Module {
+        Module {
+            span: Span::dummy(),
+            name: Name::from_str("REPL"),
+            defs: vec![],
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]

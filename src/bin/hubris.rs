@@ -20,6 +20,7 @@ Hubris, version 0.0.1.
 
 Usage:
     hubris <file> [--output=<exe>]
+    hubris (-r | --interactive) <file>
     hubris (-s | --server)
     hubris (-h | --help)
     hubris --version
@@ -35,6 +36,7 @@ struct Args {
     arg_file: String,
     flag_output: Option<String>,
     flag_server: bool,
+    flag_interactive: bool,
 }
 
 fn main() {
@@ -46,6 +48,9 @@ fn main() {
 
     if args.flag_server {
         hubris::server::server_main();
+    } else if args.flag_interactive {
+        let repl = hubris::repl::Repl::from_path(&Some(PathBuf::from(args.arg_file))).unwrap();
+        repl.start().unwrap();
     } else {
         debug!("main: compiling {} output to {:?}",
                &args.arg_file[..],

@@ -21,6 +21,7 @@ pub mod parser {
     pub use hubris_parser::parser::*;
 }
 
+pub mod repl;
 pub mod server;
 pub mod typeck;
 
@@ -33,10 +34,9 @@ use std::io;
 pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> io::Result<()> {
     let parser = try!(parser::from_file(path.as_ref()));
     let module = parser.parse();
-    let emodule = elaborate::elaborate_module(
-                        path.as_ref(),
-                        module,
-                        parser.source_map.clone());
+    let mut ecx = elaborate::ElabCx::from_module(module, parser.source_map.clone());
+
+    let emodule = ecx.elaborate_module(path.as_ref());
 
     let emodule = match emodule {
         Err(e) => panic!("elaboration error: {:?}", e),

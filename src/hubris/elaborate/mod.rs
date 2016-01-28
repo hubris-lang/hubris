@@ -12,77 +12,7 @@ pub enum Error {
     Many(Vec<Error>),
 }
 
-pub fn elaborate_module<P: AsRef<Path>>(
-    path: P,
-    module: ast::Module,
-    source_map: SourceMap) -> Result<core::Module, Error> {
-    // Elaboration relies on type checking, so first we setup a typing context to use
-    // while elaborating the program. We will run the type checker in inference mode
-    // to setup constraints, and then we will solve the constraints, and check the
-    // term again.
-    let mut ty_cx = TyCtxt::empty();
-    ty_cx.source_map = source_map;
-
-    let mut ecx = ElabCx {
-        module: module,
-        constructors: HashSet::new(),
-        globals: HashMap::new(),
-        ty_cx: ty_cx,
-    };
-
-    let module_name = ecx.module.name.clone();
-
-    let name = try!(ecx.elaborate_global_name(module_name));
-
-    let mut errors = vec![];
-    let mut defs = vec![];
-
-    for def in ecx.module.defs.clone() {
-        match &def {
-            &ast::Definition::Data(ref d) => {
-                for ctor in &d.ctors {
-                    ecx.constructors.insert(ctor.0.clone());
-                }
-            },
-            _ => {}
-        }
-
-
-        match ecx.elaborate_def(def) {
-            Err(e) => errors.push(e),
-            Ok(edef) => {
-                let edef = edef.map(|edef| {
-                    match &edef {
-                        &core::Definition::Data(ref d) =>
-                            ecx.ty_cx.declare_datatype(d),
-                        &core::Definition::Fn(ref f) =>
-                            ecx.ty_cx.declare_def(f),
-                        &core::Definition::Extern(ref e) =>
-                            ecx.ty_cx.declare_extern(e),
-                    }
-                    edef
-                });
-
-                match edef {
-                    None => {}
-                    Some(edef) => defs.push(edef),
-                }
-            }
-        }
-    }
-
-    if errors.len() != 0 {
-        Err(Error::Many(errors))
-    } else {
-        Ok(core::Module {
-            file_name: path.as_ref().to_owned(),
-            name: name,
-            defs: defs,
-        })
-    }
-}
-
-struct ElabCx {
+pub struct ElabCx {
     module: ast::Module,
     /// The set of declared constructor names in scope
     /// we need this to differentiate between a name
@@ -94,6 +24,76 @@ struct ElabCx {
 }
 
 impl ElabCx {
+    pub fn from_module(module: ast::Module, source_map: SourceMap) -> ElabCx {
+        // Elaboration relies on type checking, so first we setup a typing context to use
+        // while elaborating the program. We will run the type checker in inference mode
+        // to setup constraints, and then we will solve the constraints, and check the
+        // term again.
+        let mut ty_cx = TyCtxt::empty();
+        ty_cx.source_map = source_map;
+
+        ElabCx {
+            module: module,
+            constructors: HashSet::new(),
+            globals: HashMap::new(),
+            ty_cx: ty_cx,
+        }
+    }
+
+    pub fn elaborate_module<P: AsRef<Path>>(&mut self, path: P) -> Result<core::Module, Error> {
+        let ecx = self;
+        let module_name = ecx.module.name.clone();
+
+        let name = try!(ecx.elaborate_global_name(module_name));
+
+        let mut errors = vec![];
+        let mut defs = vec![];
+
+        for def in ecx.module.defs.clone() {
+            match &def {
+                &ast::Definition::Data(ref d) => {
+                    for ctor in &d.ctors {
+                        ecx.constructors.insert(ctor.0.clone());
+                    }
+                },
+                _ => {}
+            }
+
+
+            match ecx.elaborate_def(def) {
+                Err(e) => errors.push(e),
+                Ok(edef) => {
+                    let edef = edef.map(|edef| {
+                        match &edef {
+                            &core::Definition::Data(ref d) =>
+                                ecx.ty_cx.declare_datatype(d),
+                            &core::Definition::Fn(ref f) =>
+                                ecx.ty_cx.declare_def(f),
+                            &core::Definition::Extern(ref e) =>
+                                ecx.ty_cx.declare_extern(e),
+                        }
+                        edef
+                    });
+
+                    match edef {
+                        None => {}
+                        Some(edef) => defs.push(edef),
+                    }
+                }
+            }
+        }
+
+        if errors.len() != 0 {
+            Err(Error::Many(errors))
+        } else {
+            Ok(core::Module {
+                file_name: path.as_ref().to_owned(),
+                name: name,
+                defs: defs,
+            })
+        }
+    }
+
     pub fn elaborate_def(&mut self, def: ast::Definition) -> Result<Option<core::Definition>, Error> {
         debug!("elaborate_def: def={:?}", def);
 

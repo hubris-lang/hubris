@@ -156,7 +156,7 @@ impl TyCtxt {
             Term::abstract_pi(tys.clone(),
                 Term::apply_all(local_c.to_term(), tys_terms.clone()))));
 
-        println!("declare_datatype: recursor_ty={}", recursor_ty);
+        // println!("declare_datatype: recursor_ty={}", recursor_ty);
 
         let mut inner_terms = vec![local_c.clone().to_term()];
         inner_terms.extend(premises.clone().into_iter().map(|x| x.to_term()));
@@ -300,7 +300,7 @@ impl TyCtxt {
             }
             &Term::Recursor(ref ty_name, offset, ref ts) => {
                 for t in ts {
-                    println!("ARG: {}", t);
+                    // println!("ARG: {}", t);
                 }
 
                 match self.types.get(&ty_name) {
