@@ -7,6 +7,13 @@ use std::io;
 use std::path::{PathBuf};
 use readline;
 
+const HELP_MESSAGE: &'static str = r#"
+Commands:
+    :help        Show this message
+    :type <term> Infer the type of <term>
+    :quit        Exit
+"#;
+
 pub struct Repl {
     elab_cx: ElabCx,
     root_file: Option<PathBuf>,
@@ -35,6 +42,7 @@ impl From<elaborate::Error> for Error {
 pub enum Error {
     Io(io::Error),
     Elaborator(elaborate::Error),
+    UnknownCommand(String),
     // Parser(parser::Error),
 }
 
@@ -45,6 +53,11 @@ enum Command {
     Unknown(String),
     TypeOf(String),
     Help,
+}
+
+pub enum Cont {
+    Quit,
+    Done,
 }
 
 impl Repl {
@@ -92,6 +105,7 @@ impl Repl {
     /// Starts the read-eval-print-loop for querying the language.
     pub fn start(mut self) -> Result<(), Error> {
         loop {
+            // First we grab a line ...
             let input = match readline::readline("hubris> ") {
                 None => {
                     println!("");
@@ -100,27 +114,42 @@ impl Repl {
                 Some(input) => input,
             };
 
-            if &input[0..1] == ":" {
-                let cmd = self.parse_command(&input[1..]);
-                match cmd {
-                    Command::Quit => return Ok(()),
-                    Command::Reload => panic!("unsupported command"),
-                    Command::Unknown(u) => panic!("unknown name"),
-                    Command::TypeOf(t) => {
-                        let term = self.preprocess_term(t);
-                        println!("{}", self.type_check_term(&term));
-                    },
-                    Command::Help => {
-                        println!("HELP!")
-                    }
+            // Add it to the history
+            readline::add_history(input.as_ref());
+
+            match self.repl_iteration(input) {
+                // please make me look better
+                Err(e) => println!("repl error: {:?}", e),
+                Ok(cont) => match cont {
+                    Cont::Quit => break,
+                    Cont::Done => {},
                 }
-            } else {
-                self.handle_input(input.to_string());
-                readline::add_history(input.as_ref());
             }
         }
 
         Ok(())
+    }
+
+    pub fn repl_iteration(&mut self, input: String) -> Result<Cont, Error> {
+        if &input[0..1] == ":" {
+            let cmd = self.parse_command(&input[1..]);
+            match cmd {
+                Command::Quit => return Ok(Cont::Quit),
+                Command::Reload => panic!("unsupported command"),
+                Command::Unknown(u) => return Err(Error::UnknownCommand(u)),
+                Command::TypeOf(t) => {
+                    let term = self.preprocess_term(t);
+                    println!("{}", self.type_check_term(&term));
+                },
+                Command::Help => {
+                    println!("{}", HELP_MESSAGE)
+                }
+            }
+        } else {
+            self.handle_input(input.to_string());
+        }
+
+        Ok(Cont::Done)
     }
 
     fn preprocess_term(&mut self, source: String) -> core::Term {
@@ -150,7 +179,7 @@ impl Repl {
             Command::Reload
         } else if &command_text[0..4] == "type" {
             Command::TypeOf(command_text[4..].to_string())
-        } else if command_text == "help" {
+        } else if &command_text[0..4] == "help" {
             Command::Help
         } else {
             Command::Unknown(command_text.to_string())
