@@ -1,5 +1,6 @@
 use super::elaborate::{self, ElabCx, LocalElabCx};
 use super::parser;
+use super::core;
 use super::typeck::{TyCtxt, LocalCx};
 
 use std::io;
@@ -35,14 +36,15 @@ pub enum Error {
     Io(io::Error),
     Elaborator(elaborate::Error),
     // Parser(parser::Error),
-    // Interpreter(interpreter::Error),
 }
 
 #[derive(Debug)]
 enum Command {
     Quit,
     Reload,
-    Unknown,
+    Unknown(String),
+    TypeOf(String),
+    Help,
 }
 
 impl Repl {
@@ -103,10 +105,17 @@ impl Repl {
                 match cmd {
                     Command::Quit => return Ok(()),
                     Command::Reload => panic!("unsupported command"),
-                    Command::Unknown => panic!("unknown name"),
+                    Command::Unknown(u) => panic!("unknown name"),
+                    Command::TypeOf(t) => {
+                        let term = self.preprocess_term(t);
+                        println!("{}", self.type_check_term(&term));
+                    },
+                    Command::Help => {
+                        println!("HELP!")
+                    }
                 }
             } else {
-                self.check_term(input.to_string());
+                self.handle_input(input.to_string());
                 readline::add_history(input.as_ref());
             }
         }
@@ -114,18 +123,24 @@ impl Repl {
         Ok(())
     }
 
-    fn check_term(&mut self, source: String) {
+    fn preprocess_term(&mut self, source: String) -> core::Term {
         let parser = parser::from_string(source).unwrap();
         let term = parser.parse_term();
 
-        let eterm = {
-            let mut lcx = LocalElabCx::from_elab_cx(&mut self.elab_cx);
-            lcx.elaborate_term(term).unwrap()
-        };
-        
+        let mut lcx = LocalElabCx::from_elab_cx(&mut self.elab_cx);
+        lcx.elaborate_term(term).unwrap()
+    }
+
+    fn type_check_term(&mut self, term: &core::Term) -> core::Term {
         let mut ltycx = LocalCx::from_cx(&self.elab_cx.ty_cx);
-        let result = ltycx.type_infer_term(&eterm).unwrap();
-        println!("{} : {}", eterm, result);
+        ltycx.type_infer_term(&term).unwrap()
+    }
+
+    fn handle_input(&mut self, source: String) {
+        let term = self.preprocess_term(source);
+        let ty = self.type_check_term(&term);
+        println!("{} : {}", term, ty);
+        println!("{}", self.elab_cx.ty_cx.eval(&term).unwrap());
     }
 
     fn parse_command(&self, command_text: &str) -> Command {
@@ -133,9 +148,12 @@ impl Repl {
             Command::Quit
         } else if command_text == "reload" {
             Command::Reload
+        } else if &command_text[0..4] == "type" {
+            Command::TypeOf(command_text[4..].to_string())
+        } else if command_text == "help" {
+            Command::Help
         } else {
-            Command::Unknown
+            Command::Unknown(command_text.to_string())
         }
     }
 }
-//
