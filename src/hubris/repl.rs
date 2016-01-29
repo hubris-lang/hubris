@@ -86,13 +86,12 @@ impl Repl {
                             //report_type_error(&ty_cx, term, err).unwrap(); // handle this properly
                             // return Ok(());
                         }
-                        Ok(_) => {
-                            let t = ty_cx.get_main_body();
-                            println!("main={}",
-                                ty_cx.eval(t).unwrap());
-                        }
+                        Ok(_) => {}
                     }
                 }
+
+                let t = ty_cx.get_main_body();
+                println!("main={}", ty_cx.eval(t).unwrap());
 
                 Ok(Repl {
                     elab_cx: ecx,
