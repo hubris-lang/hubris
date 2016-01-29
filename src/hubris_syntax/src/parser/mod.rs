@@ -15,9 +15,17 @@ pub struct Parser {
 }
 
 impl Parser {
-    // TODO: Clean up token error handling
     pub fn parse(&self) -> super::ast::Module {
-        match hubris::parse_Module(&self.source_map.source[..]) {
+        self.report_error(hubris::parse_Module(&self.source_map.source[..]))
+    }
+
+    pub fn parse_term(&self) -> super::ast::Term {
+        self.report_error(hubris::parse_Term(&self.source_map.source[..]))
+    }
+
+    pub fn report_error<'input, R>(&self,
+        result: Result<R, ParseError<usize,(usize, &'input str),()>>) -> R {
+        match result {
             Err(e) => match e {
                 ParseError::InvalidToken { location } => {
                     let (offset, line) = self.source_map.find_line(location).unwrap();
@@ -55,6 +63,16 @@ pub fn from_file<T: AsRef<Path>>(path: T) -> io::Result<Parser> {
     try!(file.read_to_string(&mut contents));
 
     Ok(Parser {
-        source_map: SourceMap::new(path.to_owned(), contents),
+        source_map: SourceMap::from_file(
+            format!("{}", path.to_owned().display()),
+            contents),
+    })
+}
+
+pub fn from_string(contents: String) -> io::Result<Parser> {
+    let source_map = SourceMap::from_source(contents);
+
+    Ok(Parser {
+        source_map: source_map,
     })
 }

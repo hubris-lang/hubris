@@ -20,7 +20,7 @@ pub struct ElabCx {
     /// matching.
     constructors: HashSet<ast::Name>,
     globals: HashMap<ast::Name, core::Name>,
-    ty_cx: TyCtxt,
+    pub ty_cx: TyCtxt,
 }
 
 impl ElabCx {
@@ -192,14 +192,14 @@ impl ElabCx {
     }
 }
 
-struct LocalElabCx<'ecx> {
+pub struct LocalElabCx<'ecx> {
     cx: &'ecx mut ElabCx,
     locals: HashMap<ast::Name, core::Name>,
     metavar_counter: usize,
 }
 
 impl<'ecx> LocalElabCx<'ecx>  {
-    fn from_elab_cx(ecx: &'ecx mut ElabCx) -> LocalElabCx<'ecx> {
+    pub fn from_elab_cx(ecx: &'ecx mut ElabCx) -> LocalElabCx<'ecx> {
         LocalElabCx {
             cx: ecx,
             locals: HashMap::new(),
@@ -240,7 +240,7 @@ impl<'ecx> LocalElabCx<'ecx>  {
         Ok((ename, ety))
     }
 
-    fn elaborate_term(&mut self, term: ast::Term) -> Result<core::Term, Error> {
+    pub fn elaborate_term(&mut self, term: ast::Term) -> Result<core::Term, Error> {
         debug!("elaborate_term: term={:?}", term);
 
         match term {

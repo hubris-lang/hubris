@@ -36,7 +36,7 @@ impl TyCtxt {
             functions: HashMap::new(),
             axioms: HashMap::new(),
             definitions: HashMap::new(),
-            source_map: SourceMap::new(PathBuf::new(), "".to_string()),
+            source_map: SourceMap::from_file( "".to_string(), "".to_string()),
             local_counter: RefCell::new(0),
         }
     }
@@ -377,7 +377,7 @@ pub struct LocalCx<'tcx> {
 }
 
 impl<'tcx> LocalCx<'tcx> {
-    fn from_cx(ty_cx: &'tcx TyCtxt) -> LocalCx<'tcx> {
+    pub fn from_cx(ty_cx: &'tcx TyCtxt) -> LocalCx<'tcx> {
         LocalCx {
             ty_cx: ty_cx,
             locals: HashMap::new(),

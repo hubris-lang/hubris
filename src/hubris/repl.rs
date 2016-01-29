@@ -1,9 +1,10 @@
-use super::elaborate::{self, ElabCx};
+use super::elaborate::{self, ElabCx, LocalElabCx};
 use super::parser;
-use super::typeck::TyCtxt;
+use super::typeck::{TyCtxt, LocalCx};
 
 use std::io;
 use std::path::{PathBuf};
+use readline;
 
 pub struct Repl {
     elab_cx: ElabCx,
@@ -88,28 +89,43 @@ impl Repl {
 
     /// Starts the read-eval-print-loop for querying the language.
     pub fn start(mut self) -> Result<(), Error> {
-        panic!("start")
-        // for line in self.readline_session.clone() {
-        //     if line.starts_with(":") {
-        //         let command = self.parse_command(&line[1..]);
-        //         match command {
-        //             Command::Quit => break,
-        //             Command::Reload => {
-        //                 match self.file.as_ref() {
-        //                     None => println!("no file to reload"),
-        //                     Some(file) => {
-        //                         self.interpreter = try!(Interpreter::load_from_file(file));
-        //                     }
-        //                 }
-        //             },
-        //             _ => println!("unrecognized command {}", &line[1..])
-        //         }
-        //     } else {
-        //         try!(self.query(line))
-        //     }
-        // }
-        //
-        // Ok(())
+        loop {
+            let input = match readline::readline("hubris> ") {
+                None => {
+                    println!("");
+                    break;
+                },
+                Some(input) => input,
+            };
+
+            if &input[0..1] == ":" {
+                let cmd = self.parse_command(&input[1..]);
+                match cmd {
+                    Command::Quit => return Ok(()),
+                    Command::Reload => panic!("unsupported command"),
+                    Command::Unknown => panic!("unknown name"),
+                }
+            } else {
+                self.check_term(input.to_string());
+                readline::add_history(input.as_ref());
+            }
+        }
+
+        Ok(())
+    }
+
+    fn check_term(&mut self, source: String) {
+        let parser = parser::from_string(source).unwrap();
+        let term = parser.parse_term();
+
+        let eterm = {
+            let mut lcx = LocalElabCx::from_elab_cx(&mut self.elab_cx);
+            lcx.elaborate_term(term).unwrap()
+        };
+        
+        let mut ltycx = LocalCx::from_cx(&self.elab_cx.ty_cx);
+        let result = ltycx.type_infer_term(&eterm).unwrap();
+        println!("{} : {}", eterm, result);
     }
 
     fn parse_command(&self, command_text: &str) -> Command {
@@ -122,27 +138,4 @@ impl Repl {
         }
     }
 }
-
-// fn query(&mut self, query: String) -> Result<(), Error>  {
-//     let query_parser = Parser::new(query);
-//     let goal = try!(query_parser.parse_query());
-//     debug!("Repl::query: query_string={:?}", goal);
-//     let mut session  = ReadlineSession::new("more? ".to_owned());
-//     try!(self.interpreter.solve(goal, || {
-//         let line = session.next().unwrap();
-//         println!("Inside the callback !!: {}", line);
-//         let line = session.next().unwrap();
-//
-//         if &line[..1] == ";" {
-//             Ok(())
-//         } else {
-//             Err(())
-//         }
-//     }));
-//     // for var in vars {
-//     //     let value = self.environment
-//     //     println!("{} = {}", var, );
-//     // }
-//     Ok(())
-// }
 //

@@ -1,5 +1,5 @@
 [package]
-name = "hubris_parser"
+name = "hubris_syntax"
 version = "0.1.0"
 authors = ["Jared Roesch <jroesch@cs.uw.edu>"]
 build = "build.rs"

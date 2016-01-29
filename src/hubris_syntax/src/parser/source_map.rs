@@ -1,15 +1,14 @@
 use super::super::ast::Span;
-use std::path::PathBuf;
 
 #[derive(Clone)]
 pub struct SourceMap {
-    pub file_name: PathBuf,
+    pub file_name: String,
     pub source: String,
     lines: Vec<(usize, usize)>
 }
 
 impl SourceMap {
-    pub fn new(file_name: PathBuf, source: String) -> SourceMap {
+    pub fn from_file(file_name: String, source: String) -> SourceMap {
         let mut line_start = 0;
         let mut pos = 0;
         let mut lines = Vec::new();
@@ -27,6 +26,10 @@ impl SourceMap {
             source: source,
             lines: lines
         }
+    }
+
+    pub fn from_source(source: String) -> SourceMap {
+        SourceMap::from_file("repl".to_string(), source)
     }
 
     // Given a span returns the line and column number information.

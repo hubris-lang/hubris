@@ -1,9 +1,9 @@
-extern crate lalrpop_util;
 extern crate llvm_sys;
 extern crate gcc;
 #[macro_use] extern crate log;
 extern crate iron;
 extern crate hubris_parser;
+extern crate readline;
 extern crate term;
 
 pub mod ast {

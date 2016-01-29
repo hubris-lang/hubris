@@ -14,7 +14,7 @@ pub fn span_error<O: Write>(ty_cx: &TyCtxt,
 
     let filename_str = format!(
         "{}:{}:{}: {}:{} ",
-        ty_cx.source_map.file_name.display(),
+        ty_cx.source_map.file_name,
         line_no,
         col_no,
         line_no,
@@ -32,7 +32,7 @@ pub fn span_error<O: Write>(ty_cx: &TyCtxt,
 
     let file_str_simple =
         format!("{}:{}:{}: ",
-            ty_cx.source_map.file_name.display(),
+            ty_cx.source_map.file_name,
             line_no, col_no);
 
     try!(write!(

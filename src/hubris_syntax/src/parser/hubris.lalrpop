@@ -73,7 +73,7 @@ Binder: (Name, Term) = {
 };
 
 
-Term: Term = {
+pub Term: Term = {
    "forall" <args: (Binder+)> "," <body: Term> => {
       let mut result = body;
       for (n, t) in args {

@@ -2,7 +2,6 @@
 name = "hubris"
 version = "0.1.0"
 authors = ["Jared Roesch <roeschinc@gmail.com>"]
-build = "build.rs"
 
 [lib]
 name = "hubris"
@@ -12,14 +11,8 @@ path = "src/hubris/lib.rs"
 name = "hubris"
 path = "src/bin/hubris.rs"
 
-[dependencies.hubris_parser]
-path = "src/hubris_parser"
-
-[dependencies.lalrpop-util]
-version = "0.8.0"
-
-[build-dependencies.lalrpop]
-version = "0.8.0"
+[dependencies.hubris_syntax]
+path = "src/hubris_syntax"
 
 [dependencies.readline]
 git = "https://github.com/shaleh/rust-readline"
