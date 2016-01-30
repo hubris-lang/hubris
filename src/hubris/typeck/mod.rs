@@ -29,6 +29,30 @@ pub struct TyCtxt {
     local_counter: RefCell<usize>,
 }
 
+pub struct NameGenerator {
+    prefix: String,
+    counter: usize,
+    max: usize
+}
+
+impl Iterator for NameGenerator {
+    type Item = String;
+
+    fn next(&mut self) -> Option<String> {
+        let name = format!("{}{}", self.prefix, self.counter);
+        self.counter += 1;
+        Some(name)
+    }
+}
+
+pub fn names(prefix: &str, count: usize) -> NameGenerator {
+    NameGenerator {
+        prefix: prefix.to_string(),
+        counter: 0,
+        max: count,
+    }
+}
+
 impl TyCtxt {
     pub fn empty() -> TyCtxt {
         TyCtxt {
@@ -47,11 +71,11 @@ impl TyCtxt {
 
         for def in &module.defs {
             match def {
-                &Definition::Data(ref d) =>
+                &Item::Data(ref d) =>
                     ty_cx.declare_datatype(d),
-                &Definition::Fn(ref f) =>
+                &Item::Fn(ref f) =>
                     ty_cx.declare_def(f),
-                &Definition::Extern(ref e) =>
+                &Item::Extern(ref e) =>
                     ty_cx.declare_extern(e),
             }
         }
@@ -192,10 +216,10 @@ impl TyCtxt {
         self.axioms.insert(e.name.clone(), e.term.clone());
     }
 
-    pub fn type_check_def(&self, def: &Definition) -> Result<(), Error> {
+    pub fn type_check_def(&self, def: &Item) -> Result<(), Error> {
         debug!("type_check_def: def={}", def);
         match def {
-            &Definition::Fn(ref fun) => {
+            &Item::Fn(ref fun) => {
                 let &Function {
                     ref ret_ty,
                     ref body, ..

@@ -1,9 +1,14 @@
-extern crate llvm_sys;
+#![feature(custom_derive, plugin)]
+#![plugin(serde_macros)]
+
 extern crate gcc;
-#[macro_use] extern crate log;
 extern crate iron;
 extern crate hubris_parser;
+#[macro_use] extern crate log;
+extern crate llvm_sys;
 extern crate readline;
+extern crate rmp_serde;
+extern crate serde;
 extern crate term;
 
 pub mod ast {

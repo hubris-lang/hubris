@@ -115,7 +115,7 @@ impl HasSpan for Name {
 pub struct Module {
     pub span: Span,
     pub name: Name,
-    pub defs: Vec<Definition>,
+    pub items: Vec<Item>,
 }
 
 impl Module {
@@ -127,39 +127,42 @@ impl Module {
         Module {
             span: Span::dummy(),
             name: Name::from_str("REPL"),
-            defs: vec![],
+            items: vec![],
         }
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Definition {
+pub enum Item {
     Data(Data),
     Fn(Function),
     Extern(Extern),
-    Comment(())
+    Comment(()),
+    Import(Name),
 }
 
-impl HasSpan for Definition {
+impl HasSpan for Item {
     fn get_span(&self) -> Span {
-        use self::Definition::*;
+        use self::Item::*;
 
         match self {
             &Data(ref data) => data.span,
             &Fn(ref fun) => fun.span,
             &Extern(ref ext) => ext.span,
             &Comment(_) => Span::dummy(),
+            &Import(_) => Span::dummy(),
         }
     }
 
     fn set_span(&mut self, sp: Span) {
-        use self::Definition::*;
+        use self::Item::*;
 
         match self {
             &mut Data(ref mut data) => data.span = sp,
             &mut Fn(ref mut fun) => fun.span = sp,
             &mut Extern(ref mut ext) => ext.span = sp,
             &mut Comment(_) => {},
+            &mut Import(_) => {},
         }
     }
 }
@@ -168,6 +171,7 @@ impl HasSpan for Definition {
 pub struct Data {
     pub span: Span,
     pub name: Name,
+    pub parameters: Vec<(Name, Term)>,
     pub ty: Term,
     pub ctors: Vec<Constructor>
 }

@@ -4,33 +4,35 @@ use std::str::FromStr;
 grammar;
 
 pub Module: Module =  {
-  <lo:@L> "module" <n: Name> <ds: (Def)*> <hi:@R> =>
+  <lo:@L> "module" <n: Name> <ds: (Item)*> <hi:@R> =>
     Module {
         span: Span::new(lo, hi),
         name: n,
-        defs: ds,
+        items: ds,
     },
 };
 
-Def: Definition = {
-  <lo:@L> <d: DefNoSpan> <hi:@R> => {
+Item: Item = {
+  <lo:@L> <d: ItemNoSpan> <hi:@R> => {
     let mut d = d;
     d.set_span(Span::new(lo, hi)); d
   }
 };
 
-DefNoSpan: Definition = {
-  <d: Data> => Definition::Data(d),
-  <f: Fn> => Definition::Fn(f),
-  <c: Comment> => Definition::Comment(()),
-  <e: Extern> => Definition::Extern(e),
+ItemNoSpan: Item = {
+  <d: Data> => Item::Data(d),
+  <f: Fn> => Item::Fn(f),
+  <c: Comment> => Item::Comment(()),
+  <e: Extern> => Item::Extern(e),
+  <i: Import> => Item::Import(i),
 };
 
 Data: Data = {
- "inductive" <n: Name> <ty: (":" Term)?> <attrs: (<Constructor>)*> "end" =>
+ "inductive" <n: Name> <ps : Parameters> <ty: (":" Term)?> <attrs: (<Constructor>)*> "end" =>
   Data {
     span: Span::dummy(),
     name: n,
+    parameters: ps,
     ty: ty.map(|t| t.1).unwrap_or(Term::Type),
     ctors: attrs,
   }
@@ -64,6 +66,10 @@ Extern: Extern = {
     }
 };
 
+Import: Name = {
+    "import" <n : Name> => n,
+};
+
 Arg: (Name, Term) = {
     "(" <n : Name> ":" <ty : Term> ")" => (n, ty)
 };
@@ -72,8 +78,14 @@ Binder: (Name, Term) = {
     "(" <n : Name> ":" <ty : Term1> ")" => (n, ty)
 };
 
+Parameters: Vec<(Name, Term)> = {
+  <params: Binder*> => params,
+};
 
 pub Term: Term = {
+  "let" <name: Name> ":" <ty: Term> ":=" <body: Term> => {
+      panic!()
+   },
    "forall" <args: (Binder+)> "," <body: Term> => {
       let mut result = body;
       for (n, t) in args {

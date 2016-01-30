@@ -49,9 +49,9 @@ impl ElabCx {
         let mut errors = vec![];
         let mut defs = vec![];
 
-        for def in ecx.module.defs.clone() {
+        for def in ecx.module.items.clone() {
             match &def {
-                &ast::Definition::Data(ref d) => {
+                &ast::Item::Data(ref d) => {
                     for ctor in &d.ctors {
                         ecx.constructors.insert(ctor.0.clone());
                     }
@@ -65,11 +65,11 @@ impl ElabCx {
                 Ok(edef) => {
                     let edef = edef.map(|edef| {
                         match &edef {
-                            &core::Definition::Data(ref d) =>
+                            &core::Item::Data(ref d) =>
                                 ecx.ty_cx.declare_datatype(d),
-                            &core::Definition::Fn(ref f) =>
+                            &core::Item::Fn(ref f) =>
                                 ecx.ty_cx.declare_def(f),
-                            &core::Definition::Extern(ref e) =>
+                            &core::Item::Extern(ref e) =>
                                 ecx.ty_cx.declare_extern(e),
                         }
                         edef
@@ -94,24 +94,25 @@ impl ElabCx {
         }
     }
 
-    pub fn elaborate_def(&mut self, def: ast::Definition) -> Result<Option<core::Definition>, Error> {
+    pub fn elaborate_def(&mut self, def: ast::Item) -> Result<Option<core::Item>, Error> {
         debug!("elaborate_def: def={:?}", def);
 
         match def {
-            ast::Definition::Data(d) => {
-                let edata = core::Definition::Data(try!(self.elaborate_data(d)));
+            ast::Item::Data(d) => {
+                let edata = core::Item::Data(try!(self.elaborate_data(d)));
                 Ok(Some(edata))
             }
-            ast::Definition::Fn(f) => {
-                let efn = core::Definition::Fn(try!(self.elaborate_fn(f)));
+            ast::Item::Fn(f) => {
+                let efn = core::Item::Fn(try!(self.elaborate_fn(f)));
                 debug!("elaborate_def: fn={}", efn);
                 Ok(Some(efn))
             }
-            ast::Definition::Extern(e) => {
-                let ext = core::Definition::Extern(try!(self.elaborate_extern(e)));
+            ast::Item::Extern(e) => {
+                let ext = core::Item::Extern(try!(self.elaborate_extern(e)));
                 Ok(Some(ext))
             }
-            ast::Definition::Comment(_) => Ok(None)
+            ast::Item::Comment(_) => Ok(None),
+            ast::Item::Import(n) => panic!(),
         }
     }
 

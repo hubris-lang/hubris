@@ -15,7 +15,8 @@ pub struct Module {
     // Eventually we should use ID's that map to files
     pub file_name: PathBuf,
     pub name: Name,
-    pub defs: Vec<Definition>,
+    pub imports: Vec<Name>,
+    pub defs: Vec<Item>,
 }
 
 impl Module {
@@ -43,15 +44,15 @@ pub struct Extern {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Definition {
+pub enum Item {
     Data(Data),
     Fn(Function),
     Extern(Extern),
 }
 
-impl Display for Definition {
+impl Display for Item {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        use self::Definition::*;
+        use self::Item::*;
 
         match self {
             &Fn(ref fun) => {
