@@ -48,7 +48,7 @@ pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> io::Re
         Ok(v) => v,
     };
 
-    let ty_cx = TyCtxt::from_module(&emodule, parser.source_map);
+    let ty_cx = TyCtxt::from_module(&emodule, parser.source_map).unwrap();
 
     let term = term::stdout().unwrap();
 

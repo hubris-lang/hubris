@@ -5,6 +5,9 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+mod name_generator;
+use self::name_generator::*;
+
 #[derive(Debug, Clone)]
 pub enum Error {
     ApplicationMismatch(Span, Term, Term),
@@ -29,30 +32,6 @@ pub struct TyCtxt {
     local_counter: RefCell<usize>,
 }
 
-pub struct NameGenerator {
-    prefix: String,
-    counter: usize,
-    max: usize
-}
-
-impl Iterator for NameGenerator {
-    type Item = String;
-
-    fn next(&mut self) -> Option<String> {
-        let name = format!("{}{}", self.prefix, self.counter);
-        self.counter += 1;
-        Some(name)
-    }
-}
-
-pub fn names(prefix: &str, count: usize) -> NameGenerator {
-    NameGenerator {
-        prefix: prefix.to_string(),
-        counter: 0,
-        max: count,
-    }
-}
-
 impl TyCtxt {
     pub fn empty() -> TyCtxt {
         TyCtxt {
@@ -65,9 +44,13 @@ impl TyCtxt {
         }
     }
 
-    pub fn from_module(module: &Module, source_map: SourceMap) -> TyCtxt {
+    pub fn from_module(module: &Module, source_map: SourceMap) -> Result<TyCtxt, Error> {
         let mut ty_cx = TyCtxt::empty();
         ty_cx.source_map = source_map;
+
+        for import in &module.imports {
+            try!(ty_cx.load_import(import));
+        }
 
         for def in &module.defs {
             match def {
@@ -80,7 +63,11 @@ impl TyCtxt {
             }
         }
 
-        return ty_cx;
+        return Ok(ty_cx);
+    }
+
+    pub fn load_import(&mut self, name: &Name) -> Result<(), Error> {
+            panic!("trying to load module: {}", name);
     }
 
     pub fn get_main_body(&self) -> &Term {

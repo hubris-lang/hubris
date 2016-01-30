@@ -9,6 +9,7 @@ use std::path::Path;
 pub enum Error {
     UnexpectedQualifiedName,
     UnknownVariable(ast::Name),
+    InvalidImport,
     Many(Vec<Error>),
 }
 
@@ -48,6 +49,7 @@ impl ElabCx {
 
         let mut errors = vec![];
         let mut defs = vec![];
+        let mut imports = vec![];
 
         for def in ecx.module.items.clone() {
             match &def {
@@ -56,6 +58,9 @@ impl ElabCx {
                         ecx.constructors.insert(ctor.0.clone());
                     }
                 },
+                &ast::Item::Import(ref n) => {
+                    imports.push(try!(ecx.elaborate_import(n.clone())))
+                }
                 _ => {}
             }
 
@@ -90,7 +95,18 @@ impl ElabCx {
                 file_name: path.as_ref().to_owned(),
                 name: name,
                 defs: defs,
+                imports: imports,
             })
+        }
+    }
+
+    pub fn elaborate_import(&mut self, name: ast::Name) -> Result<core::Name, Error> {
+        match name.repr {
+            ast::NameKind::Qualified(components) => Ok(core::Name::Qual {
+                components: components,
+                span: name.span,
+            }),
+            ast::NameKind::Unqualified(..) => Err(Error::InvalidImport),
         }
     }
 
@@ -111,8 +127,8 @@ impl ElabCx {
                 let ext = core::Item::Extern(try!(self.elaborate_extern(e)));
                 Ok(Some(ext))
             }
-            ast::Item::Comment(_) => Ok(None),
-            ast::Item::Import(n) => panic!(),
+            ast::Item::Comment(_) |
+            ast::Item::Import(_) => Ok(None)
         }
     }
 
@@ -252,8 +268,8 @@ impl<'ecx> LocalElabCx<'ecx>  {
             ast::Term::Var { name, .. } => Ok(core::Term::Var {
                 name: try!(self.elaborate_name(name)),
             }),
-            ast::Term::Match { span, scrutinee, cases } => {
-                panic!("can not elaborate a match expression")
+            ast::Term::Match { .. } => {
+                panic!("match elaboration is currently disabled")
             }
             ast::Term::App { fun, arg, span } => {
                 let efun = try!(self.elaborate_term(*fun));
