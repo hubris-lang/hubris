@@ -3,7 +3,7 @@ use super::ast::{SourceMap, Span, HasSpan};
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 
 mod name_generator;
 use self::name_generator::*;
@@ -48,8 +48,11 @@ impl TyCtxt {
         let mut ty_cx = TyCtxt::empty();
         ty_cx.source_map = source_map;
 
+        let main_file = PathBuf::from(ty_cx.source_map.file_name.clone());
+        let prefix = main_file.parent().unwrap();
+
         for import in &module.imports {
-            try!(ty_cx.load_import(import));
+            try!(ty_cx.load_import(&prefix, import));
         }
 
         for def in &module.defs {
@@ -66,8 +69,14 @@ impl TyCtxt {
         return Ok(ty_cx);
     }
 
-    pub fn load_import(&mut self, name: &Name) -> Result<(), Error> {
-            panic!("trying to load module: {}", name);
+    pub fn in_scope(&self, name: &Name) -> bool {
+        self.axioms.contains_key(name) ||
+        self.definitions.contains_key(name)
+    }
+
+    pub fn load_import(&mut self, path: &Path, name: &Name) -> Result<(), Error> {
+        debug!("load_import: path={} module={}", path.display(), name);
+        panic!()
     }
 
     pub fn get_main_body(&self) -> &Term {

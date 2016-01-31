@@ -1,9 +1,12 @@
+mod util;
+
 use ast::{self, SourceMap};
 use core;
 use typeck::TyCtxt;
+use self::util::to_qualified_name;
 
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug)]
 pub enum Error {
@@ -15,11 +18,13 @@ pub enum Error {
 
 pub struct ElabCx {
     module: ast::Module,
+
     /// The set of declared constructor names in scope
     /// we need this to differentiate between a name
     /// binding or null-ary constructor in pattern
     /// matching.
     constructors: HashSet<ast::Name>,
+
     globals: HashMap<ast::Name, core::Name>,
     pub ty_cx: TyCtxt,
 }
@@ -101,13 +106,11 @@ impl ElabCx {
     }
 
     pub fn elaborate_import(&mut self, name: ast::Name) -> Result<core::Name, Error> {
-        match name.repr {
-            ast::NameKind::Qualified(components) => Ok(core::Name::Qual {
-                components: components,
-                span: name.span,
-            }),
-            ast::NameKind::Unqualified(..) => Err(Error::InvalidImport),
-        }
+        let core_name = to_qualified_name(name);
+        let main_file = PathBuf::from(self.ty_cx.source_map.file_name.clone());
+        let load_path = main_file.parent().unwrap();
+        self.ty_cx.load_import(load_path, &core_name);
+        Ok(core_name)
     }
 
     pub fn elaborate_def(&mut self, def: ast::Item) -> Result<Option<core::Item>, Error> {
@@ -307,9 +310,20 @@ impl<'ecx> LocalElabCx<'ecx>  {
     fn elaborate_name(&self, name: ast::Name) -> Result<core::Name, Error> {
         debug!("elaborate_name: name={}", name);
 
+        // It is most likely to be a local
         match self.locals.get(&name) {
+            // A global in the current module
             None => match self.cx.globals.get(&name) {
-                None => Err(Error::UnknownVariable(name.clone())),
+                // If it isn't a global we are going to see if the name has already been
+                // loading into the type context, if not this is an error.
+                None => {
+                    let core_name = to_qualified_name(name.clone());
+                    if self.cx.ty_cx.in_scope(&core_name) {
+                        Ok(core_name)
+                    } else {
+                        Err(Error::UnknownVariable(name.clone()))
+                    }
+                }
                 Some(nn) => Ok(nn.clone()),
             },
             Some(local) => Ok(local.clone())
