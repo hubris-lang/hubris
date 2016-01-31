@@ -49,7 +49,12 @@ fn main() {
     if args.flag_server {
         hubris::server::server_main();
     } else if args.flag_interactive {
-        let repl = hubris::repl::Repl::from_path(&Some(PathBuf::from(args.arg_file))).unwrap();
+        let pb = PathBuf::from(args.arg_file);
+        if !pb.is_file() {
+            println!("Hubris: file {} does not exist", pb.to_str().unwrap());
+            return;
+        }
+        let repl = hubris::repl::Repl::from_path(&Some(pb)).unwrap();
         repl.start().unwrap();
     } else {
         debug!("main: compiling {} output to {:?}",
