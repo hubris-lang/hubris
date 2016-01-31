@@ -75,23 +75,9 @@ impl Repl {
                 let emodule = try!(ecx.elaborate_module(
                     file_path));
 
-                let ty_cx = TyCtxt::from_module(&emodule, parser.source_map).unwrap();
-
-                // let term = term::stdout().unwrap();
-
-                for def in &emodule.defs {
-                    match ty_cx.type_check_def(def) {
-                        Err(err) => {
-                            panic!("error {:?}", err);
-                            //report_type_error(&ty_cx, term, err).unwrap(); // handle this properly
-                            // return Ok(());
-                        }
-                        Ok(_) => {}
-                    }
+                { let t = ecx.ty_cx.get_main_body();
+                    println!("main={}", ecx.ty_cx.eval(t).unwrap());
                 }
-
-                let t = ty_cx.get_main_body();
-                println!("main={}", ty_cx.eval(t).unwrap());
 
                 Ok(Repl {
                     elab_cx: ecx,

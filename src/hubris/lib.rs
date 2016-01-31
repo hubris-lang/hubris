@@ -30,9 +30,6 @@ pub mod repl;
 pub mod server;
 pub mod typeck;
 
-use error_reporting::*;
-use typeck::*;
-
 use std::path::{PathBuf, Path};
 use std::io;
 
@@ -48,23 +45,10 @@ pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> io::Re
         Ok(v) => v,
     };
 
-    let ty_cx = TyCtxt::from_module(&emodule, parser.source_map).unwrap();
-
     let term = term::stdout().unwrap();
 
-    for def in &emodule.defs {
-        match ty_cx.type_check_def(def) {
-            Err(err) => {
-                report_type_error(&ty_cx, term, err).unwrap(); // handle this properly
-                return Ok(());
-            }
-            Ok(_) => {
-                let t = ty_cx.get_main_body();
-                println!("main={}",
-                    ty_cx.eval(t).unwrap());
-            }
-        }
-    }
+    let t = ecx.ty_cx.get_main_body();
+    println!("main={}", ecx.ty_cx.eval(t).unwrap());
 
     // let cps_module = cps::from_core_module(emodule);
     // println!("{:?}", cps_module);

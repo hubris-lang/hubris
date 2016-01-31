@@ -2,20 +2,26 @@ mod util;
 
 use ast::{self, SourceMap};
 use core;
-use typeck::TyCtxt;
+use typeck::{self, TyCtxt};
 use self::util::to_qualified_name;
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum Error {
     UnexpectedQualifiedName,
     UnknownVariable(ast::Name),
+    TypeCk(typeck::Error),
     InvalidImport,
     Many(Vec<Error>),
 }
 
+impl From<typeck::Error> for Error {
+    fn from(err: typeck::Error) -> Error {
+        Error::TypeCk(err)
+    }
+}
 pub struct ElabCx {
     module: ast::Module,
 
@@ -96,12 +102,14 @@ impl ElabCx {
         if errors.len() != 0 {
             Err(Error::Many(errors))
         } else {
-            Ok(core::Module {
+            let module = core::Module {
                 file_name: path.as_ref().to_owned(),
                 name: name,
                 defs: defs,
                 imports: imports,
-            })
+            };
+
+            self.ty_cx.
         }
     }
 
@@ -109,7 +117,7 @@ impl ElabCx {
         let core_name = to_qualified_name(name);
         let main_file = PathBuf::from(self.ty_cx.source_map.file_name.clone());
         let load_path = main_file.parent().unwrap();
-        self.ty_cx.load_import(load_path, &core_name);
+        try!(self.ty_cx.load_import(load_path, &core_name));
         Ok(core_name)
     }
 

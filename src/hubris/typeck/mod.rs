@@ -1,20 +1,32 @@
 use core::*;
 use super::ast::{SourceMap, Span, HasSpan};
+use super::parser;
+use super::elaborate;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::io;
 use std::path::{PathBuf, Path};
 
 mod name_generator;
 use self::name_generator::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Error {
     ApplicationMismatch(Span, Term, Term),
     UnificationErr(Span, Term, Term, Vec<(Term, Term)>),
     UnknownVariable(Name),
     ElaborationError,
-    MkErr
+    MkErr,
+    InternalError(String),
+    Many(Vec<Error>),
+    Io(io::Error),
+}
+
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Error {
+        Error::Io(err)
+    }
 }
 
 /// A global context for type checking containing the necessary information
@@ -48,25 +60,34 @@ impl TyCtxt {
         let mut ty_cx = TyCtxt::empty();
         ty_cx.source_map = source_map;
 
-        let main_file = PathBuf::from(ty_cx.source_map.file_name.clone());
+        try!(ty_cx.type_check_module(module));
+
+        Ok(ty_cx)
+    }
+
+    pub fn type_check_module(&mut self, module: &Module) -> Result<(), Error> {
+        let main_file = PathBuf::from(self.source_map.file_name.clone());
         let prefix = main_file.parent().unwrap();
 
         for import in &module.imports {
-            try!(ty_cx.load_import(&prefix, import));
+            try!(self.load_import(&prefix, import));
         }
 
         for def in &module.defs {
             match def {
                 &Item::Data(ref d) =>
-                    ty_cx.declare_datatype(d),
+                    self.declare_datatype(d),
                 &Item::Fn(ref f) =>
-                    ty_cx.declare_def(f),
+                    self.declare_def(f),
                 &Item::Extern(ref e) =>
-                    ty_cx.declare_extern(e),
+                    self.declare_extern(e),
             }
+
+            try!(self.type_check_def(def));
         }
 
-        return Ok(ty_cx);
+
+        Ok(())
     }
 
     pub fn in_scope(&self, name: &Name) -> bool {
@@ -76,7 +97,72 @@ impl TyCtxt {
 
     pub fn load_import(&mut self, path: &Path, name: &Name) -> Result<(), Error> {
         debug!("load_import: path={} module={}", path.display(), name);
-        panic!()
+        let file_suffix = match name_to_path(name) {
+            None => panic!(),
+            Some(f) => f,
+        };
+
+        let file_to_load = path.join(file_suffix);
+        debug!("load_import: file_to_load={}",
+            file_to_load.display());
+
+        let parser = try!(parser::from_file(&file_to_load));
+        let module = parser.parse();
+        let mut ecx = elaborate::ElabCx::from_module(module, parser.source_map.clone());
+
+        let emodule = ecx.elaborate_module(&file_to_load);
+
+        let emodule = match emodule {
+            Err(e) => panic!("elaboration error: {:?}", e),
+            Ok(v) => v,
+        };
+
+        let ty_cx = try!(TyCtxt::from_module(&emodule, self.source_map.clone()));
+
+        self.merge(ty_cx)
+    }
+
+    pub fn merge(&mut self, ty_cx: TyCtxt) -> Result<(), Error> {
+        let TyCtxt {
+            types,
+            functions,
+            axioms,
+            definitions,
+            ..
+        } = ty_cx;
+
+        let mut errors = vec![];
+
+        for (n, ty) in types {
+            if self.types.insert(n, ty).is_some() {
+                errors.push(Error::InternalError("bleh".to_string()));
+            }
+        }
+
+        for (n, fun) in functions {
+            if self.functions.insert(n, fun).is_some() {
+                errors.push(Error::InternalError("bleh".to_string()));
+            }
+        }
+
+        for (n, axiom) in axioms {
+            if self.axioms.insert(n, axiom).is_some() {
+                errors.push(Error::InternalError("bleh".to_string()));
+            }
+
+        }
+
+        for (n, def) in definitions {
+            if self.definitions.insert(n, def).is_some() {
+                errors.push(Error::InternalError("bleh".to_string()));
+            }
+        }
+
+        if errors.len() != 0 {
+            Err(Error::Many(errors))
+        } else {
+            Ok(())
+        }
     }
 
     pub fn get_main_body(&self) -> &Term {
@@ -514,5 +600,25 @@ fn def_eq_modulo(t1: &Term, t2: &Term, equalities: &mut Vec<(Term, Term)>) -> bo
                 false
             }
         }
+    }
+}
+
+fn name_to_path(name: &Name) -> Option<PathBuf> {
+    match name {
+        &Name::Qual { ref components, .. } => {
+            assert!(components.len() > 0);
+            let mut cs = components.iter();
+            let first = cs.next().unwrap();
+            let mut path = PathBuf::from(first);
+
+            for c in cs {
+                path = path.join(c);
+            }
+
+            path.set_extension("hb");
+
+            Some(path)
+        }
+        _ => None
     }
 }
