@@ -33,7 +33,32 @@ pub mod typeck;
 use std::path::{PathBuf, Path};
 use std::io;
 
-pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> io::Result<()> {
+#[derive(Debug)]
+pub enum Error {
+    Io(io::Error),
+    Elaborator(elaborate::Error),
+    TypeCk(typeck::Error),
+}
+
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Error {
+        Error::Io(err)
+    }
+}
+
+impl From<elaborate::Error> for Error {
+    fn from(err: elaborate::Error) -> Error {
+        Error::Elaborator(err)
+    }
+}
+
+impl From<typeck::Error> for Error {
+    fn from(err: typeck::Error) -> Error {
+        Error::TypeCk(err)
+    }
+}
+
+pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> Result<(), Error> {
     let parser = try!(parser::from_file(path.as_ref()));
     let module = parser.parse();
     let mut ecx = elaborate::ElabCx::from_module(module, parser.source_map.clone());
@@ -47,8 +72,11 @@ pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> io::Re
 
     let term = term::stdout().unwrap();
 
-    let t = ecx.ty_cx.get_main_body();
-    println!("main={}", ecx.ty_cx.eval(t).unwrap());
+    {
+        let main = try!(ecx.ty_cx.get_main_body());
+        let result = try!(ecx.ty_cx.eval(main));
+        println!("main={}", result);
+    }
 
     // let cps_module = cps::from_core_module(emodule);
     // println!("{:?}", cps_module);

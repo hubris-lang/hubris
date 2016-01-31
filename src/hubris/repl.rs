@@ -1,7 +1,7 @@
 use super::elaborate::{self, ElabCx, LocalElabCx};
 use super::parser;
 use super::core;
-use super::typeck::{TyCtxt, LocalCx};
+use super::typeck::{self, TyCtxt, LocalCx};
 
 use std::io;
 use std::path::{PathBuf};
@@ -38,11 +38,18 @@ impl From<elaborate::Error> for Error {
     }
 }
 
+impl From<typeck::Error> for Error {
+    fn from(err: typeck::Error) -> Error {
+        Error::TypeCk(err)
+    }
+}
+
 #[derive(Debug)]
 pub enum Error {
     Io(io::Error),
     Elaborator(elaborate::Error),
     UnknownCommand(String),
+    TypeCk(typeck::Error),
     // Parser(parser::Error),
 }
 
@@ -75,8 +82,10 @@ impl Repl {
                 let emodule = try!(ecx.elaborate_module(
                     file_path));
 
-                { let t = ecx.ty_cx.get_main_body();
-                    println!("main={}", ecx.ty_cx.eval(t).unwrap());
+                {
+                    let main = try!(ecx.ty_cx.get_main_body());
+                    let result = try!(ecx.ty_cx.eval(main));
+                    println!("main={}", result);
                 }
 
                 Ok(Repl {

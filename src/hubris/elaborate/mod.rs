@@ -109,7 +109,9 @@ impl ElabCx {
                 imports: imports,
             };
 
-            self.ty_cx.
+            try!(ecx.ty_cx.type_check_module(&module));
+
+            Ok(module)
         }
     }
 
@@ -303,7 +305,8 @@ impl<'ecx> LocalElabCx<'ecx>  {
                     let ebody = try!(lcx.elaborate_term(*body));
                     Ok(core::Term::abstract_lambda(locals, ebody))
                 })
-            }
+            },
+            ast::Term::Let { .. } => panic!("can't elaborate let-bindings"),
             ast::Term::Type => Ok(core::Term::Type),
         }
     }

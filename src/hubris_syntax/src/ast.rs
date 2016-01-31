@@ -203,6 +203,7 @@ pub enum Term {
     Forall { span: Span, name: Name, ty: Box<Term>, term: Box<Term> },
     Metavar { name: Name },
     Lambda { span: Span, args: Vec<(Name, Term)>, ret_ty: Box<Term>, body: Box<Term> },
+    Let { span: Span, bindings: Vec<(Name, Term, Term)>, body: Box<Term> },
     Type,
 }
 
@@ -218,6 +219,7 @@ impl HasSpan for Term {
             &Forall { span, .. } => span,
             &Lambda { span, .. } => span,
             &Metavar { ref name } => name.span,
+            &Let { span, .. } => span,
             &Type => Span::dummy(),
         }
     }
@@ -233,6 +235,7 @@ impl HasSpan for Term {
             &mut Forall { ref mut span, .. } => *span = sp,
             &mut Lambda { ref mut span, .. } => *span = sp,
             &mut Metavar { ref mut name } => name.span = sp,
+            &mut Let { ref mut span, .. } => *span = sp,
             &mut Type => {},
         }
     }

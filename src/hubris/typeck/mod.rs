@@ -18,7 +18,8 @@ pub enum Error {
     UnknownVariable(Name),
     ElaborationError,
     MkErr,
-    InternalError(String),
+    NameExists(Name),
+    NoMain,
     Many(Vec<Error>),
     Io(io::Error),
 }
@@ -134,27 +135,27 @@ impl TyCtxt {
         let mut errors = vec![];
 
         for (n, ty) in types {
-            if self.types.insert(n, ty).is_some() {
-                errors.push(Error::InternalError("bleh".to_string()));
+            if let Some(_) = self.types.insert(n.clone(), ty) {
+                errors.push(Error::NameExists(n))
             }
         }
 
         for (n, fun) in functions {
-            if self.functions.insert(n, fun).is_some() {
-                errors.push(Error::InternalError("bleh".to_string()));
+            if let Some(_) = self.functions.insert(n.clone(), fun) {
+                errors.push(Error::NameExists(n))
             }
         }
 
         for (n, axiom) in axioms {
-            if self.axioms.insert(n, axiom).is_some() {
-                errors.push(Error::InternalError("bleh".to_string()));
+            if let Some(_) = self.axioms.insert(n.clone(), axiom) {
+                errors.push(Error::NameExists(n))
             }
 
         }
 
         for (n, def) in definitions {
-            if self.definitions.insert(n, def).is_some() {
-                errors.push(Error::InternalError("bleh".to_string()));
+            if let Some(_) = self.definitions.insert(n.clone(), def) {
+                errors.push(Error::NameExists(n));
             }
         }
 
@@ -165,9 +166,11 @@ impl TyCtxt {
         }
     }
 
-    pub fn get_main_body(&self) -> &Term {
-        let f = self.functions.get(&Name::from_str("main")).unwrap();
-        return &f.body;
+    pub fn get_main_body(&self) -> Result<&Term, Error> {
+        match self.functions.get(&Name::from_str("main")) {
+            None => Err(Error::NoMain),
+            Some(ref f) => Ok(&f.body),
+        }
     }
 
     pub fn declare_datatype(&mut self, data_type: &Data) {

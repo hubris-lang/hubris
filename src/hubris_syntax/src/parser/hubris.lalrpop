@@ -83,12 +83,8 @@ Parameters: Vec<(Name, Term)> = {
 };
 
 pub Term: Term = {
-  "let" <name: Name> ":" <ty: Term> ":=" <body: Term> => {
-      panic!()
-   },
    "forall" <args: (Binder+)> "," <body: Term> => {
-      let mut result = body;
-      for (n, t) in args {
+      let mut result = body; for (n, t) in args {
           result = Term::Forall {
             span: Span::dummy(),
             name: n,
@@ -104,7 +100,18 @@ pub Term: Term = {
       ret_ty: Box::new(t),
       body: Box::new(body)
   },
+  "let" <bindings: (Binding ",")+> "in" <body: Term> => {
+      Term::Let {
+          bindings: bindings.into_iter().map(|b| b.0).collect(),
+          body: Box::new(body),
+          span: Span::dummy(),
+      }
+   },
   <t: TermFnType> => t
+};
+
+Binding : (Name, Term, Term) = {
+    <n: Name> ":" <ty: Term> ":=" <rhs: Term> => (n, ty, rhs)
 };
 
 TermFnType : Term = {
