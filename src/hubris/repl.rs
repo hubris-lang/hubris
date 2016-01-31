@@ -1,10 +1,10 @@
 use super::elaborate::{self, ElabCx, LocalElabCx};
 use super::parser;
 use super::core;
-use super::typeck::{self, TyCtxt, LocalCx};
+use super::typeck::{self, LocalCx};
 
 use std::io;
-use std::path::{PathBuf};
+use std::path::PathBuf;
 use readline;
 
 const HELP_MESSAGE: &'static str = r#"
@@ -49,8 +49,7 @@ pub enum Error {
     Io(io::Error),
     Elaborator(elaborate::Error),
     UnknownCommand(String),
-    TypeCk(typeck::Error),
-    // Parser(parser::Error),
+    TypeCk(typeck::Error), // Parser(parser::Error),
 }
 
 #[derive(Debug)]
@@ -75,12 +74,9 @@ impl Repl {
                 let parser = try!(parser::from_file(file_path));
                 let module = parser.parse();
 
-                let mut ecx = ElabCx::from_module(
-                    module,
-                    parser.source_map.clone());
+                let mut ecx = ElabCx::from_module(module, parser.source_map.clone());
 
-                let emodule = try!(ecx.elaborate_module(
-                    file_path));
+                let emodule = try!(ecx.elaborate_module(file_path));
 
                 {
                     let main = try!(ecx.ty_cx.get_main_body());
@@ -104,7 +100,7 @@ impl Repl {
                 None => {
                     println!("");
                     break;
-                },
+                }
                 Some(input) => input,
             };
 
@@ -114,9 +110,11 @@ impl Repl {
             match self.repl_iteration(input) {
                 // please make me look better
                 Err(e) => println!("repl error: {:?}", e),
-                Ok(cont) => match cont {
-                    Cont::Quit => break,
-                    Cont::Done => {},
+                Ok(cont) => {
+                    match cont {
+                        Cont::Quit => break,
+                        Cont::Done => {}
+                    }
                 }
             }
         }
@@ -132,38 +130,41 @@ impl Repl {
                 Command::Reload => panic!("unsupported command"),
                 Command::Unknown(u) => return Err(Error::UnknownCommand(u)),
                 Command::TypeOf(t) => {
-                    let term = self.preprocess_term(t);
-                    println!("{}", self.type_check_term(&term));
-                },
-                Command::Help => {
-                    println!("{}", HELP_MESSAGE)
+                    let term = try!(self.preprocess_term(t));
+                    println!("{}", try!(self.type_check_term(&term)));
                 }
+                Command::Help => println!("{}", HELP_MESSAGE),
             }
         } else {
-            self.handle_input(input.to_string());
+            try!(self.handle_input(input.to_string()));
         }
 
         Ok(Cont::Done)
     }
 
-    fn preprocess_term(&mut self, source: String) -> core::Term {
+    fn preprocess_term(&mut self, source: String) -> Result<core::Term, Error> {
         let parser = parser::from_string(source).unwrap();
         let term = parser.parse_term();
 
         let mut lcx = LocalElabCx::from_elab_cx(&mut self.elab_cx);
-        lcx.elaborate_term(term).unwrap()
+        let term = try!(lcx.elaborate_term(term));
+
+        Ok(term)
     }
 
-    fn type_check_term(&mut self, term: &core::Term) -> core::Term {
+    fn type_check_term(&mut self, term: &core::Term) -> Result<core::Term, Error> {
         let mut ltycx = LocalCx::from_cx(&self.elab_cx.ty_cx);
-        ltycx.type_infer_term(&term).unwrap()
+        let term = try!(ltycx.type_infer_term(&term));
+
+        Ok(term)
     }
 
-    fn handle_input(&mut self, source: String) {
-        let term = self.preprocess_term(source);
-        let ty = self.type_check_term(&term);
+    fn handle_input(&mut self, source: String) -> Result<(), Error> {
+        let term = try!(self.preprocess_term(source));
+        let ty = try!(self.type_check_term(&term));
         println!("{} : {}", term, ty);
-        println!("{}", self.elab_cx.ty_cx.eval(&term).unwrap());
+        println!("{}", try!(self.elab_cx.ty_cx.eval(&term)));
+        Ok(())
     }
 
     fn parse_command(&self, command_text: &str) -> Command {

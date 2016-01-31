@@ -1,7 +1,7 @@
 pub struct NameGenerator {
     prefix: String,
     counter: usize,
-    max: usize
+    max: usize,
 }
 
 impl Iterator for NameGenerator {

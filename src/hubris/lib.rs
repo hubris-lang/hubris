@@ -4,7 +4,8 @@
 extern crate gcc;
 extern crate iron;
 extern crate hubris_parser;
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
 extern crate llvm_sys;
 extern crate readline;
 extern crate rmp_serde;
@@ -81,6 +82,6 @@ pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> Result
     // let cps_module = cps::from_core_module(emodule);
     // println!("{:?}", cps_module);
 
-    //backend::create_executable(&cps_module, output);
+    // backend::create_executable(&cps_module, output);
     Ok(())
 }

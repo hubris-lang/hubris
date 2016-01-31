@@ -7,10 +7,24 @@ use super::Term;
 
 #[derive(Clone, Debug, Eq)]
 pub enum Name {
-    DeBruijn { index: usize, span: Span, repr: String },
-    Local { number: usize, repr: String, ty: Box<Term> },
-    Qual { span: Span, components: Vec<String> },
-    Meta { number: usize, ty: Box<Term> }
+    DeBruijn {
+        index: usize,
+        span: Span,
+        repr: String,
+    },
+    Local {
+        number: usize,
+        repr: String,
+        ty: Box<Term>,
+    },
+    Qual {
+        span: Span,
+        components: Vec<String>,
+    },
+    Meta {
+        number: usize,
+        ty: Box<Term>,
+    },
 }
 
 impl Name {
@@ -31,7 +45,7 @@ impl Name {
         match self {
             &DeBruijn { ref repr, .. } |
             &Local { ref repr, .. } if repr == "" || repr == "_" => true,
-            _ => false
+            _ => false,
         }
     }
 
@@ -50,10 +64,10 @@ impl Name {
 
                 Some(Name::Qual {
                     span: span,
-                    components: components
+                    components: components,
                 })
             }
-            _ => None
+            _ => None,
         }
     }
 }
@@ -64,25 +78,25 @@ impl PartialEq for Name {
 
         match (self, other) {
             (&DeBruijn { index: ref index1, .. },
-             &DeBruijn { index: ref index2, .. }) =>
-                index1 == index2,
+             &DeBruijn { index: ref index2, .. }) => index1 == index2,
             (&Qual { components: ref components1, .. },
-             &Qual { components: ref components2, .. }) =>
-                components1 == components2,
+             &Qual { components: ref components2, .. }) => components1 == components2,
             _ => false,
         }
     }
 }
 
 impl Hash for Name {
-    fn hash<H>(&self, state: &mut H) where H: Hasher {
+    fn hash<H>(&self, state: &mut H)
+        where H: Hasher
+    {
         use self::Name::*;
 
         match self {
             &DeBruijn { ref index, .. } => {
                 0.hash(state);
                 index.hash(state);
-            },
+            }
             &Qual { ref components, .. } => {
                 1.hash(state);
                 components.hash(state);
@@ -104,20 +118,20 @@ impl Display for Name {
         use self::Name::*;
 
         match self {
-            &DeBruijn { ref repr, .. } =>
-                try!(write!(formatter, "{}", repr)),
-            &Qual { ref components, .. } =>
+            &DeBruijn { ref repr, .. } => try!(write!(formatter, "{}", repr)),
+            &Qual { ref components, .. } => {
                 if components.len() == 1 {
                     try!(write!(formatter, "{}", components[0]))
                 } else {
                     for c in components {
                         try!(write!(formatter, "{}.", c))
                     }
-                },
-            &Meta { number, .. } =>
-                try!(write!(formatter, "?{}", number)),
-            &Local { ref repr, number, .. } =>
-                try!(write!(formatter, "{}(local {})", repr, number)),
+                }
+            }
+            &Meta { number, .. } => try!(write!(formatter, "?{}", number)),
+            &Local { ref repr, number, .. } => {
+                try!(write!(formatter, "{}(local {})", repr, number))
+            }
         }
 
         Ok(())
@@ -140,12 +154,10 @@ impl HasSpan for Name {
         use self::Name::*;
 
         match self {
-            &mut DeBruijn { ref mut span, .. } =>
-                *span = sp,
-            &mut Qual { ref mut span, ..} =>
-                *span = sp,
-            &mut Meta { .. } => {},
-            &mut Local { .. } => {},
+            &mut DeBruijn { ref mut span, .. } => *span = sp,
+            &mut Qual { ref mut span, ..} => *span = sp,
+            &mut Meta { .. } => {}
+            &mut Local { .. } => {}
         }
     }
 }

@@ -68,10 +68,8 @@ impl ElabCx {
                     for ctor in &d.ctors {
                         ecx.constructors.insert(ctor.0.clone());
                     }
-                },
-                &ast::Item::Import(ref n) => {
-                    imports.push(try!(ecx.elaborate_import(n.clone())))
                 }
+                &ast::Item::Import(ref n) => imports.push(try!(ecx.elaborate_import(n.clone()))),
                 _ => {}
             }
 
@@ -81,12 +79,9 @@ impl ElabCx {
                 Ok(edef) => {
                     let edef = edef.map(|edef| {
                         match &edef {
-                            &core::Item::Data(ref d) =>
-                                ecx.ty_cx.declare_datatype(d),
-                            &core::Item::Fn(ref f) =>
-                                ecx.ty_cx.declare_def(f),
-                            &core::Item::Extern(ref e) =>
-                                ecx.ty_cx.declare_extern(e),
+                            &core::Item::Data(ref d) => ecx.ty_cx.declare_datatype(d),
+                            &core::Item::Fn(ref f) => ecx.ty_cx.declare_def(f),
+                            &core::Item::Extern(ref e) => ecx.ty_cx.declare_extern(e),
                         }
                         edef
                     });
@@ -141,31 +136,42 @@ impl ElabCx {
                 Ok(Some(ext))
             }
             ast::Item::Comment(_) |
-            ast::Item::Import(_) => Ok(None)
+            ast::Item::Import(_) => Ok(None),
         }
     }
 
     fn elaborate_data(&mut self, data: ast::Data) -> Result<core::Data, Error> {
-        let rec_name = data.name.in_scope("rec".to_string()).unwrap();
+        let ast_rec_name = data.name.in_scope("rec".to_string()).unwrap();
         let ty_name = try!(self.elaborate_global_name(data.name));
 
-        // Pre-declare the recursor for the time being.
+        // Pre-declare the recursor name for the time being.
         self.globals.insert(
-            rec_name,
+            ast_rec_name,
             ty_name.in_scope("rec".to_string()).unwrap());
 
         let mut lcx = LocalElabCx::from_elab_cx(self);
-        let mut ctors = Vec::new();
 
-        for ctor in data.ctors.into_iter() {
-            let ector = try!(lcx.elaborate_ctor(ctor));
-            ctors.push(ector);
-        }
+        let data_ctors = data.ctors;
+        let data_ty = data.ty;
+
+        let (ctors, ty) = try!(lcx.enter_scope(data.parameters.clone(), move |lcx, params| {
+            let mut ctors = Vec::new();
+            for ctor in data_ctors.into_iter() {
+                let ector = try!(lcx.elaborate_ctor(&params, ctor));
+                ctors.push(ector);
+            }
+
+            let ty = core::Term::abstract_pi(
+                params,
+                try!(lcx.elaborate_term(data_ty)));
+
+            Ok((ctors, ty))
+        }));
 
         Ok(core::Data {
             span: data.span,
             name: ty_name,
-            ty: try!(lcx.elaborate_term(data.ty)),
+            ty: ty,
             ctors: ctors,
         })
     }
@@ -199,19 +205,17 @@ impl ElabCx {
         Ok(core::Extern {
             span: span,
             name: try!(self.elaborate_global_name(name)),
-            term: try!(LocalElabCx::from_elab_cx(self)
-                                  .elaborate_term(term)),
+            term: try!(LocalElabCx::from_elab_cx(self).elaborate_term(term)),
         })
     }
 
     fn elaborate_global_name(&mut self, n: ast::Name) -> Result<core::Name, Error> {
         match n.repr.clone() {
-            ast::NameKind::Qualified(_) =>
-                Err(Error::UnexpectedQualifiedName),
+            ast::NameKind::Qualified(_) => Err(Error::UnexpectedQualifiedName),
             ast::NameKind::Unqualified(name) => {
                 let qn = core::Name::Qual {
                     span: n.span,
-                    components: vec![name]
+                    components: vec![name],
                 };
 
                 self.globals.insert(n.clone(), qn.clone());
@@ -228,17 +232,21 @@ pub struct LocalElabCx<'ecx> {
     metavar_counter: usize,
 }
 
-impl<'ecx> LocalElabCx<'ecx>  {
+impl<'ecx> LocalElabCx<'ecx> {
     pub fn from_elab_cx(ecx: &'ecx mut ElabCx) -> LocalElabCx<'ecx> {
         LocalElabCx {
             cx: ecx,
             locals: HashMap::new(),
-            metavar_counter: 0
+            metavar_counter: 0,
         }
     }
 
-    fn enter_scope<F, R>(&mut self, binders: Vec<(ast::Name, ast::Term)>, body: F) -> Result<R, Error>
-    where F : FnOnce(&mut LocalElabCx, Vec<core::Name>) -> Result<R, Error> {
+    fn enter_scope<F, R>(&mut self,
+                         binders: Vec<(ast::Name, ast::Term)>,
+                         body: F)
+                         -> Result<R, Error>
+        where F: FnOnce(&mut LocalElabCx, Vec<core::Name>) -> Result<R, Error>
+    {
         let mut locals = vec![];
 
         let old_context = self.locals.clone();
@@ -263,9 +271,15 @@ impl<'ecx> LocalElabCx<'ecx>  {
         Ok(result)
     }
 
-    fn elaborate_ctor(&mut self, ctor: ast::Constructor) -> Result<(core::Name, core::Term), Error> {
+    fn elaborate_ctor(&mut self,
+                      parameters: &Vec<core::Name>,
+                      ctor: ast::Constructor)
+                      -> Result<(core::Name, core::Term), Error> {
+
         let ename = try!(self.cx.elaborate_global_name(ctor.0));
+
         let ety = try!(self.elaborate_term(ctor.1));
+        let ety = core::Term::abstract_pi(parameters.clone(), ety);
 
         Ok((ename, ety))
     }
@@ -274,16 +288,16 @@ impl<'ecx> LocalElabCx<'ecx>  {
         debug!("elaborate_term: term={:?}", term);
 
         match term {
-            ast::Term::Literal { span, lit } => Ok(core::Term::Literal {
-                span: span,
-                lit: self.elaborate_literal(lit),
-            }),
-            ast::Term::Var { name, .. } => Ok(core::Term::Var {
-                name: try!(self.elaborate_name(name)),
-            }),
-            ast::Term::Match { .. } => {
-                panic!("match elaboration is currently disabled")
+            ast::Term::Literal { span, lit } => {
+                Ok(core::Term::Literal {
+                    span: span,
+                    lit: self.elaborate_literal(lit),
+                })
             }
+            ast::Term::Var { name, .. } => {
+                Ok(core::Term::Var { name: try!(self.elaborate_name(name)) })
+            }
+            ast::Term::Match { .. } => panic!("match elaboration is currently disabled"),
             ast::Term::App { fun, arg, span } => {
                 let efun = try!(self.elaborate_term(*fun));
                 let earg = try!(self.elaborate_term(*arg));
@@ -293,19 +307,20 @@ impl<'ecx> LocalElabCx<'ecx>  {
                     fun: Box::new(efun),
                     arg: Box::new(earg),
                 })
-            },
-            ast::Term::Forall { name, ty, term, span } =>
+            }
+            ast::Term::Forall { name, ty, term, .. } => {
                 self.enter_scope(vec![(name.clone(), *ty)], move |lcx, locals| {
                     let term = try!(lcx.elaborate_term(*term));
                     Ok(core::Term::abstract_pi(locals, term))
-                }),
+                })
+            }
             ast::Term::Metavar { .. } => panic!("can't elaborate meta-variables"),
-            ast::Term::Lambda { args, body, span, .. } => {
+            ast::Term::Lambda { args, body, .. } => {
                 self.enter_scope(args, move |lcx, locals| {
                     let ebody = try!(lcx.elaborate_term(*body));
                     Ok(core::Term::abstract_lambda(locals, ebody))
                 })
-            },
+            }
             ast::Term::Let { .. } => panic!("can't elaborate let-bindings"),
             ast::Term::Type => Ok(core::Term::Type),
         }
@@ -324,20 +339,22 @@ impl<'ecx> LocalElabCx<'ecx>  {
         // It is most likely to be a local
         match self.locals.get(&name) {
             // A global in the current module
-            None => match self.cx.globals.get(&name) {
-                // If it isn't a global we are going to see if the name has already been
-                // loading into the type context, if not this is an error.
-                None => {
-                    let core_name = to_qualified_name(name.clone());
-                    if self.cx.ty_cx.in_scope(&core_name) {
-                        Ok(core_name)
-                    } else {
-                        Err(Error::UnknownVariable(name.clone()))
+            None => {
+                match self.cx.globals.get(&name) {
+                    // If it isn't a global we are going to see if the name has already been
+                    // loading into the type context, if not this is an error.
+                    None => {
+                        let core_name = to_qualified_name(name.clone());
+                        if self.cx.ty_cx.in_scope(&core_name) {
+                            Ok(core_name)
+                        } else {
+                            Err(Error::UnknownVariable(name.clone()))
+                        }
                     }
+                    Some(nn) => Ok(nn.clone()),
                 }
-                Some(nn) => Ok(nn.clone()),
-            },
-            Some(local) => Ok(local.clone())
+            }
+            Some(local) => Ok(local.clone()),
         }
     }
 }

@@ -1,3 +1,7 @@
+mod error;
+mod inductive;
+mod name_generator;
+
 use core::*;
 use super::ast::{SourceMap, Span, HasSpan};
 use super::parser;
@@ -8,27 +12,8 @@ use std::collections::HashMap;
 use std::io;
 use std::path::{PathBuf, Path};
 
-mod name_generator;
 use self::name_generator::*;
-
-#[derive(Debug)]
-pub enum Error {
-    ApplicationMismatch(Span, Term, Term),
-    UnificationErr(Span, Term, Term, Vec<(Term, Term)>),
-    UnknownVariable(Name),
-    ElaborationError,
-    MkErr,
-    NameExists(Name),
-    NoMain,
-    Many(Vec<Error>),
-    Io(io::Error),
-}
-
-impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Error {
-        Error::Io(err)
-    }
-}
+pub use self::error::Error;
 
 /// A global context for type checking containing the necessary information
 /// needed across type checking all definitions.
@@ -52,7 +37,7 @@ impl TyCtxt {
             functions: HashMap::new(),
             axioms: HashMap::new(),
             definitions: HashMap::new(),
-            source_map: SourceMap::from_file( "".to_string(), "".to_string()),
+            source_map: SourceMap::from_file("".to_string(), "".to_string()),
             local_counter: RefCell::new(0),
         }
     }
@@ -70,18 +55,16 @@ impl TyCtxt {
         let main_file = PathBuf::from(self.source_map.file_name.clone());
         let prefix = main_file.parent().unwrap();
 
-        for import in &module.imports {
-            try!(self.load_import(&prefix, import));
-        }
+        // Should be idempotent, is currently not.
+        // for import in &module.imports {
+        //     try!(self.load_import(&prefix, import));
+        // }
 
         for def in &module.defs {
             match def {
-                &Item::Data(ref d) =>
-                    self.declare_datatype(d),
-                &Item::Fn(ref f) =>
-                    self.declare_def(f),
-                &Item::Extern(ref e) =>
-                    self.declare_extern(e),
+                &Item::Data(ref d) => self.declare_datatype(d),
+                &Item::Fn(ref f) => self.declare_def(f),
+                &Item::Extern(ref e) => self.declare_extern(e),
             }
 
             try!(self.type_check_def(def));
@@ -92,8 +75,7 @@ impl TyCtxt {
     }
 
     pub fn in_scope(&self, name: &Name) -> bool {
-        self.axioms.contains_key(name) ||
-        self.definitions.contains_key(name)
+        self.axioms.contains_key(name) || self.definitions.contains_key(name)
     }
 
     pub fn load_import(&mut self, path: &Path, name: &Name) -> Result<(), Error> {
@@ -104,8 +86,7 @@ impl TyCtxt {
         };
 
         let file_to_load = path.join(file_suffix);
-        debug!("load_import: file_to_load={}",
-            file_to_load.display());
+        debug!("load_import: file_to_load={}", file_to_load.display());
 
         let parser = try!(parser::from_file(&file_to_load));
         let module = parser.parse();
@@ -188,103 +169,7 @@ impl TyCtxt {
             self.axioms.insert(name, ty);
         }
 
-        // Finally we will build a recursor for the type.
-        // Parameters should come first, but we don't have them yet.
-
-        // We then create ...
-
-        let local_c = self.local_with_repr(
-            "C".to_string(),
-            Term::abstract_pi(
-                vec![self.local_with_repr("".to_string(), data_type.name.clone().to_term())],
-                Term::Type));
-
-        let mut premises = Vec::new();
-
-        for &(ref name, ref ty) in &data_type.ctors {
-            let mut ctor_ty = ty;
-
-            let mut premise_args = Vec::new();
-            let mut names = Vec::new();
-
-
-            while let &Term::Forall { ref ty, ref term, .. } = ctor_ty {
-                let local_n = self.local_with_repr(
-                    "n".to_string(),
-                    *ty.clone());
-
-                premise_args.push(local_n.clone());
-
-                let local_x = self.local_with_repr(
-                    "".to_string(),
-                    Term::apply(local_c.to_term(), local_n.to_term()));
-
-                premise_args.push(local_x);
-
-                if true {
-                    names.push(local_n.clone().to_term());
-                }
-
-                ctor_ty = term;
-            }
-
-            let c_for_ctor = Term::apply(
-                local_c.to_term(),
-                Term::apply_all(name.to_term(), names));
-
-            let premise = Term::abstract_pi(premise_args, c_for_ctor);
-
-            premises.push(premise);
-        }
-
-        let premises: Vec<_> = premises.into_iter()
-                               .map(|p| self.local_with_repr("".to_string(), p))
-                               .collect();
-
-        let mut result = data_type.ty.clone();
-
-        let mut tys = Vec::new();
-        while let Term::Forall { ty, term, .. } = result {
-            tys.push(*ty.clone());
-            result = *term;
-        }
-
-        tys.push(data_type.name.to_term());
-
-        let tys: Vec<_> = tys
-                     .into_iter()
-                     .enumerate()
-                     .map(|(i, ty)| self.local_with_repr(format!("a{}", i), ty))
-                     .collect();
-
-        let tys_terms: Vec<_> = tys.iter().map(|t| t.to_term()).collect();
-
-        let recursor_ty = Term::abstract_pi(
-            vec![local_c.clone()],
-            Term::abstract_pi(premises.clone(),
-            Term::abstract_pi(tys.clone(),
-                Term::apply_all(local_c.to_term(), tys_terms.clone()))));
-
-        // println!("declare_datatype: recursor_ty={}", recursor_ty);
-
-        let mut inner_terms = vec![local_c.clone().to_term()];
-        inner_terms.extend(premises.clone().into_iter().map(|x| x.to_term()));
-        inner_terms.extend(tys_terms.clone().into_iter());
-
-        let recursor_body =
-            Term::abstract_lambda(
-                vec![local_c.clone()],
-                Term::abstract_lambda(
-                    premises,
-                    Term::abstract_lambda(
-                        tys,
-                        Term::Recursor(
-                            data_type.name.clone(),
-                            1,
-                            inner_terms))));
-
-        self.definitions.insert(data_type.name.in_scope("rec".to_string()).unwrap(),
-            (recursor_ty, recursor_body));
+        inductive::make_recursor(self, data_type);
     }
 
     pub fn declare_def(&mut self, f: &Function) {
@@ -314,17 +199,19 @@ impl TyCtxt {
                 try!(lcx.type_check_term(&body, &ret_ty));
                 Ok(())
             }
-            _ => Ok(())
+            _ => Ok(()),
         }
     }
 
     fn lookup_global(&self, name: &Name) -> Result<&Term, Error> {
         match self.definitions.get(name) {
-            None => match self.axioms.get(name) {
-                None => Err(Error::UnknownVariable(name.clone())),
-                Some(t) => Ok(t)
-            },
-            Some(t) => Ok(&t.0)
+            None => {
+                match self.axioms.get(name) {
+                    None => Err(Error::UnknownVariable(name.clone())),
+                    Some(t) => Ok(t),
+                }
+            }
+            Some(t) => Ok(&t.0),
         }
     }
 
@@ -362,12 +249,10 @@ impl TyCtxt {
                     None => Ok(n.to_term()), // panic!("failed to lookup name {}", q),
                     Some(t) => Ok(t.1.clone()),
                 }
-            },
+            }
             &DeBruijn { .. } |
             &Meta { .. } |
-            &Local { .. } => {
-                Ok(n.to_term())
-            }
+            &Local { .. } => Ok(n.to_term()),
         }
     }
 
@@ -375,9 +260,8 @@ impl TyCtxt {
         let def_rhs = try!(self.unfold_name(n));
         let nt = n.to_term();
 
-        t.replace_term(&def_rhs, &|term| {
-            self.def_eq(Span::dummy(), term, &nt).is_err()
-        });
+        t.replace_term(&def_rhs,
+                       &|term| self.def_eq(Span::dummy(), term, &nt).is_err());
 
         Ok(t)
     }
@@ -394,19 +278,18 @@ impl TyCtxt {
 
                 match &efun {
                     &Term::Forall { ref term, .. } |
-                    &Term::Lambda { body: ref term, .. } =>
-                        self.eval(&term.instantiate(&earg)),
-                    v @ &Term::Var { .. } => Ok(App {
-                        fun: Box::new(v.clone()),
-                        arg: Box::new(earg),
-                        span: Span::dummy(),
-                    }),
+                    &Term::Lambda { body: ref term, .. } => self.eval(&term.instantiate(&earg)),
+                    v @ &Term::Var { .. } => {
+                        Ok(App {
+                            fun: Box::new(v.clone()),
+                            arg: Box::new(earg),
+                            span: Span::dummy(),
+                        })
+                    }
                     t => panic!("this means there was a type checker bug {}", t),
                 }
-            },
-            &Term::Var { ref name } => {
-                self.unfold_name(name)
             }
+            &Term::Var { ref name } => self.unfold_name(name),
             &Term::Recursor(ref ty_name, offset, ref ts) => {
                 for t in ts {
                     // println!("ARG: {}", t);
@@ -430,7 +313,8 @@ impl TyCtxt {
                             debug!("arg to recursor: {}", scrutinee);
                             match scrutinee.head() {
                                 None => panic!("arg to recursor must be in (w)hnf"),
-                                    Some(head) => if name.to_term() == head {
+                                Some(head) => {
+                                    if name.to_term() == head {
                                         let premise = ts[i + offset].clone();
                                         // I think instead we need to figure out if
                                         // this is recursive contructor case.
@@ -440,7 +324,9 @@ impl TyCtxt {
                                                 let mut tsprime = ts.clone();
                                                 let idx = tsprime.len() - 1;
                                                 tsprime[idx] = args[0].clone();
-                                                let rec = Recursor(ty_name.clone(), offset, tsprime);
+                                                let rec = Recursor(ty_name.clone(),
+                                                                   offset,
+                                                                   tsprime);
                                                 args.push(rec);
                                                 return self.eval(&Term::apply_all(premise, args));
                                             }
@@ -448,9 +334,10 @@ impl TyCtxt {
                                     }
                                 }
                             }
-                            panic!("this shouldn't happen")
                         }
+                        panic!("this shouldn't happen")
                     }
+                }
             }
             t => Ok(t.clone()),
         };
@@ -471,7 +358,7 @@ impl TyCtxt {
             assert_eq!(inequalities.len(), 0);
             Ok(t.clone())
         } else {
-            Err(Error::UnificationErr(span, t.clone(), u.clone(), inequalities))
+            Err(Error::DefUnequal(span, t.clone(), u.clone(), inequalities))
         }
     }
 }
@@ -504,42 +391,41 @@ impl<'tcx> LocalCx<'tcx> {
         debug!("type_check_term: infering the type of {}", term);
         let infer_ty = try!(self.type_infer_term(term));
         debug!("type_check_term: checking {} againist the inferred type {}",
-                ty,
-                infer_ty);
-        let term = try!(self.ty_cx.def_eq(term.get_span(), ty,  &infer_ty));
-        debug!("return from unify");
+               ty,
+               infer_ty);
+        let term = try!(self.ty_cx.def_eq(term.get_span(), ty, &infer_ty));
         Ok(term)
     }
 
     pub fn type_infer_term(&mut self, term: &Term) -> Result<Term, Error> {
         match term {
-            &Term::Literal { ref lit, .. } => match lit {
-                &Literal::Int(..) => Ok(panic!()),
-                &Literal::Unit => Ok(Term::Var {
-                    name: Name::from_str("Unit")
-                })
-            },
-            &Term::Var { ref name, .. } => match name {
-                &Name::Local { ref ty, .. } =>
-                        Ok(*ty.clone()),
-                q @ &Name::Qual { .. } =>
-                    self.ty_cx.lookup_global(q).map(Clone::clone),
-                _ => {
-                    panic!("internal error: all variable occurences must be free when type checking
-                            term that is a variable")
+            &Term::Literal { ref lit, .. } => {
+                match lit {
+                    &Literal::Int(..) => Ok(panic!()),
+                    &Literal::Unit => Ok(Term::Var { name: Name::from_str("Unit") }),
                 }
-            },
-            &Term::App { ref fun, ref arg, .. } => {
+            }
+            &Term::Var { ref name, .. } => {
+                match name {
+                    &Name::Local { ref ty, .. } => Ok(*ty.clone()),
+                    q @ &Name::Qual { .. } => self.ty_cx.lookup_global(q).map(Clone::clone),
+                    _ => {
+                        panic!("internal error: all variable occurences must be free when type \
+                                checking
+                            term that is a variable")
+                    }
+                }
+            }
+            &Term::App { ref fun, ref arg, span } => {
                 match try!(self.type_infer_term(fun)) {
-                    // This is still broken, need to get everything else working first
-                    Term::Forall { term, .. } => {
-                        // try!(self.type_infer_term(arg));
+                    Term::Forall { term, ty, .. } => {
+                        try!(self.type_check_term(arg, &*ty));
                         Ok(term.instantiate(arg))
-                    },
-                _ => Err(Error::ApplicationMismatch(
-                        Span::dummy(),
+                    }
+                    _ => Err(Error::ApplicationMismatch(
+                        span,
                         *fun.clone(),
-                        *arg.clone()))
+                        *arg.clone())),
                 }
             }
             &Term::Forall { ref name, ref ty, ref term, .. } => {
@@ -556,9 +442,7 @@ impl<'tcx> LocalCx<'tcx> {
 
                 let body = body.instantiate(&local.to_term());
 
-                let pi_body =
-                    try!(self.type_infer_term(&body))
-                             .abstr(&local);
+                let pi_body = try!(self.type_infer_term(&body)).abstr(&local);
 
                 Ok(Term::Forall {
                     span: span,
@@ -584,17 +468,17 @@ fn def_eq_modulo(t1: &Term, t2: &Term, equalities: &mut Vec<(Term, Term)>) -> bo
 
     match (t1, t2) {
         (&App { fun: ref fun1, arg: ref arg1, .. },
-         &App { fun: ref fun2, arg: ref arg2, .. }) =>
-            def_eq_modulo(fun1, fun2, equalities) &&
-            def_eq_modulo(arg1, arg2, equalities),
+         &App { fun: ref fun2, arg: ref arg2, .. }) => {
+            def_eq_modulo(fun1, fun2, equalities) && def_eq_modulo(arg1, arg2, equalities)
+        }
         (&Forall { ty: ref ty1, term: ref term1, .. },
-         &Forall { ty: ref ty2, term: ref term2, .. }) =>
-            def_eq_modulo(ty1, ty2, equalities) &&
-            def_eq_modulo(term1, term2, equalities),
+         &Forall { ty: ref ty2, term: ref term2, .. }) => {
+            def_eq_modulo(ty1, ty2, equalities) && def_eq_modulo(term1, term2, equalities)
+        }
         (&Lambda { ty: ref ty1, body: ref body1, .. },
-         &Lambda { ty: ref ty2, body: ref body2, ..}) =>
-            def_eq_modulo(ty1, ty2, equalities) &&
-            def_eq_modulo(body1, body2, equalities),
+         &Lambda { ty: ref ty2, body: ref body2, ..}) => {
+            def_eq_modulo(ty1, ty2, equalities) && def_eq_modulo(body1, body2, equalities)
+        }
         (t, u) => {
             if t == u {
                 true
@@ -622,6 +506,6 @@ fn name_to_path(name: &Name) -> Option<PathBuf> {
 
             Some(path)
         }
-        _ => None
+        _ => None,
     }
 }

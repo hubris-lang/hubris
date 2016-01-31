@@ -1,8 +1,8 @@
-use hubris_parser::ast::{Span};
+use hubris_parser::ast::Span;
 
 use std::fmt::{self, Display, Formatter};
 use std::path::{Path, PathBuf};
-use std::hash::{Hasher};
+use std::hash::Hasher;
 
 pub mod name;
 pub mod term;
@@ -40,7 +40,7 @@ pub type Constructor = (Name, Term);
 pub struct Extern {
     pub span: Span,
     pub name: Name,
-    pub term: Term
+    pub term: Term,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -55,10 +55,8 @@ impl Display for Item {
         use self::Item::*;
 
         match self {
-            &Fn(ref fun) => {
-                write!(formatter, "{}", fun)
-            },
-            d => write!(formatter, "{:?}", d)
+            &Fn(ref fun) => write!(formatter, "{}", fun),
+            d => write!(formatter, "{:?}", d),
         }
     }
 }

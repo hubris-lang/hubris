@@ -43,8 +43,8 @@ fn main() {
     env_logger::init().unwrap();
 
     let args: Args = Docopt::new(USAGE)
-                            .and_then(|d| d.decode())
-                            .unwrap_or_else(|e| e.exit());
+                         .and_then(|d| d.decode())
+                         .unwrap_or_else(|e| e.exit());
 
     if args.flag_server {
         hubris::server::server_main();
@@ -56,9 +56,8 @@ fn main() {
                &args.arg_file[..],
                args.arg_file);
 
-        let result = hubris::compile_file(
-            &args.arg_file[..],
-            args.flag_output.map(|p| PathBuf::from(p)));
+        let result = hubris::compile_file(&args.arg_file[..],
+                                          args.flag_output.map(|p| PathBuf::from(p)));
 
         match result {
             Err(e) => panic!("failed with {:?}", e),

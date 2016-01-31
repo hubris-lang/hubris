@@ -7,11 +7,30 @@ use super::Name;
 
 #[derive(Debug, Clone, Eq)]
 pub enum Term {
-    Literal { span: Span, lit: Literal },
-    Var { name: Name },
-    App { span: Span, fun: Box<Term>, arg: Box<Term> },
-    Forall { span: Span, name: Name, ty: Box<Term>, term: Box<Term> },
-    Lambda { span: Span, name: Name, ty: Box<Term>, body: Box<Term> },
+    Literal {
+        span: Span,
+        lit: Literal,
+    },
+    Var {
+        name: Name,
+    },
+    App {
+        span: Span,
+        fun: Box<Term>,
+        arg: Box<Term>,
+    },
+    Forall {
+        span: Span,
+        name: Name,
+        ty: Box<Term>,
+        term: Box<Term>,
+    },
+    Lambda {
+        span: Span,
+        name: Name,
+        ty: Box<Term>,
+        body: Box<Term>,
+    },
     Recursor(Name, usize, Vec<Term>),
     Type,
 }
@@ -81,41 +100,52 @@ impl Term {
 
         match self {
             &Literal { .. } => self.clone(),
-            &Var { name: ref vname } => match vname {
-                &Local { number: number1, ref repr, .. } => match x {
-                    &Local { number, .. } if number == number1 => DeBruijn {
-                        index: index,
-                        span: Span::dummy(),
-                        repr: repr.clone(),
-                    }.to_term(),
-                    _ => self.clone(),
-                },
-                &Qual { .. } | &DeBruijn { .. } | &Meta { .. } =>
-                    self.clone(),
-            },
-            &App { ref fun, ref arg, span } =>
+            &Var { name: ref vname } => {
+                match vname {
+                    &Local { number: number1, ref repr, .. } => {
+                        match x {
+                            &Local { number, .. } if number == number1 => {
+                                DeBruijn {
+                                    index: index,
+                                    span: Span::dummy(),
+                                    repr: repr.clone(),
+                                }
+                                .to_term()
+                            }
+                            _ => self.clone(),
+                        }
+                    }
+                    &Qual { .. } | &DeBruijn { .. } | &Meta { .. } => self.clone(),
+                }
+            }
+            &App { ref fun, ref arg, span } => {
                 App {
                     fun: Box::new(fun.abst(index, x)),
                     arg: Box::new(arg.abst(index, x)),
                     span: span,
-                },
-            &Forall { ref name, ref ty, ref term, span } =>
+                }
+            }
+            &Forall { ref name, ref ty, ref term, span } => {
                 Forall {
                     name: name.clone(),
                     ty: Box::new(ty.abst(index, x)),
                     term: Box::new(term.abst(index + 1, x)),
                     span: span,
-                },
-            &Lambda {  ref name, ref ty, ref body, span } =>
+                }
+            }
+            &Lambda {  ref name, ref ty, ref body, span } => {
                 Lambda {
                     name: name.clone(),
                     ty: Box::new(ty.abst(index, x)),
                     body: Box::new(body.abst(index + 1, x)),
                     span: span,
-                },
-            &Recursor(ref name, offset, ref ts) =>
-                Recursor(name.clone(), offset,
-                    ts.iter().map(|t| t.abst(index, x)).collect()),
+                }
+            }
+            &Recursor(ref name, offset, ref ts) => {
+                Recursor(name.clone(),
+                         offset,
+                         ts.iter().map(|t| t.abst(index, x)).collect())
+            }
             &Type => Type,
         }
     }
@@ -142,33 +172,38 @@ impl Term {
                         } else {
                             Var { name: name.clone() }
                         }
-                    },
-                    &Qual { .. } | &Local { .. } | &Meta { .. } =>
-                        self.clone(),
+                    }
+                    &Qual { .. } | &Local { .. } | &Meta { .. } => self.clone(),
                 }
             }
-            &App { ref fun, ref arg, span } =>
+            &App { ref fun, ref arg, span } => {
                 App {
                     fun: Box::new(fun.replace(index, subst)),
                     arg: Box::new(arg.replace(index, subst)),
                     span: span,
-                },
-            &Forall { ref name, ref ty, ref term, span } =>
+                }
+            }
+            &Forall { ref name, ref ty, ref term, span } => {
                 Forall {
                     name: name.clone(),
                     ty: Box::new(ty.replace(index, subst)),
                     term: Box::new(term.replace(index + 1, subst)),
                     span: span,
-                },
-            &Lambda { ref name, ref ty, ref body, span } =>
+                }
+            }
+            &Lambda { ref name, ref ty, ref body, span } => {
                 Lambda {
                     name: name.clone(),
                     ty: Box::new(ty.replace(index, subst)),
                     body: Box::new(body.replace(index + 1, subst)),
                     span: span,
-                },
-            &Recursor(ref name, offset, ref ts) =>
-                Recursor(name.clone(), offset, ts.iter().map(|t| t.replace(index, subst)).collect()),
+                }
+            }
+            &Recursor(ref name, offset, ref ts) => {
+                Recursor(name.clone(),
+                         offset,
+                         ts.iter().map(|t| t.replace(index, subst)).collect())
+            }
             &Type => Type,
         }
     }
@@ -178,19 +213,17 @@ impl Term {
         use super::Name::*;
 
         match self {
-            &Var { ref name } => match name {
-                &DeBruijn { .. } | &Qual { .. } | &Meta { .. } => true,
-                &Local { .. } => true,
-            },
-            &App { ref fun, ref arg, .. } =>
-                fun.is_closed() && arg.is_closed(),
-            &Forall { ref ty, ref term, .. } =>
-                ty.is_closed() && term.is_closed(),
-            &Lambda { ref ty, ref body,.. } =>
-                ty.is_closed() && body.is_closed(),
-            &Recursor(..) =>
-                true,
-            &Literal { .. } | &Type => true
+            &Var { ref name } => {
+                match name {
+                    &DeBruijn { .. } | &Qual { .. } | &Meta { .. } => true,
+                    &Local { .. } => true,
+                }
+            }
+            &App { ref fun, ref arg, .. } => fun.is_closed() && arg.is_closed(),
+            &Forall { ref ty, ref term, .. } => ty.is_closed() && term.is_closed(),
+            &Lambda { ref ty, ref body,.. } => ty.is_closed() && body.is_closed(),
+            &Recursor(..) => true,
+            &Literal { .. } | &Type => true,
         }
     }
 
@@ -202,7 +235,7 @@ impl Term {
         }
     }
 
-    pub fn apply_all(fun : Term, args: Vec<Term>) -> Term {
+    pub fn apply_all(fun: Term, args: Vec<Term>) -> Term {
         let mut result = fun;
         for arg in args {
             result = Term::App {
@@ -218,12 +251,13 @@ impl Term {
         use self::Term::*;
 
         match self {
-            &App { ref fun, ref arg, .. } => match &**fun {
-                &Term::Forall { ref term, .. } |
-                &Term::Lambda { body: ref term, .. } =>
-                    term.instantiate(arg).whnf(),
-                _ => self.clone(),
-            },
+            &App { ref fun, ref arg, .. } => {
+                match &**fun {
+                    &Term::Forall { ref term, .. } |
+                    &Term::Lambda { body: ref term, .. } => term.instantiate(arg).whnf(),
+                    _ => self.clone(),
+                }
+            }
             &Forall { ref name, ref ty, ref term, span } => {
                 Term::Forall {
                     name: name.clone(),
@@ -240,8 +274,7 @@ impl Term {
                     span: span,
                 }
             }
-            &Recursor(..) =>
-                panic!(),
+            &Recursor(..) => panic!(),
             t => t.clone(),
         }
     }
@@ -251,17 +284,16 @@ impl Term {
         use self::Term::*;
         match self {
             &App { ref fun, .. } => {
-                let mut result : &Term = &**fun;
+                let mut result: &Term = &**fun;
                 while let &App { ref fun, .. } = result {
                     result = &**fun;
                 }
                 Some(result.clone())
-            },
+            }
             f @ &Forall { .. } => Some(f.clone()),
             l @ &Lambda { .. } => Some(l.clone()),
             v @ &Var { .. } => Some(v.clone()),
-            &Recursor(..) =>
-                panic!(),
+            &Recursor(..) => panic!(),
             _ => None,
         }
     }
@@ -277,7 +309,7 @@ impl Term {
                     result.push(*arg.clone());
                 }
                 Some(result.into_iter().rev().collect())
-            },
+            }
             _ => None,
         }
     }
@@ -302,9 +334,7 @@ impl Term {
                     ty.replace_term(&replacement, pred);
                     body.replace_term(&replacement, pred);
                 }
-                &mut Recursor(..) => {
-                    panic!()
-                }
+                &mut Recursor(..) => panic!(),
                 _ => {}
             }
         }
@@ -317,29 +347,29 @@ impl PartialEq for Term {
 
         match (self, other) {
             (&Literal { lit: ref lit1, .. },
-             &Literal { lit: ref lit2, .. }) =>
-                lit1 == lit2,
-            (&Var { name: ref name1, .. },
-             &Var { name: ref name2, .. }) =>
-                name1 == name2,
+             &Literal { lit: ref lit2, .. }) => lit1 == lit2,
+            (&Var { name: ref name1, .. }, &Var { name: ref name2, .. }) => name1 == name2,
             (&App { fun: ref fun1, arg: ref arg1, .. },
-             &App { fun: ref fun2, arg: ref arg2, .. }) =>
-                fun1 == fun2 && arg1 == arg2,
+             &App { fun: ref fun2, arg: ref arg2, .. }) => fun1 == fun2 && arg1 == arg2,
             (&Forall { name: ref name1, ty: ref ty1, term: ref term1, .. },
-             &Forall { name: ref name2, ty: ref ty2, term: ref term2, .. }) =>
-                name1 == name2 && ty1 == ty2 && term1 == term2,
+             &Forall { name: ref name2, ty: ref ty2, term: ref term2, .. }) => {
+                name1 == name2 && ty1 == ty2 && term1 == term2
+            }
             (&Lambda { name: ref args1, ty: ref ret_ty1, body: ref body1, .. },
-             &Lambda { name: ref args2, ty: ref ret_ty2, body: ref body2, ..}) =>
-                args1 == args2 && ret_ty1 == ret_ty2 && body1 == body2,
+             &Lambda { name: ref args2, ty: ref ret_ty2, body: ref body2, ..}) => {
+                args1 == args2 && ret_ty1 == ret_ty2 && body1 == body2
+            }
             // TODO: Deal with Intro/Recursor eq
             (&Type, &Type) => true,
-            _ => false
+            _ => false,
         }
     }
 }
 
 impl Hash for Term {
-    fn hash<H>(&self, state: &mut H) where H: Hasher {
+    fn hash<H>(&self, state: &mut H)
+        where H: Hasher
+    {
         use self::Term::*;
         debug!("hash: {}", self);
 
@@ -347,31 +377,31 @@ impl Hash for Term {
             &Literal { ref lit, .. } => {
                 0.hash(state);
                 lit.hash(state)
-            },
+            }
             &Var { ref name, .. } => {
                 1.hash(state);
                 name.hash(state);
-            },
+            }
             &App { ref fun, ref arg, .. } => {
                 2.hash(state);
                 fun.hash(state);
                 arg.hash(state);
-            },
+            }
             &Forall { ref name, ref ty, ref term, .. } => {
                 3.hash(state);
                 name.hash(state);
                 ty.hash(state);
                 term.hash(state);
-            },
+            }
             &Lambda { ref name, ref ty, ref body, .. } => {
                 4.hash(state);
                 name.hash(state);
                 ty.hash(state);
                 body.hash(state);
-            },
+            }
             &Recursor(..) => {
                 5.hash(state);
-            },
+            }
             &Type => {
                 6.hash(state);
             }
@@ -384,17 +414,15 @@ impl Display for Term {
         use self::Term::*;
 
         match self {
-            &Literal { ref lit, .. } =>
-                write!(formatter, "{:?}", lit),
-            &Var { ref name, .. } =>
-                write!(formatter, "{}", name),
-            &App { ref fun, ref arg, .. } =>
+            &Literal { ref lit, .. } => write!(formatter, "{:?}", lit),
+            &Var { ref name, .. } => write!(formatter, "{}", name),
+            &App { ref fun, ref arg, .. } => {
                 match &**arg {
                     &Term::App { .. } => write!(formatter, "{} ({})", fun, arg),
                     _ => write!(formatter, "{} {}", fun, arg),
-                },
-            &Forall { ref name, ref ty, ref term, .. } =>
-                // TODO implement PartialEq on strings or create special placeholder name
+                }
+            }
+            &Forall { ref name, ref ty, ref term, .. } => {
                 if name.is_placeholder() {
                     match &**ty {
                         &Forall {..} => try!(write!(formatter, "({}) -> ", ty)),
@@ -403,7 +431,8 @@ impl Display for Term {
                     write!(formatter, "{}", term)
                 } else {
                     write!(formatter, "forall ({} : {}), {}", name, ty, term)
-                },
+                }
+            }
             &Lambda { ref name, ref ty, ref body, .. } => {
                 write!(formatter, "fun ({} : {}) => {}", name, ty, body)
             }
@@ -444,7 +473,7 @@ impl HasSpan for Term {
             &mut App { ref mut span, .. } => *span = sp,
             &mut Forall { ref mut span, .. } => *span = sp,
             &mut Lambda { ref mut span, .. } => *span = sp,
-            &mut Type => {},
+            &mut Type => {}
             _ => panic!(),
         }
     }
@@ -453,5 +482,5 @@ impl HasSpan for Term {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Literal {
     Int(i64), // will need to revisit this decision
-    Unit
+    Unit,
 }

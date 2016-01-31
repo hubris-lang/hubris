@@ -2,19 +2,15 @@ use llvm_sys;
 use llvm_sys::prelude::*;
 
 use super::context::Context;
-use super::function::{Function};
+use super::function::Function;
 
 pub struct Builder {
-    builder_ref: LLVMBuilderRef
+    builder_ref: LLVMBuilderRef,
 }
 
 impl Builder {
     pub fn in_context(cx: &Context) -> Builder {
-        Builder {
-            builder_ref: unsafe {
-                llvm_sys::core::LLVMCreateBuilderInContext(cx.as_ptr())
-            }
-        }
+        Builder { builder_ref: unsafe { llvm_sys::core::LLVMCreateBuilderInContext(cx.as_ptr()) } }
     }
 
     #[inline]
@@ -24,10 +20,11 @@ impl Builder {
 
     pub fn emit_call(&self, fun: &Function, mut args: Vec<LLVMValueRef>) -> LLVMValueRef {
         unsafe {
-            llvm_sys::core::LLVMBuildCall(
-                self.as_ptr(), fun.as_ptr(),
-                args.as_mut_ptr(), args.len() as u32,
-                b"bleh\0".as_ptr() as *const _)
+            llvm_sys::core::LLVMBuildCall(self.as_ptr(),
+                                          fun.as_ptr(),
+                                          args.as_mut_ptr(),
+                                          args.len() as u32,
+                                          b"bleh\0".as_ptr() as *const _)
         }
     }
 
@@ -40,12 +37,7 @@ impl Builder {
     }
 
     pub fn emit_alloca(&self, ty: LLVMTypeRef, s: String) -> LLVMValueRef {
-        unsafe {
-            llvm_sys::core::LLVMBuildAlloca(
-                self.as_ptr(),
-                ty,
-                s.as_ptr() as *const _)
-        }
+        unsafe { llvm_sys::core::LLVMBuildAlloca(self.as_ptr(), ty, s.as_ptr() as *const _) }
     }
 
     pub fn postition_at_end(&self, bb: LLVMBasicBlockRef) {
