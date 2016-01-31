@@ -8,8 +8,10 @@ you are interested in developing please email @jroesch, or open a PR.
 
 ## Development
 
-Currently development of Hubris is on Rust Nightly. For instructions on how to install it go [here](https://www.rust-lang.org/downloads.html). You can also try Brian's great
-[multirust](https://github.com/brson/multirust) which is my reconmended way of installing Rust.
+Currently development of Hubris is on Rust Nightly. For instructions on how to
+install it go [here](https://www.rust-lang.org/downloads.html). You can also try
+Brian's great [multirust](https://github.com/brson/multirust) which is my recommended
+way of installing Rust.
 
 If you have `multirust` you can switch to the appropriate version like so:
 `multirust override nightly`
