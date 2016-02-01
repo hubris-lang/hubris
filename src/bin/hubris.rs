@@ -34,6 +34,7 @@ Options:
 struct Args {
     arg_file: Option<String>,
     flag_output: Option<String>,
+    flag_version: bool,
     cmd_server: bool,
     cmd_repl: bool,
 }
@@ -45,7 +46,9 @@ fn main() {
                          .and_then(|d| d.decode())
                          .unwrap_or_else(|e| e.exit());
 
-    if args.cmd_server {
+    if args.flag_version {
+        println!("hubris 0.0.1.0 (we are trying)");
+    } else if args.cmd_server {
         println!("Starting Server...");
         hubris::server::server_main();
     } else if args.cmd_repl {
