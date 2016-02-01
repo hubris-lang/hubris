@@ -48,6 +48,7 @@ impl ElabCx {
             module: module,
             constructors: HashSet::new(),
             globals: HashMap::new(),
+            metavar_counter: 0,
             ty_cx: ty_cx,
         }
     }
@@ -225,7 +226,7 @@ impl ElabCx {
         }
     }
 
-    fn meta(&mut self, ty: Term) -> Result<core::Name, Error> {
+    fn meta(&mut self, ty: core::Term) -> Result<core::Name, Error> {
         let meta_no = self.metavar_counter;
         let meta = core::Name::Meta {
             number: meta_no,
@@ -246,7 +247,6 @@ impl<'ecx> LocalElabCx<'ecx> {
         LocalElabCx {
             cx: ecx,
             locals: HashMap::new(),
-            metavar_counter: 0,
         }
     }
 
