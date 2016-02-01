@@ -39,6 +39,7 @@ pub enum Error {
     Io(io::Error),
     Elaborator(elaborate::Error),
     TypeCk(typeck::Error),
+    Parser(parser::Error),
 }
 
 impl From<io::Error> for Error {
@@ -59,9 +60,15 @@ impl From<typeck::Error> for Error {
     }
 }
 
+impl From<parser::Error> for Error {
+    fn from(err: parser::Error) -> Error {
+        Error::Parser(err)
+    }
+}
+
 pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> Result<(), Error> {
     let parser = try!(parser::from_file(path.as_ref()));
-    let module = parser.parse();
+    let module = try!(parser.parse());
     let mut ecx = elaborate::ElabCx::from_module(module, parser.source_map.clone());
 
     let emodule = ecx.elaborate_module(path.as_ref());

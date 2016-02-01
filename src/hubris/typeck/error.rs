@@ -2,6 +2,7 @@ use super::super::ast::{SourceMap, Span, HasSpan};
 use super::super::core::{Term, Name};
 use super::super::error_reporting::{Report, span_error};
 use super::TyCtxt;
+use parser;
 
 use std::io;
 use std::io::prelude::*;
@@ -18,11 +19,18 @@ pub enum Error {
     NoMain,
     Many(Vec<Error>),
     Io(io::Error),
+    Parser(parser::Error)
 }
 
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Error {
         Error::Io(err)
+    }
+}
+
+impl From<parser::Error> for Error {
+    fn from(err: parser::Error) -> Error {
+        Error::Parser(err)
     }
 }
 

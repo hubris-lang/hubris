@@ -89,7 +89,7 @@ impl TyCtxt {
         debug!("load_import: file_to_load={}", file_to_load.display());
 
         let parser = try!(parser::from_file(&file_to_load));
-        let module = parser.parse();
+        let module = try!(parser.parse());
         let mut ecx = elaborate::ElabCx::from_module(module, parser.source_map.clone());
 
         let emodule = ecx.elaborate_module(&file_to_load);

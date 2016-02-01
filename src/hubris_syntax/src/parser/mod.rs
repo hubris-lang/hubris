@@ -14,43 +14,57 @@ pub struct Parser {
     pub source_map: SourceMap,
 }
 
+// TODO: Create a propper error type with the correct Display trait
+pub type Error = String;
+
 impl Parser {
-    pub fn parse(&self) -> super::ast::Module {
+    pub fn parse(&self) -> Result<super::ast::Module, Error> {
         self.report_error(hubris::parse_Module(&self.source_map.source[..]))
     }
 
-    pub fn parse_term(&self) -> super::ast::Term {
+    pub fn parse_term(&self) -> Result<super::ast::Term, Error> {
         self.report_error(hubris::parse_Term(&self.source_map.source[..]))
     }
 
     pub fn report_error<'input, R>(&self,
-        result: Result<R, ParseError<usize,(usize, &'input str),()>>) -> R {
-        match result {
-            Err(e) => match e {
+        result: Result<R, ParseError<usize,(usize, &'input str),()>>) -> Result<R, Error> {
+        result.map_err(|e|
+            match e {
                 ParseError::InvalidToken { location } => {
-                    let (offset, line) = self.source_map.find_line(location).unwrap();
-                    let mut ptr = "\n".to_string();
-                    for _ in 0..offset {
-                        ptr.push(' ');
+                    match self.source_map.find_line(location) {
+                        Some((offset, line)) => {
+                            let mut ptr = "\n".to_string();
+                            for _ in 0..offset {
+                                ptr.push(' ');
+                            }
+                            ptr.push('^');
+                            format!("invalid_token on:\n {}{}", line, ptr)
+                        }
+                        None => format!("invalid_token; location unknown")
                     }
-                    ptr.push('^');
-                    panic!("invalid_token on:\n {}{}", line, ptr);
                 }
                 ParseError::UnrecognizedToken { token, expected } => {
                     debug!("{:?} {:?}", token, expected);
-                    let (start, token, end) = token.unwrap();
-                    let (offset, line) = self.source_map.find_line(start).unwrap();
-                    let mut ptr = "\n".to_string();
-                    for _ in 0..offset {
-                        ptr.push(' ');
+                    match token {
+                        None => format!("Unexpected EOF"),
+                        Some((start, token, end)) => {
+                            match self.source_map.find_line(start) {
+                                Some((offset, line)) => {
+                                    let mut ptr = "\n".to_string();
+                                    for _ in 0..offset {
+                                        ptr.push(' ');
+                                    }
+                                    ptr.push('^');
+                                    format!("unrecognized_token {:?} on:\n {}{}", token, line, ptr)
+                                }
+                                None => format!("unrecognized_token {:?}; location unknown", token)
+                            }
+                        }
                     }
-                    ptr.push('^');
-                    panic!("unrecongnized_token {:?} on:\n {}{}", token, line, ptr);
                 }
-                e => panic!("{:?}", e),
-            },
-            Ok(v) => v
-        }
+                e => format!("{:?}", e),
+            }
+        )
     }
 }
 

@@ -45,12 +45,19 @@ impl From<typeck::Error> for Error {
     }
 }
 
+impl From<parser::Error> for Error {
+    fn from(err: parser::Error) -> Error {
+        Error::Parser(err)
+    }
+}
+
 #[derive(Debug)]
 pub enum Error {
     Io(io::Error),
     Elaborator(elaborate::Error),
     UnknownCommand(String),
-    TypeCk(typeck::Error), // Parser(parser::Error),
+    TypeCk(typeck::Error),
+    Parser(parser::Error),
 }
 
 #[derive(Debug)]
@@ -79,7 +86,7 @@ impl Repl {
             }
             &Some(ref file_path) => {
                 let parser = try!(parser::from_file(file_path));
-                let module = parser.parse();
+                let module = try!(parser.parse());
 
                 let mut ecx = ElabCx::from_module(module, parser.source_map.clone());
 
@@ -153,7 +160,7 @@ impl Repl {
 
     fn preprocess_term(&mut self, source: String) -> Result<core::Term, Error> {
         let parser = parser::from_string(source).unwrap();
-        let term = parser.parse_term();
+        let term = try!(parser.parse_term());
 
         let mut lcx = LocalElabCx::from_elab_cx(&mut self.elab_cx);
         let term = try!(lcx.elaborate_term(term));
