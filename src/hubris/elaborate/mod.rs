@@ -155,7 +155,8 @@ impl ElabCx {
         let data_ctors = data.ctors;
         let data_ty = data.ty;
 
-        let (ctors, ty) = try!(lcx.enter_scope(data.parameters.clone(), move |lcx, params| {
+        let (ctors, ty, params) = try!(lcx.enter_scope(data.parameters.clone(),
+        move |lcx, params| {
             let mut ctors = Vec::new();
             for ctor in data_ctors.into_iter() {
                 let ector = try!(lcx.elaborate_ctor(&params, ctor));
@@ -163,15 +164,16 @@ impl ElabCx {
             }
 
             let ty = core::Term::abstract_pi(
-                params,
+                params.clone(),
                 try!(lcx.elaborate_term(data_ty)));
 
-            Ok((ctors, ty))
+            Ok((ctors, ty, params))
         }));
 
         Ok(core::Data {
             span: data.span,
             name: ty_name,
+            parameters: params,
             ty: ty,
             ctors: ctors,
         })

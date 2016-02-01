@@ -247,6 +247,21 @@ impl Term {
         result
     }
 
+    // fn eta_expand(&self) -> Term {
+    //     let mut pi = self;
+    //     let mut result = self.inductive_ty.name.to_term();
+    //     let mut i = 0;
+    //     let mut locals = vec![];
+    //     while let Term::Forall { ty, term, .. } = pi {
+    //         let local = self.ty_cx.local_with_repr(format!("x{}", 0), *ty);
+    //         locals.push(local);
+    //         pi = *term;
+    //     }
+    //     Term::abstract_lambda(
+    //         locals.clone(),
+    //         Term::apply_all(result, locals.into_iter().map(|t| t.to_term()).collect()))
+    // }
+
     pub fn whnf(&self) -> Term {
         use self::Term::*;
 

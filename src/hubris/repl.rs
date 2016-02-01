@@ -1,4 +1,6 @@
+use super::core;
 use super::elaborate::{self, ElabCx, LocalElabCx};
+use super::error_reporting::Report;
 use super::parser;
 use super::core;
 use ast::{self, SourceMap};
@@ -188,8 +190,10 @@ impl Repl {
             Command::Quit
         } else if command_text == "reload" {
             Command::Reload
-        } else if &command_text[0..4] == "type" || &command_text[0..1] == "t" {
-            Command::TypeOf(command_text[4..].to_string())
+        } else if &command_text[0..4] == "type" {
+            Command::TypeOf(command_text[0..4].to_string())
+        } else if &command_text[0..1] == "t" {
+            Command::TypeOf(command_text[1..].to_string())
         } else if &command_text[0..4] == "help" {
             Command::Help
         } else {
@@ -197,3 +201,17 @@ impl Repl {
         }
     }
 }
+
+// impl Report for Error {
+//     type Context = ElabCx;
+//
+//     fn report<O: Write>(cx: &Self::Context,
+//                          mut out: Box<Terminal<Output = O>>,
+//                          error: Self)
+//                          -> TResult<()> {
+//         match error {
+//             Error::TypeCk(ty_ck) => panic!(),
+//             _ => panic!(),
+//         }
+//     }
+// }

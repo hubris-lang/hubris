@@ -29,6 +29,7 @@ impl Module {
 pub struct Data {
     pub span: Span,
     pub name: Name,
+    pub parameters: Vec<Name>,
     pub ty: Term,
     pub ctors: Vec<Constructor>,
 }
