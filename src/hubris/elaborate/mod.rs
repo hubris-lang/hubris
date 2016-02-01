@@ -30,8 +30,8 @@ pub struct ElabCx {
     /// binding or null-ary constructor in pattern
     /// matching.
     constructors: HashSet<ast::Name>,
-
     globals: HashMap<ast::Name, core::Name>,
+    metavar_counter: usize,
     pub ty_cx: TyCtxt,
 }
 
@@ -224,12 +224,21 @@ impl ElabCx {
             }
         }
     }
+
+    fn meta(&mut self, ty: Term) -> Result<core::Name, Error> {
+        let meta_no = self.metavar_counter;
+        let meta = core::Name::Meta {
+            number: meta_no,
+            ty: Box::new(ty),
+        };
+        self.metavar_counter += 1;
+        Ok(meta)
+    }
 }
 
 pub struct LocalElabCx<'ecx> {
     cx: &'ecx mut ElabCx,
     locals: HashMap<ast::Name, core::Name>,
-    metavar_counter: usize,
 }
 
 impl<'ecx> LocalElabCx<'ecx> {

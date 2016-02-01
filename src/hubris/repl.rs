@@ -172,7 +172,7 @@ impl Repl {
             Command::Quit
         } else if command_text == "reload" {
             Command::Reload
-        } else if &command_text[0..4] == "type" {
+        } else if &command_text[0..4] == "type" || &command_text[0..1] == "t" {
             Command::TypeOf(command_text[4..].to_string())
         } else if &command_text[0..4] == "help" {
             Command::Help

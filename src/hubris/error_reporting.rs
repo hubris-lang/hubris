@@ -1,5 +1,5 @@
-use typeck::{Error as TypeCkError, TyCtxt};
-use super::ast::{Span, HasSpan};
+use typeck::{TyCtxt};
+use super::ast::{Span};
 
 use std::io::prelude::*;
 use term::{Terminal, color, Result as TResult};
