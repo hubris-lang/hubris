@@ -3,8 +3,8 @@ use super::super::ast::Span;
 #[derive(Clone)]
 pub struct SourceMap {
     pub file_name: String,
-    pub source: String,
-    lines: Vec<(usize, usize)>
+    pub source: String, // source code of the file
+    lines: Vec<(usize, usize)> // mapping from line number to line offset
 }
 
 impl SourceMap {
@@ -71,5 +71,13 @@ impl SourceMap {
 
             (line_with_padding, marker)
         })
+    }
+
+    pub fn empty() -> SourceMap {
+        SourceMap {
+            file_name: String::new(),
+            source: String::new(),
+            lines: Vec::new()
+        }
     }
 }

@@ -1,6 +1,7 @@
 use super::elaborate::{self, ElabCx, LocalElabCx};
 use super::parser;
 use super::core;
+use ast::{self, SourceMap};
 use super::typeck::{self, LocalCx};
 
 use std::io;
@@ -69,7 +70,13 @@ pub enum Cont {
 impl Repl {
     pub fn from_path(file: &Option<PathBuf>) -> Result<Repl, Error> {
         match file {
-            &None => panic!("need to load the REPL with a file"),
+            &None => {
+                let ecx = ElabCx::from_module(ast::Module::empty(), SourceMap::empty());
+                Ok(Repl {
+                    elab_cx: ecx,
+                    root_file: None
+                })
+            }
             &Some(ref file_path) => {
                 let parser = try!(parser::from_file(file_path));
                 let module = parser.parse();
@@ -107,7 +114,7 @@ impl Repl {
             // Add it to the history
             readline::add_history(input.as_ref());
 
-            match self.repl_iteration(input) {
+            match self.repl_interation(input) {
                 // please make me look better
                 Err(e) => println!("repl error: {:?}", e),
                 Ok(cont) => {
@@ -122,8 +129,10 @@ impl Repl {
         Ok(())
     }
 
-    pub fn repl_iteration(&mut self, input: String) -> Result<Cont, Error> {
-        if &input[0..1] == ":" {
+    pub fn repl_interation(&mut self, input: String) -> Result<Cont, Error> {
+        if input.len() <= 0 {
+            // do nothing
+        } else if &input[0..1] == ":" {
             let cmd = self.parse_command(&input[1..]);
             match cmd {
                 Command::Quit => return Ok(Cont::Quit),

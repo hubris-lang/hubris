@@ -19,24 +19,23 @@ Hubris, version 0.0.1.
        \/           \/              \/
 
 Usage:
+    hubris repl [<file>]
+    hubris server
     hubris <file> [--output=<exe>]
-    hubris (-r | --interactive) <file>
-    hubris (-s | --server)
     hubris (-h | --help)
     hubris --version
 
 Options:
-    -s --server  Launch compiler in server mode.
     -h --help    Show this screen.
     --version    Show version.
 "#;
 
 #[derive(Debug, RustcDecodable)]
 struct Args {
-    arg_file: String,
+    arg_file: Option<String>,
     flag_output: Option<String>,
-    flag_server: bool,
-    flag_interactive: bool,
+    cmd_server: bool,
+    cmd_repl: bool,
 }
 
 fn main() {
@@ -46,22 +45,27 @@ fn main() {
                          .and_then(|d| d.decode())
                          .unwrap_or_else(|e| e.exit());
 
-    if args.flag_server {
+    if args.cmd_server {
+        println!("Starting Server...");
         hubris::server::server_main();
-    } else if args.flag_interactive {
-        let pb = PathBuf::from(args.arg_file);
-        if !pb.is_file() {
-            println!("Hubris: file {} does not exist", pb.to_str().unwrap());
-            return;
-        }
-        let repl = hubris::repl::Repl::from_path(&Some(pb)).unwrap();
-        repl.start().unwrap();
+    } else if args.cmd_repl {
+        // verify file exists
+        let pb = args.arg_file.map(|f| {
+            let pb = PathBuf::from(f);
+            if !pb.is_file() {
+                panic!("Hubris: file {} does not exist", pb.to_str().unwrap());
+            }
+            pb
+        });
+        let repl = hubris::repl::Repl::from_path(&pb).expect("Launching repl failed");
+        repl.start().expect("Starting repl failed");
     } else {
+        let input = args.arg_file.expect("No input files");
         debug!("main: compiling {} output to {:?}",
-               &args.arg_file[..],
-               args.arg_file);
+               &input[..],
+               args.flag_output);
 
-        let result = hubris::compile_file(&args.arg_file[..],
+        let result = hubris::compile_file(&input[..],
                                           args.flag_output.map(|p| PathBuf::from(p)));
 
         match result {
