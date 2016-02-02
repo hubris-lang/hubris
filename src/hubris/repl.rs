@@ -2,8 +2,7 @@ use super::core;
 use super::elaborate::{self, ElabCx, LocalElabCx};
 use super::error_reporting::Report;
 use super::parser;
-use super::core;
-use ast::{self, SourceMap};
+use super::ast::{self, SourceMap};
 use super::typeck::{self, LocalCx};
 
 use std::io;

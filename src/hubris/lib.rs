@@ -3,7 +3,7 @@
 
 extern crate gcc;
 extern crate iron;
-extern crate hubris_parser;
+extern crate hubris_syntax;
 #[macro_use]
 extern crate log;
 extern crate llvm_sys;
@@ -13,7 +13,7 @@ extern crate serde;
 extern crate term;
 
 pub mod ast {
-    pub use hubris_parser::ast::*;
+    pub use hubris_syntax::ast::*;
 }
 
 // pub mod backend;
@@ -24,7 +24,7 @@ pub mod elaborate;
 pub mod llvm;
 
 pub mod parser {
-    pub use hubris_parser::parser::*;
+    pub use hubris_syntax::parser::*;
 }
 
 pub mod repl;

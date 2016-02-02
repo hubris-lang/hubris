@@ -1,7 +1,9 @@
 use ast::*;
+use tok::{self, Tok};
 use std::str::FromStr;
+use unicode_xid::UnicodeXID;
 
-grammar;
+grammar<'input>(text: &'input str)["LALR(1)"];
 
 pub Module: Module =  {
   <lo:@L> "module" <n: Name> <ds: (Item)*> <hi:@R> =>
@@ -22,7 +24,6 @@ Item: Item = {
 ItemNoSpan: Item = {
   <d: Data> => Item::Data(d),
   <f: Fn> => Item::Fn(f),
-  <c: Comment> => Item::Comment(()),
   <e: Extern> => Item::Extern(e),
   <i: Import> => Item::Import(i),
 };
@@ -145,20 +146,20 @@ Term0: Term = {
 
 Term0US: Term = {
   <n : Name> => Term::Var { name: n },
-  <l : Literal> => Term::Literal {
-      span: Span::dummy(),
-      lit: l
-  },
+  // <l : Literal> => Term::Literal {
+  //    span: Span::dummy(),
+  //    lit: l
+  // },
   <m : Match> => Term::Match {
     span: Span::dummy(),
     scrutinee: Box::new(m.0),
     cases: m.1
   },
-  <s: r"\?[a-zA-Z_][a-zA-Z0-9_]*"> => {
-      let name = Name::from_str(s);
-
-      Term::Metavar { name: name }
-  },
+  // <s: r"\?[a-zA-Z_][a-zA-Z0-9_]*"> => {
+  //    let name = Name::from_str(s);
+  //
+  //    Term::Metavar { name: name }
+  // },
   "Type" => Term::Type,
   "(" <t:Term> ")" => t,
 };
@@ -201,21 +202,45 @@ Name: Name = {
 };
 
 NameKind: Vec<String> = {
-    <prefix : NameKind> "." <end : SimpleName> => {
-        let mut prefix = prefix; prefix.push(end); prefix
+    <prefix : NameKind> "." <end : "Id"> => {
+        let mut prefix = prefix; prefix.push(end.to_string()); prefix
     },
-    <s : SimpleName> => vec![s],
+    <s : "Id"> => vec![s.to_string()],
 };
 
-SimpleName: String = {
-    <s: r"[a-zA-Z_][a-zA-Z0-9_]*"> => s.to_string()
-};
+// Literal: Literal = {
+//    r"\(\)" => Literal::Unit,
+// };
 
-Literal: Literal = {
-    r"[1-9][0-9]+" => Literal::Int(i64::from_str(<>).unwrap()),
-    r"\(\)" => Literal::Unit,
-};
-
-Comment: () = {
-    r"--[^\n]*\n" => ()
-};
+extern {
+    type Location = usize;
+    type Error = tok::Error;
+    enum Tok<'input> {
+        "def" => Tok::Def,
+        "end" => Tok::End,
+        "extern" => Tok::Extern,
+        "forall" => Tok::Forall,
+        "fun" => Tok::Fun,
+        "inductive" => Tok::Inductive,
+        "in" => Tok::In,
+        "import" => Tok::Import,
+        "let" => Tok::Let,
+        "match" => Tok::Match,
+        "module" => Tok::Module,
+        "pub" => Tok::Pub,
+        "Type" => Tok::Type,
+        "with" => Tok::With,
+        "|" => Tok::Bar,
+        ":" => Tok::Colon,
+        ":=" => Tok::ColonEq,
+        "(" => Tok::LeftParen,
+        ")" => Tok::RightParen,
+        "," => Tok::Comma,
+        "=>" => Tok::FatArrow,
+        "->" => Tok::Arrow,
+        "_" => Tok::Underscore,
+        "." => Tok::Period,
+        "Comment" => Tok::Comment(<&'input str>),
+        "Id" => Tok::Id(<&'input str>),
+    }
+}

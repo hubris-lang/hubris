@@ -9,6 +9,7 @@ mod source_map;
 
 use lalrpop_util::ParseError;
 pub use self::source_map::SourceMap;
+pub use super::tok;
 
 pub struct Parser {
     pub source_map: SourceMap,
@@ -19,15 +20,21 @@ pub type Error = String;
 
 impl Parser {
     pub fn parse(&self) -> Result<super::ast::Module, Error> {
-        self.report_error(hubris::parse_Module(&self.source_map.source[..]))
+        let tokenizer = tok::Tokenizer::new(&self.source_map.source[..], 0);
+        self.report_error(
+            hubris::parse_Module(&self.source_map.source[..],
+            tokenizer))
     }
 
     pub fn parse_term(&self) -> Result<super::ast::Term, Error> {
-        self.report_error(hubris::parse_Term(&self.source_map.source[..]))
+        let tokenizer = tok::Tokenizer::new(&self.source_map.source[..], 0);
+        self.report_error(
+            hubris::parse_Term(&self.source_map.source[..],
+            tokenizer))
     }
 
     pub fn report_error<'input, R>(&self,
-        result: Result<R, ParseError<usize,(usize, &'input str),()>>) -> Result<R, Error> {
+        result: Result<R, ParseError<usize, tok::Tok<'input>, tok::Error>>) -> Result<R, Error> {
         result.map_err(|e|
             match e {
                 ParseError::InvalidToken { location } => {

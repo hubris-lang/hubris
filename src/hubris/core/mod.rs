@@ -1,8 +1,8 @@
-use hubris_parser::ast::Span;
-
 use std::fmt::{self, Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::hash::Hasher;
+
+use super::ast::Span;
 
 pub mod name;
 pub mod term;

@@ -1,4 +1,4 @@
-use hubris_parser::ast::{Span, HasSpan};
+use super::super::ast::{Span, HasSpan};
 
 use std::fmt::{self, Display, Formatter};
 use std::hash::{Hash, Hasher};
