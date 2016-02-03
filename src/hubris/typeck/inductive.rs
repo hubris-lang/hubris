@@ -117,72 +117,113 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
                 arguments,
                 c_for_ctor))
     }
+
+    pub fn construct_recursor(&self,
+                              minor_premises: Vec<Name>,
+                              major_premise_args: Vec<Name>,
+                              major_premise: Term) -> (Term, Term) {
+        let ind_hyp = self.ind_hyp.clone();
+        let params =
+            self.inductive_ty
+                .parameters
+                .clone();
+
+        let recursor_ty =
+            Term::abstract_pi(
+                params.clone(),
+                Term::abstract_pi(vec![ind_hyp.clone()],
+                    Term::abstract_pi(minor_premises.clone(),
+                        Term::abstract_pi(major_premise_args.clone(),
+                            major_premise))));
+
+        let mut recursor_terms = vec![ind_hyp.clone().to_term()];
+        recursor_terms.extend(minor_premises.iter().map(|x| x.to_term()));
+        recursor_terms.extend(major_premise_args.iter().map(|x| x.to_term()));
+
+        let recursor_body =
+            Term::abstract_lambda(
+                params.clone(),
+                Term::abstract_lambda(
+                    vec![ind_hyp.clone()],
+                    Term::abstract_lambda(
+                        minor_premises,
+                        Term::abstract_lambda(
+                            major_premise_args,
+                            Term::Recursor(
+                                self.inductive_ty.name.clone(),
+                                1, // this needs to be fixed
+                                recursor_terms)))));
+
+        (recursor_ty, recursor_body)
+    }
+
+    pub fn major_premise(&self) -> (Vec<Name>, Term) {
+        let mut data_type_ty = self.with_params(
+            self.inductive_ty.ty.clone());
+
+        let mut arguments = Vec::new();
+        while let Term::Forall { ty, term, .. } = data_type_ty {
+            arguments.push(*ty.clone());
+            data_type_ty = *term;
+        }
+
+        let mut arguments: Vec<_> = arguments.into_iter()
+                                         .enumerate()
+                                         .map(|(i, ty)|
+                                            self.ty_cx.local_with_repr(format!("a{}", i), ty))
+                                         .collect();
+        let scrutinee =
+            Term::apply_all(
+                self.with_params(self.inductive_ty.name.to_term()),
+                arguments.iter().map(|x| x.to_term()).collect());
+
+        arguments.push(self.ty_cx.local_with_repr(
+            "c".to_string(),
+            scrutinee));
+
+        let premise =
+            self.ind_hyp.to_term();
+
+        let premise = Term::apply_all(
+            premise,
+            arguments.
+            iter().
+            map(|a| a.to_term()).
+            collect());
+
+        (arguments, premise)
+    }
 }
 
 /// Construct a recursor for `data_type`.
 pub fn make_recursor(ty_cx: &mut TyCtxt, data_type: &Data) {
     let mut rcx = RecursorCx::new(ty_cx, data_type);
 
-    let params = data_type.parameters.clone();
-
     let ind_hyp = rcx.ind_hyp.clone();
 
-    let mut premises = Vec::new();
+    let params = data_type.parameters.clone();
 
-    for ctor in &data_type.ctors {
-        premises.push(rcx.minor_premise_for(&ind_hyp, ctor))
-    }
+    let minor_premises =
+        data_type.ctors
+                 .iter()
+                 .map(|ctor| {
+                     let p = rcx.minor_premise_for(&ind_hyp, ctor);
+                     rcx.ty_cx.local_with_repr("".to_string(), p)
+                 })
+                 .collect();
 
-    let premises: Vec<_> = premises.into_iter()
-                                   .map(|p| rcx.ty_cx.local_with_repr("".to_string(), p))
-                                   .collect();
+    let (tys, major_premise) =
+        rcx.major_premise();
 
-    let mut result = data_type.ty.clone();
+    let (recursor_ty, recursor_body) =
+        rcx.construct_recursor(
+            minor_premises,
+            tys,
+            major_premise);
 
-    let mut tys = Vec::new();
-    while let Term::Forall { ty, term, .. } = result {
-        tys.push(*ty.clone());
-        result = *term;
-    }
+    let recursor_name = data_type.name.in_scope("rec".to_string()).unwrap();
 
-    tys.push(data_type.name.to_term());
-
-    let tys: Vec<_> = tys.into_iter()
-                         .enumerate()
-                         .map(|(i, ty)| rcx.ty_cx.local_with_repr(format!("a{}", i), ty))
-                         .collect();
-
-    let tys_terms: Vec<_> = tys.iter().map(|t| t.to_term()).collect();
-
-    let recursor_ty =
-        Term::abstract_pi(
-            params.clone(),
-            Term::abstract_pi(vec![ind_hyp.clone()],
-                Term::abstract_pi(premises.clone(),
-                    Term::abstract_pi(tys.clone(),
-                        Term::apply_all(ind_hyp.to_term(),
-                        tys_terms.clone())))));
-
-    // println!("declare_datatype: recursor_ty={}", recursor_ty);
-
-    let mut inner_terms = vec![ind_hyp.clone().to_term()];
-    inner_terms.extend(premises.clone().into_iter().map(|x| x.to_term()));
-    inner_terms.extend(tys_terms.clone().into_iter());
-
-    let recursor_body =
-        Term::abstract_lambda(
-            params.clone(),
-            Term::abstract_lambda(
-                vec![ind_hyp.clone()],
-                Term::abstract_lambda(
-                    premises,
-                    Term::abstract_lambda(
-                        tys,
-                        Term::Recursor(
-                            data_type.name.clone(),
-                            1,
-                            inner_terms)))));
-
-    rcx.ty_cx.definitions.insert(data_type.name.in_scope("rec".to_string()).unwrap(),
-                            (recursor_ty, recursor_body));
+    rcx.ty_cx
+       .definitions
+       .insert(recursor_name, (recursor_ty, recursor_body));
 }

@@ -443,10 +443,18 @@ impl Display for Term {
                         &Forall {..} => try!(write!(formatter, "({}) -> ", ty)),
                         _ => try!(write!(formatter, "{} -> ", ty)),
                     }
-                    write!(formatter, "{}", term)
+                    try!(write!(formatter, "{}", term));
                 } else {
-                    write!(formatter, "forall ({} : {}), {}", name, ty, term)
+                    write!(formatter, "forall ({} : {})", name, ty);
+                    let mut cursor = &**term;
+                    while let &Term::Forall { ref name, ref ty, ref term, .. } = cursor {
+                        if name.is_placeholder() { break; }
+                        try!(write!(formatter, " ({} : {})", name, ty));
+                        cursor = term;
+                    }
+                    try!(write!(formatter, ", {}", cursor));
                 }
+                Ok(())
             }
             &Lambda { ref name, ref ty, ref body, .. } => {
                 write!(formatter, "fun ({} : {}) => {}", name, ty, body)
