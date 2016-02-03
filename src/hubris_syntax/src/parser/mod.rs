@@ -3,13 +3,17 @@ use std::fs::File;
 use std::io;
 use std::io::Read;
 
-// The parser for our language.
+// A way to verify the parser is not producing dummy spans
+// in debug mode, need to wrap this with cfg enable at some point.
+mod dummy_span_debug;
+// The LALRPOP parser for our language.
 mod hubris;
 mod source_map;
 
 use lalrpop_util::ParseError;
 pub use self::source_map::SourceMap;
 pub use super::tok;
+use self::dummy_span_debug::*;
 
 pub struct Parser {
     pub source_map: SourceMap,
@@ -21,9 +25,11 @@ pub type Error = String;
 impl Parser {
     pub fn parse(&self) -> Result<super::ast::Module, Error> {
         let tokenizer = tok::Tokenizer::new(&self.source_map.source[..], 0);
-        self.report_error(
+        let module = try!(self.report_error(
             hubris::parse_Module(&self.source_map.source[..],
-            tokenizer))
+            tokenizer)));
+        ensure_no_dummy_spans(&module);
+        Ok(module)
     }
 
     pub fn parse_term(&self) -> Result<super::ast::Term, Error> {

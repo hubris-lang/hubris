@@ -10,5 +10,5 @@ def append (A : Type) (xs : List A) (ys : List A) : List A :=
     (fun (x : List A) : Type => List A)
     ys
     (fun (x : A) (zz : List A) (recCase : List A) : List A => Cons x recCase)
-    xs
+    A xs
 end
