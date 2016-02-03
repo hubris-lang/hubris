@@ -19,7 +19,7 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
             ind_hyp: inductive_ty.name.clone(),
         };
 
-        let ty = rcx.eta_expand();
+        let ty = rcx.make_ind_hyp_ty();
 
         let ty = rcx.with_params(ty);
         let ind_hyp = rcx.ty_cx.local_with_repr("C".to_string(),
@@ -31,7 +31,7 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
         rcx
     }
 
-    fn eta_expand(&self) -> Term {
+    fn  make_ind_hyp_ty(&self) -> Term {
         let mut pi = self.inductive_ty.ty.clone();
         let mut result = self.inductive_ty.name.to_term();
         let mut i = 0;
@@ -41,9 +41,18 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
             locals.push(local);
             pi = *term;
         }
-        Term::abstract_lambda(
+
+        let applied_ty =
+            Term::apply_all(
+                result,
+                locals.into_iter().map(|t| t.to_term()).collect());
+
+        locals.push(
+            self.ty_cx.local_with_repr("".to_string(), applied_ty));
+
+        Term::abstract_pi(
             locals.clone(),
-            Term::apply_all(result, locals.into_iter().map(|t| t.to_term()).collect()))
+            Term::Type)
     }
 
     pub fn with_params(&self, term: Term) -> Term {
