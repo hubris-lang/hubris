@@ -21,9 +21,7 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
 
         let ty = rcx.eta_expand();
 
-
-        let params = inductive_ty.parameters.iter().map(|x| x.to_term()).collect();
-        let ty = Term::apply_all(ty, params).whnf();
+        let ty = rcx.with_params(ty);
         let ind_hyp = rcx.ty_cx.local_with_repr("C".to_string(),
             Term::abstract_pi(vec![rcx.ty_cx.local_with_repr("".to_string(), ty)],
                 Term::Type));
@@ -48,39 +46,76 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
             Term::apply_all(result, locals.into_iter().map(|t| t.to_term()).collect()))
     }
 
-    pub fn make_premise(&mut self, ind_hyp: &Name, ctor: &(Name, Term)) -> Term {
-        let ctor_name = &ctor.0;
-        let mut ctor_ty = &ctor.1;
+    pub fn with_params(&self, term: Term) -> Term {
+        let params = self.inductive_ty
+                         .parameters
+                         .iter()
+                         .map(|x| x.to_term())
+                         .collect();
 
-        let mut premise_args = Vec::new();
-        let mut names = Vec::new();
+        Term::apply_all(term, params).whnf()
+    }
+
+    fn is_recursive_arg(&self, term: &Term) -> bool {
+        match term.head() {
+            None => false,
+            Some(h) => h == self.inductive_ty.name.to_term(),
+        }
+    }
+
+    pub fn minor_premise_for(&mut self, ind_hyp: &Name, ctor: &(Name, Term)) -> Term {
+        // Apply the constructor name to the parameters.
+        let ctor_with_params =
+            self.with_params(ctor.0.to_term());
+
+        // Apply the constructor type to the parameters.
+        let mut ctor_ty_with_params =
+            self.with_params(ctor.1.clone());
 
         let mut i = 0;
-        while let &Term::Forall { ref ty, ref term, .. } = ctor_ty {
-            let local_n = self.ty_cx.local_with_repr(format!("a{}", i), *ty.clone());
+        let mut binders = Vec::new();
+        let mut arguments = Vec::new();
+        let mut pi = &ctor_ty_with_params;
 
-            premise_args.push(local_n.clone());
-
-            let local_x =
+        while let &Term::Forall { ref ty, ref term, .. } = pi {
+            // Create a local with a fresh name and type of the binder.
+            let arg_local =
                 self.ty_cx.local_with_repr(
-                    "".to_string(),
-                    Term::apply(ind_hyp.to_term(), local_n.to_term()));
+                    format!("a{}", i),
+                    *ty.clone());
 
-            premise_args.push(local_x);
+            // Add this to the list of binders (a0 : A) (a1 : List A)
+            binders.push(arg_local.clone());
+            // (a0 : A) (a1 : List A) -> C a1 -> C (Cons a0 a1)
 
-            if true {
-                names.push(local_n.to_term());
+            // If this is a recursive argument we all need to generate a piece of proof
+            // for that case for example `C a1`.
+            if self.is_recursive_arg(&*ty) {
+                let local_x =
+                    self.ty_cx.local_with_repr(
+                        "".to_string(),
+                        Term::apply(ind_hyp.to_term(), arg_local.to_term()));
+
+                 arguments.push(local_x);
             }
 
-            ctor_ty = &**term;
+            pi = &**term;
             i += 1;
         }
 
         let c_for_ctor = Term::apply(
             ind_hyp.to_term(),
-            Term::apply_all(ctor_name.to_term(), names));
+            Term::apply_all(
+                ctor_with_params,
+                binders.iter()
+                       .map(|x| x.to_term())
+                       .collect()));
 
-        Term::abstract_pi(premise_args, c_for_ctor)
+        Term::abstract_pi(
+            binders,
+            Term::abstract_pi(
+                arguments,
+                c_for_ctor))
     }
 }
 
@@ -95,7 +130,7 @@ pub fn make_recursor(ty_cx: &mut TyCtxt, data_type: &Data) {
     let mut premises = Vec::new();
 
     for ctor in &data_type.ctors {
-        premises.push(rcx.make_premise(&ind_hyp, ctor))
+        premises.push(rcx.minor_premise_for(&ind_hyp, ctor))
     }
 
     let premises: Vec<_> = premises.into_iter()
