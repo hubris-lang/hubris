@@ -75,6 +75,17 @@ pub enum Cont {
     Done,
 }
 
+fn split_command(command_text: &str) -> (&str, &str) {
+
+    for (i, c) in command_text.char_indices() {
+        if c.is_whitespace() {
+            return command_text.split_at(i);
+        }
+    }
+
+    (command_text, "")
+}
+
 impl Repl {
     pub fn from_path(file: &Option<PathBuf>) -> Result<Repl, Error> {
         match file {
@@ -185,15 +196,17 @@ impl Repl {
     }
 
     fn parse_command(&self, command_text: &str) -> Command {
-        if command_text == "quit" {
+        let (command, arg) = split_command(command_text);
+
+        if command == "" {
+            Command::Unknown(command_text.to_string())
+        } else if "quit".starts_with(command) {
             Command::Quit
-        } else if command_text == "reload" {
+        } else if "reload".starts_with(command) {
             Command::Reload
-        } else if &command_text[0..4] == "type" {
-            Command::TypeOf(command_text[0..4].to_string())
-        } else if &command_text[0..1] == "t" {
-            Command::TypeOf(command_text[1..].to_string())
-        } else if &command_text[0..4] == "help" {
+        } else if "type".starts_with(command) {
+            Command::TypeOf(arg.to_string())
+        } else if "help".starts_with(command) {
             Command::Help
         } else {
             Command::Unknown(command_text.to_string())
