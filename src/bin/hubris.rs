@@ -40,6 +40,7 @@ struct Args {
 }
 
 fn main() {
+    // TODO: add logger flags to redirect to a fd
     env_logger::init().unwrap();
 
     let args: Args = Docopt::new(USAGE)
@@ -60,6 +61,7 @@ fn main() {
             }
             pb
         });
+
         let repl = hubris::repl::Repl::from_path(&pb).expect("Launching repl failed");
         repl.start().expect("Starting repl failed");
     } else {

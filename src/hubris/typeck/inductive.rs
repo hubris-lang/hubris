@@ -1,4 +1,4 @@
-use super::TyCtxt;
+use super::{TyCtxt, Error, LocalCx};
 
 use super::super::core::*;
 use super::name_generator::*;
@@ -22,12 +22,7 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
         let ty = rcx.make_ind_hyp_ty();
 
         let ty = rcx.with_params(ty);
-        let ind_hyp = rcx.ty_cx.local_with_repr("C".to_string(),
-            Term::abstract_pi(vec![rcx.ty_cx.local_with_repr("".to_string(), ty)],
-                Term::Type));
-
-        rcx.ind_hyp = ind_hyp;
-
+        rcx.ind_hyp = rcx.ty_cx.local_with_repr("C".to_string(), ty);
         rcx
     }
 
@@ -45,7 +40,7 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
         let applied_ty =
             Term::apply_all(
                 result,
-                locals.into_iter().map(|t| t.to_term()).collect());
+                locals.iter().map(|t| t.to_term()).collect());
 
         locals.push(
             self.ty_cx.local_with_repr("".to_string(), applied_ty));
@@ -72,7 +67,7 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
         }
     }
 
-    pub fn minor_premise_for(&mut self, ind_hyp: &Name, ctor: &(Name, Term)) -> Term {
+    pub fn minor_premise_for(&mut self, ind_hyp: &Name, ctor: &(Name, Term)) -> Result<Term, Error> {
         // Apply the constructor name to the parameters.
         let ctor_with_params =
             self.with_params(ctor.0.to_term());
@@ -84,9 +79,9 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
         let mut i = 0;
         let mut binders = Vec::new();
         let mut arguments = Vec::new();
-        let mut pi = &ctor_ty_with_params;
+        let mut pi = ctor_ty_with_params;
 
-        while let &Term::Forall { ref ty, ref term, .. } = pi {
+        while let Term::Forall { ty, term, .. } = pi {
             // Create a local with a fresh name and type of the binder.
             let arg_local =
                 self.ty_cx.local_with_repr(
@@ -100,31 +95,73 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
             // If this is a recursive argument we all need to generate a piece of proof
             // for that case for example `C a1`.
             if self.is_recursive_arg(&*ty) {
+                let num_params = self.inductive_ty.parameters.len();
+                let mut indicies = match ty.args() {
+                    None => vec![],
+                    Some(is) =>
+                        is.iter()
+                          .skip(num_params)
+                          .map(Clone::clone)
+                          .collect(),
+                };
+
+                println!("type to get indicies from: {}", ty);
+
+                // Add the ctor to the end of the list and we are going to build an
+                // application of the form C indicies (Ctor args)
+                indicies.push(arg_local.to_term());
+
                 let local_x =
                     self.ty_cx.local_with_repr(
                         "".to_string(),
-                        Term::apply(ind_hyp.to_term(), arg_local.to_term()));
+                        Term::apply_all(
+                            ind_hyp.to_term(),
+                            indicies));
 
                  arguments.push(local_x);
             }
 
-            pi = &**term;
+            pi = term.instantiate(&arg_local.to_term());
             i += 1;
         }
 
-        let c_for_ctor = Term::apply(
-            ind_hyp.to_term(),
+        let ctor_application =
             Term::apply_all(
                 ctor_with_params,
                 binders.iter()
                        .map(|x| x.to_term())
-                       .collect()));
+                       .collect());
 
-        Term::abstract_pi(
-            binders,
-            Term::abstract_pi(
-                arguments,
-                c_for_ctor))
+        // We compute the type of the constructor using the type checker
+        // this allows us to rely on the type system to return the proper
+        // set of indicies for us to bind.
+        let ty_of_ctor = {
+            let mut lcx = LocalCx::from_cx(self.ty_cx);
+            try!(lcx.type_infer_term(&ctor_application))
+        };
+
+        // We then compute indicies in the same way as above.
+        let num_params = self.inductive_ty.parameters.len();
+        let mut indicies = match ty_of_ctor.args() {
+            None => vec![],
+            Some(is) =>
+                is.iter()
+                  .skip(num_params)
+                  .map(Clone::clone)
+                  .collect(),
+        };
+
+        indicies.push(ctor_application);
+
+        let c_for_ctor = Term::apply_all(
+            ind_hyp.to_term(),
+            indicies);
+
+        Ok(Term::abstract_pi(
+              binders,
+              Term::abstract_pi(
+                  arguments,
+                  c_for_ctor)))
     }
 
     pub fn construct_recursor(&self,
@@ -205,21 +242,23 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
 }
 
 /// Construct a recursor for `data_type`.
-pub fn make_recursor(ty_cx: &mut TyCtxt, data_type: &Data) {
+pub fn make_recursor(ty_cx: &mut TyCtxt, data_type: &Data) -> Result<(), Error> {
     let mut rcx = RecursorCx::new(ty_cx, data_type);
 
     let ind_hyp = rcx.ind_hyp.clone();
 
     let params = data_type.parameters.clone();
 
-    let minor_premises =
+    let minor_premises: Result<_, Error> =
         data_type.ctors
                  .iter()
                  .map(|ctor| {
-                     let p = rcx.minor_premise_for(&ind_hyp, ctor);
-                     rcx.ty_cx.local_with_repr("".to_string(), p)
+                     let p = try!(rcx.minor_premise_for(&ind_hyp, ctor));
+                     Ok(rcx.ty_cx.local_with_repr("".to_string(), p))
                  })
                  .collect();
+
+    let minor_premises = try!(minor_premises);
 
     let (tys, major_premise) =
         rcx.major_premise();
@@ -235,4 +274,6 @@ pub fn make_recursor(ty_cx: &mut TyCtxt, data_type: &Data) {
     rcx.ty_cx
        .definitions
        .insert(recursor_name, (recursor_ty, recursor_body));
+
+    Ok(())
 }

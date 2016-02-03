@@ -1,13 +1,15 @@
 use super::core;
 use super::elaborate::{self, ElabCx, LocalElabCx};
-use super::error_reporting::Report;
+use super::error_reporting::{ErrorContext, Report};
 use super::parser;
 use super::ast::{self, SourceMap};
 use super::typeck::{self, LocalCx};
 
-use std::io;
+use std::io::{self, Write};
 use std::path::PathBuf;
 use readline;
+
+use term::{self, Terminal, color, StdoutTerminal, Result as TResult};
 
 const HELP_MESSAGE: &'static str = r#"
 Commands:
@@ -19,6 +21,7 @@ Commands:
 pub struct Repl {
     elab_cx: ElabCx,
     root_file: Option<PathBuf>,
+    terminal: Box<StdoutTerminal>,
 }
 
 // impl From<parser::Error> for Error {
@@ -93,7 +96,8 @@ impl Repl {
                 let ecx = ElabCx::from_module(ast::Module::empty(), SourceMap::empty());
                 Ok(Repl {
                     elab_cx: ecx,
-                    root_file: None
+                    root_file: None,
+                    terminal: term::stdout().unwrap(),
                 })
             }
             &Some(ref file_path) => {
@@ -102,7 +106,12 @@ impl Repl {
 
                 let mut ecx = ElabCx::from_module(module, parser.source_map.clone());
 
-                let emodule = try!(ecx.elaborate_module(file_path));
+                // Ensure that if a type error occurs here we report it, ideally
+                // the REPL should launch anyways.
+                match ecx.elaborate_module(file_path) {
+                    Err(e) => { e.report(&mut ecx); },
+                    Ok(_) => {}
+                }
 
                 {
                     let main = try!(ecx.ty_cx.get_main_body());
@@ -113,6 +122,7 @@ impl Repl {
                 Ok(Repl {
                     elab_cx: ecx,
                     root_file: file.clone(),
+                    terminal: term::stdout().unwrap(),
                 })
             }
         }
@@ -135,7 +145,7 @@ impl Repl {
 
             match self.repl_interation(input) {
                 // please make me look better
-                Err(e) => println!("repl error: {:?}", e),
+                Err(e) => { e.report(&mut self); },
                 Ok(cont) => {
                     match cont {
                         Cont::Quit => break,
@@ -214,16 +224,26 @@ impl Repl {
     }
 }
 
-// impl Report for Error {
-//     type Context = ElabCx;
-//
-//     fn report<O: Write>(cx: &Self::Context,
-//                          mut out: Box<Terminal<Output = O>>,
-//                          error: Self)
-//                          -> TResult<()> {
-//         match error {
-//             Error::TypeCk(ty_ck) => panic!(),
-//             _ => panic!(),
-//         }
-//     }
-// }
+impl ErrorContext<io::Stdout> for Repl {
+    fn get_source_map(&self) -> &SourceMap {
+        &self.elab_cx.ty_cx.source_map
+    }
+
+    fn get_terminal(&mut self) -> &mut Box<Terminal<Output=io::Stdout> + Send> {
+        &mut self.elab_cx.ty_cx.terminal
+    }
+}
+
+impl<O: Write, E: ErrorContext<O>> Report<O, E> for Error {
+    fn report(self, cx: &mut E) -> TResult<()> {
+        match self {
+            Error::TypeCk(ty_ck_err) => {
+                ty_ck_err.report(cx)
+            }
+            Error::Elaborator(elab_err) => {
+                elab_err.report(cx)
+            }
+            e => panic!("need to support better error printing for this {:?}", e),
+        }
+    }
+}

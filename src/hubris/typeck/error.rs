@@ -1,6 +1,6 @@
 use super::super::ast::{SourceMap, Span, HasSpan};
 use super::super::core::{Term, Name};
-use super::super::error_reporting::{Report, span_error};
+use super::super::error_reporting::{Report, ErrorContext};
 use super::TyCtxt;
 use parser;
 
@@ -34,30 +34,23 @@ impl From<parser::Error> for Error {
     }
 }
 
-impl Report for Error {
-    type Context = TyCtxt;
-
-    fn report<O: Write>(ty_cx: &Self::Context,
-                        mut out: Box<Terminal<Output = O>>,
-                        error: Self)
-                        -> TResult<()> {
-        match error {
+impl<O: Write, E: ErrorContext<O>> Report<O, E> for Error {
+    fn report(self, cx: &mut E) -> TResult<()> {
+        match self {
             Error::UnknownVariable(name) => {
-                span_error(ty_cx,
-                           &mut out,
-                           name.get_span(),
-                           format!("unknown variable `{}`", name))
+                cx.span_error(name.get_span(),
+                    format!("unknown variable `{}`", name))
             }
             Error::DefUnequal(span, t1, t2, disequalities) => {
                 let msg = format!("the term `{}` is not equivalent to `{}`", t1, t2);
 
-                try!(span_error(ty_cx, &mut out, span, msg));
+                try!(cx.span_error(span, msg));
 
                 if disequalities.len() > 1 {
-                    try!(writeln!(out, "in particular:"));
+                    try!(writeln!(cx.get_terminal(), "in particular:"));
 
                     for (t, u) in disequalities {
-                        try!(writeln!(out, "    {} not equal to {}", t, u));
+                        try!(writeln!(cx.get_terminal(), "    {} not equal to {}", t, u));
                     }
                 }
 
@@ -66,7 +59,7 @@ impl Report for Error {
             Error::ApplicationMismatch(span, _, _) => {
                 let msg = format!("can not apply a term t with type t' to a term u to u'");
 
-                try!(span_error(ty_cx, &mut out, span, msg));
+                try!(cx.span_error(span, msg));
 
                 Ok(())
             }

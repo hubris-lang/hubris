@@ -9,11 +9,13 @@ use super::elaborate;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::io;
+use std::io::{self, Write};
 use std::path::{PathBuf, Path};
 
 use self::name_generator::*;
 pub use self::error::Error;
+use error_reporting::ErrorContext;
+use term::{Terminal, stdout, color, StdoutTerminal, Result as TResult};
 
 /// A global context for type checking containing the necessary information
 /// needed across type checking all definitions.
@@ -28,6 +30,17 @@ pub struct TyCtxt {
     pub source_map: SourceMap,
 
     local_counter: RefCell<usize>,
+    pub terminal: Box<StdoutTerminal>,
+}
+
+impl ErrorContext<io::Stdout> for TyCtxt {
+    fn get_source_map(&self) -> &SourceMap {
+        &self.source_map
+    }
+
+    fn get_terminal(&mut self) -> &mut Box<Terminal<Output=io::Stdout> + Send> {
+        &mut self.terminal
+    }
 }
 
 impl TyCtxt {
@@ -39,6 +52,7 @@ impl TyCtxt {
             definitions: HashMap::new(),
             source_map: SourceMap::from_file("".to_string(), "".to_string()),
             local_counter: RefCell::new(0),
+            terminal: stdout().unwrap(),
         }
     }
 
@@ -62,7 +76,7 @@ impl TyCtxt {
 
         for def in &module.defs {
             match def {
-                &Item::Data(ref d) => self.declare_datatype(d),
+                &Item::Data(ref d) => try!(self.declare_datatype(d)),
                 &Item::Fn(ref f) => self.declare_def(f),
                 &Item::Extern(ref e) => self.declare_extern(e),
             }
@@ -154,7 +168,7 @@ impl TyCtxt {
         }
     }
 
-    pub fn declare_datatype(&mut self, data_type: &Data) {
+    pub fn declare_datatype(&mut self, data_type: &Data) -> Result<(), Error> {
         // Currently we use types/functions for metadata, do we need them?
         self.types.insert(data_type.name.clone(), data_type.clone());
 
@@ -169,7 +183,7 @@ impl TyCtxt {
             self.axioms.insert(name, ty);
         }
 
-        inductive::make_recursor(self, data_type);
+        inductive::make_recursor(self, data_type)
     }
 
     pub fn declare_def(&mut self, f: &Function) {
@@ -419,6 +433,8 @@ impl<'tcx> LocalCx<'tcx> {
             &Term::App { ref fun, ref arg, span } => {
                 match try!(self.type_infer_term(fun)) {
                     Term::Forall { term, ty, .. } => {
+                        // When doing inference I don't think we should try to check this
+                        // constraint:
                         try!(self.type_check_term(arg, &*ty));
                         Ok(term.instantiate(arg))
                     }

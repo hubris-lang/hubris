@@ -81,7 +81,11 @@ impl PartialEq for Name {
              &DeBruijn { index: ref index2, .. }) => index1 == index2,
             (&Qual { components: ref components1, .. },
              &Qual { components: ref components2, .. }) => components1 == components2,
-            _ => false,
+            (&Local { number: ref n1, .. },
+             &Local { number: ref n2, .. }) =>
+                n1 == n2,
+            (&Meta { ..}, &Meta {..}) => panic!(),
+            _ => false
         }
     }
 }

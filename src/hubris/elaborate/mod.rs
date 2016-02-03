@@ -4,7 +4,10 @@ use ast::{self, SourceMap};
 use core;
 use typeck::{self, TyCtxt};
 use self::util::to_qualified_name;
+use super::error_reporting::{Report, ErrorContext};
+use term::{self, Terminal, color, StdoutTerminal, Result as TResult};
 
+use std::io::{self, Write};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
@@ -22,6 +25,22 @@ impl From<typeck::Error> for Error {
         Error::TypeCk(err)
     }
 }
+
+impl<O: Write, E: ErrorContext<O>> Report<O, E> for Error {
+    fn report(self, cx: &mut E) -> TResult<()> {
+        match self {
+            Error::TypeCk(ty_ck_err) => {
+                ty_ck_err.report(cx)
+            }
+            Error::UnknownVariable(n) => {
+                cx.span_error(n.span,
+                    format!("unresolved name `{}`", n))
+            }
+            e => panic!("need to support better error printing for this {:?}", e),
+        }
+    }
+}
+
 pub struct ElabCx {
     module: ast::Module,
 
@@ -33,6 +52,16 @@ pub struct ElabCx {
     globals: HashMap<ast::Name, core::Name>,
     metavar_counter: usize,
     pub ty_cx: TyCtxt,
+}
+
+impl ErrorContext<io::Stdout> for ElabCx {
+    fn get_source_map(&self) -> &SourceMap {
+        &self.ty_cx.source_map
+    }
+
+    fn get_terminal(&mut self) -> &mut Box<Terminal<Output=io::Stdout> + Send> {
+        &mut self.ty_cx.terminal
+    }
 }
 
 impl ElabCx {
@@ -77,19 +106,16 @@ impl ElabCx {
 
             match ecx.elaborate_def(def) {
                 Err(e) => errors.push(e),
-                Ok(edef) => {
-                    let edef = edef.map(|edef| {
+                Ok(edef) => match edef {
+                    None => {},
+                    Some(edef) => {
                         match &edef {
-                            &core::Item::Data(ref d) => ecx.ty_cx.declare_datatype(d),
+                            &core::Item::Data(ref d) => try!(ecx.ty_cx.declare_datatype(d)),
                             &core::Item::Fn(ref f) => ecx.ty_cx.declare_def(f),
                             &core::Item::Extern(ref e) => ecx.ty_cx.declare_extern(e),
                         }
-                        edef
-                    });
 
-                    match edef {
-                        None => {}
-                        Some(edef) => defs.push(edef),
+                        defs.push(edef);
                     }
                 }
             }

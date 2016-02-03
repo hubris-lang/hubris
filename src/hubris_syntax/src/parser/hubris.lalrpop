@@ -85,7 +85,7 @@ Parameters: Vec<(Name, Term)> = {
 
 pub Term: Term = {
    "forall" <args: (Binder+)> "," <body: Term> => {
-      let mut result = body; for (n, t) in args {
+      let mut result = body; for (n, t) in args.into_iter().rev() {
           result = Term::Forall {
             span: Span::dummy(),
             name: n,

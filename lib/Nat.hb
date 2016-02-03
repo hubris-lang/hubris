@@ -1,7 +1,5 @@
 module Nat
 
-import Eq
-
 inductive Nat
   | Z : Nat
   | S : Nat -> Nat
