@@ -5,7 +5,7 @@ mod name_generator;
 use core::*;
 use super::ast::{SourceMap, Span, HasSpan};
 use super::parser;
-use super::elaborate;
+use super::elaborate::{self, Error as ElabErr};
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -14,7 +14,7 @@ use std::path::{PathBuf, Path};
 
 use self::name_generator::*;
 pub use self::error::Error;
-use error_reporting::ErrorContext;
+use error_reporting::{ErrorContext, Report};
 use term::{Terminal, stdout, color, StdoutTerminal, Result as TResult};
 
 /// A global context for type checking containing the necessary information
@@ -108,14 +108,14 @@ impl TyCtxt {
 
         let emodule = ecx.elaborate_module(&file_to_load);
 
-        let emodule = match emodule {
-            Err(e) => panic!("elaboration error: {:?}", e),
-            Ok(v) => v,
-        };
-
-        let ty_cx = try!(TyCtxt::from_module(&emodule, self.source_map.clone()));
-
-        self.merge(ty_cx)
+        // Should find a way to gracefully exit, or report error and continue function
+        match emodule {
+            Err(e) => { e.report(&mut ecx); Ok(()) },
+            Ok(emodule) => {
+                let ty_cx = try!(TyCtxt::from_module(&emodule, self.source_map.clone()));
+                self.merge(ty_cx)
+            }
+        }
     }
 
     pub fn merge(&mut self, ty_cx: TyCtxt) -> Result<(), Error> {
