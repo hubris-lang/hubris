@@ -1,4 +1,4 @@
-use super::super::ast::{SourceMap, Span, HasSpan};
+use super::super::ast::{Span, HasSpan};
 use super::super::core::{Term, Name};
 use super::super::error_reporting::{Report, ErrorContext};
 use super::TyCtxt;

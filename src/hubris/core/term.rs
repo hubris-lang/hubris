@@ -262,37 +262,38 @@ impl Term {
     //         Term::apply_all(result, locals.into_iter().map(|t| t.to_term()).collect()))
     // }
 
-    pub fn whnf(&self) -> Term {
-        use self::Term::*;
-
-        match self {
-            &App { ref fun, ref arg, .. } => {
-                match &**fun {
-                    &Term::Forall { ref term, .. } |
-                    &Term::Lambda { body: ref term, .. } => term.instantiate(arg).whnf(),
-                    _ => self.clone(),
-                }
-            }
-            &Forall { ref name, ref ty, ref term, span } => {
-                Term::Forall {
-                    name: name.clone(),
-                    ty: Box::new(ty.whnf()),
-                    term: Box::new(term.whnf()),
-                    span: span,
-                }
-            }
-            &Lambda { ref name, ref ty, ref body, span } => {
-                Term::Lambda {
-                    name: name.clone(),
-                    ty: Box::new(ty.whnf()),
-                    body: Box::new(body.whnf()),
-                    span: span,
-                }
-            }
-            &Recursor(..) => panic!(),
-            t => t.clone(),
-        }
-    }
+    // // Actually eval without unfolding
+    // pub fn whnf(&self) -> Term {
+    //     use self::Term::*;
+    //
+    //     match self {
+    //         &App { ref fun, ref arg, span } => {
+    //             Term::App {
+    //                 fun: Box::new(fun.whnf()),
+    //                 arg: Box::new(arg.whnf()),
+    //                 span: span,
+    //             }
+    //         }
+    //         // &Forall { ref name, ref ty, ref term, span } => {
+    //         //     Term::Forall {
+    //         //         name: name.clone(),
+    //         //         ty: Box::new(ty.whnf()),
+    //         //         term: Box::new(term.whnf()),
+    //         //         span: span,
+    //         //     }
+    //         // }
+    //         &Lambda { ref name, ref ty, ref body, span } => {
+    //             Term::Lambda {
+    //                 name: name.clone(),
+    //                 ty: Box::new(ty.whnf()),
+    //                 body: Box::new(body.whnf()),
+    //                 span: span,
+    //             }
+    //         }
+    //         &Recursor(..) => panic!(),
+    //         t => t.clone(),
+    //     }
+    // }
 
     /// Will return the "head" of a term
     pub fn head(&self) -> Option<Term> {

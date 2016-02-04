@@ -9,7 +9,7 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use readline;
 
-use term::{self, Terminal, color, StdoutTerminal, Result as TResult};
+use term::{self, Terminal, StdoutTerminal, Result as TResult};
 
 const HELP_MESSAGE: &'static str = r#"
 Commands:

@@ -67,7 +67,7 @@ impl TyCtxt {
 
     pub fn type_check_module(&mut self, module: &Module) -> Result<(), Error> {
         let main_file = PathBuf::from(self.source_map.file_name.clone());
-        let prefix = main_file.parent().unwrap();
+        // let prefix = main_file.parent().unwrap();
 
         // Should be idempotent, is currently not.
         // for import in &module.imports {
@@ -110,7 +110,11 @@ impl TyCtxt {
 
         // Should find a way to gracefully exit, or report error and continue function
         match emodule {
-            Err(e) => { e.report(&mut ecx); Ok(()) },
+            Err(e) => {
+                e.report(&mut ecx);
+                // We should return an import error here
+                Ok(())
+            },
             Ok(emodule) => {
                 let ty_cx = try!(TyCtxt::from_module(&emodule, self.source_map.clone()));
                 self.merge(ty_cx)
@@ -286,29 +290,38 @@ impl TyCtxt {
         debug!("eval: {}", term);
 
         let result = match term {
-            &App { ref fun, ref arg, .. } => {
-                let earg = try!(self.eval(arg));
+            &App { ref fun, ref arg, span } => {
                 let efun = try!(self.eval(fun));
+                // This is call by value
+                let earg = try!(self.eval(arg));
 
-                match &efun {
-                    &Term::Forall { ref term, .. } |
-                    &Term::Lambda { body: ref term, .. } => self.eval(&term.instantiate(&earg)),
-                    v @ &Term::Var { .. } => {
-                        Ok(App {
-                            fun: Box::new(v.clone()),
-                            arg: Box::new(earg),
-                            span: Span::dummy(),
-                        })
+                match efun {
+                    Term::Lambda { ref body, .. } => {
+                        self.eval(&body.instantiate(&earg))
                     }
-                    t => panic!("this means there was a type checker bug {}", t),
+                    f => Ok(App {
+                        fun: Box::new(f),
+                        arg: Box::new(earg),
+                        span: span,
+                    })
                 }
+            }
+            &Term::Forall { ref name, ref ty, ref term, span } => {
+                let ety = try!(self.eval(ty));
+                let eterm = try!(self.eval(term));
+
+                Ok(Forall {
+                    name: name.clone(),
+                    ty: Box::new(ety),
+                    term: Box::new(eterm),
+                    span: span,
+                })
             }
             &Term::Var { ref name } => self.unfold_name(name),
             &Term::Recursor(ref ty_name, offset, ref ts) => {
-                for t in ts {
+                // for t in ts {
                     // println!("ARG: {}", t);
-                }
-
+                // }
                 match self.types.get(&ty_name) {
                     None => panic!("can not find decl for {}", ty_name),
                     Some(dt) => {
@@ -363,8 +376,8 @@ impl TyCtxt {
 
     pub fn def_eq(&self, span: Span, t: &Term, u: &Term) -> Result<Term, Error> {
         debug!("unify: {} {}", t, u);
-        let t = t.whnf();
-        let u = u.whnf();
+        let t = try!(self.eval(t));
+        let u = try!(self.eval(u));
 
         let mut inequalities = vec![];
         let is_def_eq = def_eq_modulo(&t, &u, &mut inequalities);

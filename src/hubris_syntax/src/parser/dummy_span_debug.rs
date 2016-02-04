@@ -13,7 +13,7 @@ struct DummySpanVisitor {
 
 impl<'v> Visitor<'v> for DummySpanVisitor {
     fn visit_term(&mut self, term: &'v Term) {
-        println!("term: {:?}", term);
+        // println!("term: {:?}", term);
         walk_term(self, term)
     }
 

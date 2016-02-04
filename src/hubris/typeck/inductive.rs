@@ -57,7 +57,7 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
                          .map(|x| x.to_term())
                          .collect();
 
-        Term::apply_all(term, params).whnf()
+        self.ty_cx.eval(&Term::apply_all(term, params)).unwrap() // TODO: flow error
     }
 
     fn is_recursive_arg(&self, term: &Term) -> bool {
@@ -105,7 +105,7 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
                           .collect(),
                 };
 
-                println!("type to get indicies from: {}", ty);
+                // println!("type to get indicies from: {}", ty);
 
                 // Add the ctor to the end of the list and we are going to build an
                 // application of the form C indicies (Ctor args)
