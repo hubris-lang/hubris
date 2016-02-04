@@ -114,9 +114,9 @@ impl Repl {
                 }
 
                 {
-                    let main = try!(ecx.ty_cx.get_main_body());
-                    let result = try!(ecx.ty_cx.eval(main));
-                    println!("main={}", result);
+                    // let main = try!(ecx.ty_cx.get_main_body());
+                    // let result = try!(ecx.ty_cx.eval(main));
+                    // println!("main={}", result);
                 }
 
                 Ok(Repl {

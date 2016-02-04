@@ -336,11 +336,12 @@ impl TyCtxt {
                         // to correctly work.
                         for (i, ctor) in dt.ctors.iter().enumerate() {
                             let name = &ctor.0;
-                            debug!("name of ctor: {}", name);
-                            debug!("arg to recursor: {}", scrutinee);
+                            println!("name of ctor: {}", name);
+                            println!("arg to recursor: {}", scrutinee);
                             match scrutinee.head() {
                                 None => panic!("arg to recursor must be in (w)hnf"),
                                 Some(head) => {
+
                                     if name.to_term() == head {
                                         let premise = ts[i + offset].clone();
                                         // I think instead we need to figure out if
@@ -451,10 +452,12 @@ impl<'tcx> LocalCx<'tcx> {
                         try!(self.type_check_term(arg, &*ty));
                         Ok(term.instantiate(arg))
                     }
-                    _ => Err(Error::ApplicationMismatch(
+                    t => Err(Error::ApplicationMismatch(
                         span,
                         *fun.clone(),
-                        *arg.clone())),
+                        *arg.clone(),
+                        t,
+                        Term::Type))
                 }
             }
             &Term::Forall { ref name, ref ty, ref term, .. } => {

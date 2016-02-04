@@ -46,6 +46,7 @@ pub trait ErrorContext<O: Write> {
         try!(self.get_terminal().fg(color::RED));
         try!(writeln!(self.get_terminal(), "{}", marker));
         try!(self.get_terminal().reset());
+        try!(self.get_terminal().flush());
 
         Ok(())
     }

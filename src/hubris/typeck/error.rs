@@ -10,7 +10,7 @@ use term::{Terminal, color, Result as TResult};
 
 #[derive(Debug)]
 pub enum Error {
-    ApplicationMismatch(Span, Term, Term),
+    ApplicationMismatch(Span, Term, Term, Term, Term),
     DefUnequal(Span, Term, Term, Vec<(Term, Term)>),
     UnknownVariable(Name),
     ElaborationError,
@@ -56,8 +56,11 @@ impl<O: Write, E: ErrorContext<O>> Report<O, E> for Error {
 
                 Ok(())
             }
-            Error::ApplicationMismatch(span, _, _) => {
-                let msg = format!("can not apply a term t with type t' to a term u to u'");
+            Error::ApplicationMismatch(span, t, u, ty_of_t, ty_of_u) => {
+                let msg = format!(
+                    "can not apply `{}` with type `{}`\n \
+                     to `{}`` with type `{}`",
+                    t, u, ty_of_t, ty_of_u);
 
                 try!(cx.span_error(span, msg));
 

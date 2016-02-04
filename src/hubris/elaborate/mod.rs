@@ -36,6 +36,13 @@ impl<O: Write, E: ErrorContext<O>> Report<O, E> for Error {
                 cx.span_error(n.span,
                     format!("unresolved name `{}`", n))
             }
+            Error::Many(es) => {
+                for e in es {
+                    try!(e.report(cx))
+                }
+
+                Ok(())
+            }
             e => panic!("need to support better error printing for this {:?}", e),
         }
     }
