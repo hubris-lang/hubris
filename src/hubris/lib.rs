@@ -78,8 +78,6 @@ pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> Result
         Ok(v) => v,
     };
 
-    let term = term::stdout().unwrap();
-
     {
         let main = try!(ecx.ty_cx.get_main_body());
         let result = try!(ecx.ty_cx.eval(main));

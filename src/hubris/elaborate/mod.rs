@@ -5,7 +5,7 @@ use core;
 use typeck::{self, TyCtxt};
 use self::util::to_qualified_name;
 use super::error_reporting::{Report, ErrorContext};
-use term::{self, Terminal, color, StdoutTerminal, Result as TResult};
+use term::{Terminal, Result as TResult};
 
 use std::io::{self, Write};
 use std::collections::{HashMap, HashSet};

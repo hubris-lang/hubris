@@ -1,4 +1,4 @@
-use super::ast::*;
+use super::core::*;
 
 pub trait Visitor<'v> : Sized {
     fn visit_module(&mut self, module: &'v Module) {
@@ -25,7 +25,9 @@ pub trait Visitor<'v> : Sized {
         walk_term(self, term)
     }
 
-    fn visit_span(&mut self, _span: Span) {}
+    fn visit_span(&mut self, _span: Span) {
+        panic!();
+    }
 
     fn visit_case(&mut self, case: &'v Case) {
         panic!();
@@ -44,7 +46,7 @@ pub trait Visitor<'v> : Sized {
     }
 }
 
-pub fn walk_module<'v, V: Visitor<'v>>(visitor: &mut V, module: &'v Module) {
+fn walk_module<'v, V: Visitor<'v>>(visitor: &mut V, module: &'v Module) {
     visitor.visit_span(module.span);
     visitor.visit_name(&module.name);
 
@@ -53,7 +55,7 @@ pub fn walk_module<'v, V: Visitor<'v>>(visitor: &mut V, module: &'v Module) {
     }
 }
 
-pub fn walk_item<'v, V: Visitor<'v>>(visitor: &mut V, item: &'v Item) {
+fn walk_item<'v, V: Visitor<'v>>(visitor: &mut V, item: &'v Item) {
     use ast::Item::*;
 
     match item {
@@ -65,7 +67,7 @@ pub fn walk_item<'v, V: Visitor<'v>>(visitor: &mut V, item: &'v Item) {
     }
 }
 
-pub fn walk_inductive<'v, V: Visitor<'v>>(visitor: &mut V, inductive: &'v Data) {
+fn walk_inductive<'v, V: Visitor<'v>>(visitor: &mut V, inductive: &'v Data) {
     visitor.visit_span(inductive.span);
     visitor.visit_name(&inductive.name);
 
@@ -82,7 +84,7 @@ pub fn walk_inductive<'v, V: Visitor<'v>>(visitor: &mut V, inductive: &'v Data) 
     }
 }
 
-pub fn walk_def<'v, V: Visitor<'v>>(visitor: &mut V, def: &'v Function) {
+fn walk_def<'v, V: Visitor<'v>>(visitor: &mut V, def: &'v Function) {
     visitor.visit_span(def.span);
     visitor.visit_name(&def.name);
 
@@ -95,7 +97,7 @@ pub fn walk_def<'v, V: Visitor<'v>>(visitor: &mut V, def: &'v Function) {
     visitor.visit_term(&def.body);
 }
 
-pub fn walk_term<'v, V: Visitor<'v>>(visitor: &mut V, term: &'v Term) {
+fn walk_term<'v, V: Visitor<'v>>(visitor: &mut V, term: &'v Term) {
     use ast::Term::*;
 
     match term {
@@ -135,6 +137,6 @@ pub fn walk_term<'v, V: Visitor<'v>>(visitor: &mut V, term: &'v Term) {
     }
 }
 
-pub fn walk_name<'v, V: Visitor<'v>>(visitor: &mut V, name: &'v Name) {
+fn walk_name<'v, V: Visitor<'v>>(visitor: &mut V, name: &'v Name) {
     visitor.visit_span(name.span);
 }

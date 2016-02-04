@@ -66,6 +66,7 @@ fn main() {
         repl.start().expect("Starting repl failed");
     } else {
         let input = args.arg_file.expect("No input files");
+        
         debug!("main: compiling {} output to {:?}",
                &input[..],
                args.flag_output);

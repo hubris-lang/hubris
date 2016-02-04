@@ -1,4 +1,3 @@
-use typeck::{TyCtxt};
 use super::ast::{Span, SourceMap};
 
 use std::io::prelude::*;

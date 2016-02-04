@@ -12,7 +12,15 @@ struct DummySpanVisitor {
 }
 
 impl<'v> Visitor<'v> for DummySpanVisitor {
+    fn visit_term(&mut self, term: &'v Term) {
+        println!("term: {:?}", term);
+        walk_term(self, term)
+    }
+
     fn visit_span(&mut self, span: Span) {
-        self.count += 1;
+        if span == Span::dummy() {
+            self.count += 1;
+            panic!()
+        }
     }
 }
