@@ -4,6 +4,8 @@ rust:
 sudo: false
 addons:
   apt:
+    sources:
+    - llvm-toolchain-precise-3.7
     packages:
-    - llvm-3.6
-    - llvm-3.6-dev
+    - llvm-3.7
+    - llvm-3.7-dev
