@@ -121,14 +121,15 @@ Binding : (Name, Term, Term) = {
 
 TermFnType : Term = {
   <t1: Term1> "->" <t2: TermFnType> => {
-      let span = Span::new(
-        t1.get_span().lo,
-        t2.get_span().hi);
+      let span = Span::new(0, 1);
 
-      let mut name =
-        Name::from_str("");
+        // t1.get_span().lo,
+        // t2.get_span().hi);
 
-      name.set_span(t1.get_span());
+        let mut name =
+            Name::from_str("");
+
+        // name.set_span(t1.get_span());
 
       Term::Forall {
         span: span,

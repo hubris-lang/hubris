@@ -12,6 +12,7 @@ pub trait ErrorContext<O: Write> {
     fn span_error(&mut self,
                   span: Span,
                   message: String) -> TResult<()> {
+        // TODO: We need to know if we wrap around to more then one line.
         let (line_no, col_no) = self.get_source_map().position(span).unwrap_or((0,0));
         let (line_with_padding, marker) = self.get_source_map().underline_span(span).unwrap_or((format!("??"),format!("??")));
 
@@ -19,8 +20,8 @@ pub trait ErrorContext<O: Write> {
                                self.get_source_map().file_name,
                                line_no,
                                col_no,
-                               line_no,
-                               col_no);
+                               line_no, // this should be the line where we end, not the same line
+                               col_no + (span.hi - span.lo)); // this should be the column we end at
 
         try!(write!(self.get_terminal(), "{}", filename_str));
 
@@ -30,10 +31,9 @@ pub trait ErrorContext<O: Write> {
         try!(writeln!(self.get_terminal(), "{}", message));
 
         let file_str_simple =
-            format!("{}:{}:{}: ",
+            format!("{}:{}: ",
             self.get_source_map().file_name,
-            line_no,
-            col_no);
+            line_no);
 
         try!(write!(self.get_terminal(), "{} {}", file_str_simple, line_with_padding));
 

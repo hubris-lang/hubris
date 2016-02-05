@@ -1,6 +1,6 @@
 mod util;
 
-use ast::{self, SourceMap};
+use ast::{self, SourceMap, HasSpan};
 use core;
 use typeck::{self, TyCtxt};
 use self::util::to_qualified_name;
@@ -381,7 +381,7 @@ impl<'ecx> LocalElabCx<'ecx> {
         debug!("elaborate_name: name={}", name);
 
         // It is most likely to be a local
-        match self.locals.get(&name) {
+        let mut core_name = match self.locals.get(&name) {
             // A global in the current module
             None => {
                 match self.cx.globals.get(&name) {
@@ -390,15 +390,22 @@ impl<'ecx> LocalElabCx<'ecx> {
                     None => {
                         let core_name = to_qualified_name(name.clone());
                         if self.cx.ty_cx.in_scope(&core_name) {
-                            Ok(core_name)
+                            core_name
                         } else {
-                            Err(Error::UnknownVariable(name.clone()))
+                            return Err(Error::UnknownVariable(name.clone()))
                         }
                     }
-                    Some(nn) => Ok(nn.clone()),
+                    Some(nn) => nn.clone(),
                 }
             }
-            Some(local) => Ok(local.clone()),
-        }
+            Some(local) => local.clone(),
+        };
+
+        // IMPORTANT!: Make sure we update the span here for the precise name being elaborated
+        // we store how we choose to translate the name in the tables, but this results in
+        // us using the first occurence of `name` s span everywhere for name.
+        core_name.set_span(name.span);
+
+        Ok(core_name)
     }
 }

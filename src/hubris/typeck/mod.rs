@@ -418,8 +418,11 @@ impl TyCtxt {
         result
     }
 
+    // TODO: currently this reports that two terms are not equal, we should probably
+    // specialize this for type checking saying that for term T, with inferred type
+    // U, is not equal to specified type W.
     pub fn def_eq(&self, span: Span, t: &Term, u: &Term) -> Result<Term, Error> {
-        debug!("unify: {} {}", t, u);
+        debug!("def_eq: {} {}", t, u);
         let t = try!(self.eval(t));
         let u = try!(self.eval(u));
 
