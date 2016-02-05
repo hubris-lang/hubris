@@ -15,6 +15,7 @@ const HELP_MESSAGE: &'static str = r#"
 Commands:
     :help        Show this message
     :type <term> Infer the type of <term>
+    :reload      Reload the session
     :quit        Exit
 "#;
 
