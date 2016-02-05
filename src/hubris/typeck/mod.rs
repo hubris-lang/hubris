@@ -1,21 +1,21 @@
 mod error;
 mod inductive;
-mod name_generator;
+// mod name_generator;
 
 use core::*;
 use super::ast::{SourceMap, Span, HasSpan};
 use super::parser;
-use super::elaborate::{self, Error as ElabErr};
+use super::elaborate::{self};
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::io::{self, Write};
+use std::io::{self};
 use std::path::{PathBuf, Path};
 
-use self::name_generator::*;
+// use self::name_generator::*;
 pub use self::error::Error;
 use error_reporting::{ErrorContext, Report};
-use term::{Terminal, stdout, color, StdoutTerminal, Result as TResult};
+use term::{Terminal, stdout, StdoutTerminal};
 
 /// A global context for type checking containing the necessary information
 /// needed across type checking all definitions.
@@ -66,7 +66,7 @@ impl TyCtxt {
     }
 
     pub fn type_check_module(&mut self, module: &Module) -> Result<(), Error> {
-        let main_file = PathBuf::from(self.source_map.file_name.clone());
+        // let main_file = PathBuf::from(self.source_map.file_name.clone());
         // let prefix = main_file.parent().unwrap();
 
         // Should be idempotent, is currently not.
@@ -214,6 +214,7 @@ impl TyCtxt {
                 } = fun;
 
                 let mut lcx = LocalCx::from_cx(self);
+                println!("ret_ty: {}", ret_ty);
                 try!(lcx.type_check_term(&body, &ret_ty));
                 Ok(())
             }
@@ -284,6 +285,24 @@ impl TyCtxt {
         Ok(t)
     }
 
+    /// Checks whether a constructor's type is recursive
+    pub fn is_recursive_ctor(&self, ty_name: &Name, mut ctor_ty: &Term) -> bool {
+        let mut is_rec = false;
+
+        while let &Term::Forall { ref ty, ref term, .. } = ctor_ty {
+            match ty.head() {
+                None => is_rec = is_rec || false,
+                Some(head) =>
+                    if head == ty_name.to_term() {
+                        return true;
+                    }
+            }
+            ctor_ty = term;
+        }
+
+        return is_rec;
+    }
+
     pub fn eval(&self, term: &Term) -> Result<Term, Error> {
         use core::Term::*;
 
@@ -318,46 +337,70 @@ impl TyCtxt {
                 })
             }
             &Term::Var { ref name } => self.unfold_name(name),
-            &Term::Recursor(ref ty_name, offset, ref ts) => {
-                // for t in ts {
-                    // println!("ARG: {}", t);
-                // }
+            &Term::Recursor(ref ty_name, ref premises, ref scrutinee) => {
+                for t in premises {
+                    println!("ARG: {}", t);
+                }
+                println!("ty_name: {}", ty_name);
+                let scrutinee = try!(self.eval(scrutinee));
+                println!("scrutinee: {}", scrutinee);
+
                 match self.types.get(&ty_name) {
-                    None => panic!("can not find decl for {}", ty_name),
+                    None => panic!("type checking bug: can not find inductive type {}", ty_name),
                     Some(dt) => {
-                        let scrutinee = try!(self.eval(&ts[ts.len() - 1]));
-                        // Super hack-y right now, need to account for
-                        // the type formers, probably should just
-                        // store an offset into the vector of
-                        // terms to keep this model simple.
-                        //
-                        // We need to have all the binding structure
-                        // of the type in order of the substitions
-                        // to correctly work.
                         for (i, ctor) in dt.ctors.iter().enumerate() {
                             let name = &ctor.0;
-                            println!("name of ctor: {}", name);
-                            println!("arg to recursor: {}", scrutinee);
+                            let ctor_ty = &ctor.1;
                             match scrutinee.head() {
                                 None => panic!("arg to recursor must be in (w)hnf"),
                                 Some(head) => {
-
                                     if name.to_term() == head {
-                                        let premise = ts[i + offset].clone();
-                                        // I think instead we need to figure out if
-                                        // this is recursive contructor case.
-                                        match scrutinee.args() {
-                                            None => return Ok(premise),
-                                            Some(mut args) => {
-                                                let mut tsprime = ts.clone();
-                                                let idx = tsprime.len() - 1;
-                                                tsprime[idx] = args[0].clone();
-                                                let rec = Recursor(ty_name.clone(),
-                                                                   offset,
-                                                                   tsprime);
-                                                args.push(rec);
-                                                return self.eval(&Term::apply_all(premise, args));
+                                        let premise = premises[i].clone();
+
+                                        let is_recursive =
+                                            self.is_recursive_ctor(ty_name, ctor_ty);
+
+                                        if !is_recursive {
+                                            return Ok(premise);
+                                        } else {
+                                            let args: Vec<_> =
+                                                scrutinee.args()
+                                                         .unwrap();
+
+                                            // Need to skip the parameters
+                                            let args =
+                                                args.iter()
+                                                    .skip(dt.parameters.len());
+
+                                            let tys =
+                                                premise.binders()
+                                                       .unwrap();
+
+                                            println!("premise: {}", premise);
+                                            println!("scurtinee: {}", scrutinee);
+
+                                            let mut term_args = vec![];
+                                            let mut recursor_args = vec![];
+
+                                            for (arg, ty) in args.zip(tys.into_iter()) {
+                                                println!("arg : {}", arg);
+                                                println!("ty : {}", ty);
+                                                if ty.head().unwrap() == ty_name.to_term() {
+                                                    let rec =
+                                                    Recursor(
+                                                        ty_name.clone(),
+                                                        premises.clone(),
+                                                        Box::new(arg.clone()));
+                                                    recursor_args.push(rec);
+                                                }
+
+                                                term_args.push(arg.clone());
                                             }
+
+                                            let mut args = term_args;
+                                            args.extend(recursor_args.into_iter());
+
+                                            return self.eval(&Term::apply_all(premise.clone(), args));
                                         }
                                     }
                                 }
@@ -450,7 +493,7 @@ impl<'tcx> LocalCx<'tcx> {
                         // When doing inference I don't think we should try to check this
                         // constraint:
                         try!(self.type_check_term(arg, &*ty));
-                        Ok(term.instantiate(arg))
+                        self.ty_cx.eval(&term.instantiate(arg))
                     }
                     t => Err(Error::ApplicationMismatch(
                         span,

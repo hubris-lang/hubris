@@ -1,7 +1,7 @@
 use super::{TyCtxt, Error, LocalCx};
 
 use super::super::core::*;
-use super::name_generator::*;
+//use super::name_generator::*;
 
 /// A context with the needed state to deal with operations that process an inductive definition.
 pub struct RecursorCx<'i, 'tcx> {
@@ -21,14 +21,15 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
 
         let ty = rcx.make_ind_hyp_ty();
 
-        let ty = rcx.with_params(ty);
         rcx.ind_hyp = rcx.ty_cx.local_with_repr("C".to_string(), ty);
         rcx
     }
 
     fn  make_ind_hyp_ty(&self) -> Term {
-        let mut pi = self.inductive_ty.ty.clone();
-        let mut result = self.inductive_ty.name.to_term();
+        let mut pi =
+            self.with_params(self.inductive_ty.ty.clone());
+        let mut result =
+            self.with_params(self.inductive_ty.name.to_term());
         let mut i = 0;
         let mut locals = vec![];
         while let Term::Forall { ty, term, .. } = pi {
@@ -50,17 +51,42 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
             Term::Type)
     }
 
+    // A helper for applying parameters to different types of terms.
     pub fn with_params(&self, term: Term) -> Term {
-        let params = self.inductive_ty
-                         .parameters
-                         .iter()
-                         .map(|x| x.to_term())
-                         .collect();
+        let params: Vec<_> = self.inductive_ty
+                                 .parameters
+                                 .iter()
+                                 .map(|x| x.to_term())
+                                 .collect();
 
-        self.ty_cx.eval(&Term::apply_all(term, params)).unwrap() // TODO: flow error
+        // If there are no parameters we shouldn't try to apply
+        // them.
+        if params.len() == 0 {
+            return term;
+        }
+
+        // If it is a forall we should instantiate it
+        if let &Term::Forall { .. } = &term {
+            let mut term = term;
+            for param in params {
+                term = match term {
+                    Term::Forall { term: term1, .. } =>
+                    term1.instantiate(&param),
+                    t => panic!("{}", t)
+                }
+            }
+
+            return term;
+        // If it is a var we apply it
+        } else if let &Term::Var { .. } = &term {
+            return Term::apply_all(term, params)
+        } else {
+            panic!("{}", term)
+        }
     }
 
     fn is_recursive_arg(&self, term: &Term) -> bool {
+        debug!("is_recursive_arg: term={}", term);
         match term.head() {
             None => false,
             Some(h) => h == self.inductive_ty.name.to_term(),
@@ -68,13 +94,16 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
     }
 
     pub fn minor_premise_for(&mut self, ind_hyp: &Name, ctor: &(Name, Term)) -> Result<Term, Error> {
+        debug!("minor_premise_for: ind_hyp={} ctor=({}, {})", ind_hyp, ctor.0, ctor.1);
         // Apply the constructor name to the parameters.
         let ctor_with_params =
             self.with_params(ctor.0.to_term());
 
         // Apply the constructor type to the parameters.
-        let mut ctor_ty_with_params =
+        let ctor_ty_with_params =
             self.with_params(ctor.1.clone());
+
+        // println!("ctor_ty_with_params: {}", ctor_ty_with_params);
 
         let mut i = 0;
         let mut binders = Vec::new();
@@ -182,9 +211,18 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
                         Term::abstract_pi(major_premise_args.clone(),
                             major_premise))));
 
-        let mut recursor_terms = vec![ind_hyp.clone().to_term()];
-        recursor_terms.extend(minor_premises.iter().map(|x| x.to_term()));
-        recursor_terms.extend(major_premise_args.iter().map(|x| x.to_term()));
+        let mut recursor_terms: Vec<_> =
+            minor_premises
+                .iter()
+                .map(|x| x.to_term())
+                .collect();
+
+
+        let scrutinee =
+            major_premise_args.iter()
+                              .last()
+                              .unwrap()
+                              .to_term();
 
         let recursor_body =
             Term::abstract_lambda(
@@ -197,8 +235,8 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
                             major_premise_args,
                             Term::Recursor(
                                 self.inductive_ty.name.clone(),
-                                1, // this needs to be fixed
-                                recursor_terms)))));
+                                recursor_terms,
+                                Box::new(scrutinee))))));
 
         (recursor_ty, recursor_body)
     }
@@ -246,8 +284,6 @@ pub fn make_recursor(ty_cx: &mut TyCtxt, data_type: &Data) -> Result<(), Error> 
     let mut rcx = RecursorCx::new(ty_cx, data_type);
 
     let ind_hyp = rcx.ind_hyp.clone();
-
-    let params = data_type.parameters.clone();
 
     let minor_premises: Result<_, Error> =
         data_type.ctors

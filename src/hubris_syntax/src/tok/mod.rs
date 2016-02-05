@@ -321,50 +321,6 @@ impl<'input> Tokenizer<'input> {
         self.lookahead
     }
 
-    fn right_arrow(&mut self, idx0: usize) -> Result<Spanned<Tok<'input>>, Error> {
-        // we've seen =>, now we have to choose between:
-        //
-        // => code
-        // =>? code
-        // =>@L
-        // =>@R
-
-        match self.lookahead {
-            Some((_, '@')) => {
-                match self.bump() {
-                    Some((idx2, 'L')) => {
-                        self.bump();
-                        Ok((idx0, EqualsGreaterThanLookahead, idx2+1))
-                    }
-                    Some((idx2, 'R')) => {
-                        self.bump();
-                        Ok((idx0, EqualsGreaterThanLookbehind, idx2+1))
-                    }
-                    _ => {
-                        error(UnrecognizedToken, idx0)
-                    }
-                }
-            }
-
-            Some((idx1, '?')) => {
-                self.bump();
-                let idx2 = try!(self.code(idx0, "([{", "}])"));
-                let code = &self.text[idx1+1..idx2];
-                Ok((idx0, EqualsGreaterThanQuestionCode(code), idx2))
-            }
-
-            Some((idx1, _)) => {
-                let idx2 = try!(self.code(idx0, "([{", "}])"));
-                let code = &self.text[idx1..idx2];
-                Ok((idx0, EqualsGreaterThanCode(code), idx2))
-            }
-
-            None => {
-                error(UnterminatedCode, idx0)
-            }
-        }
-    }
-
     fn code(&mut self, idx0: usize, open_delims: &str, close_delims: &str) -> Result<usize, Error> {
         // This is the interesting case. To find the end of the code,
         // we have to scan ahead, matching (), [], and {}, and looking

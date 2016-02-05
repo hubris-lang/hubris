@@ -15,7 +15,7 @@ path = "src/bin/hubris.rs"
 path = "src/hubris_syntax"
 
 [dependencies.readline]
-git = "https://github.com/shaleh/rust-readline"
+git = "https://github.com/hubris-lang/rust-readline"
 
 [dependencies]
 llvm-sys = "*"

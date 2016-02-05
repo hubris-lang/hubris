@@ -31,7 +31,7 @@ pub enum Term {
         ty: Box<Term>,
         body: Box<Term>,
     },
-    Recursor(Name, usize, Vec<Term>),
+    Recursor(Name, Vec<Term>, Box<Term>),
     Type,
 }
 
@@ -72,7 +72,7 @@ impl Term {
 
             result = Term::Forall {
                 name: Name::DeBruijn {
-                    index: 1,
+                    index: 0,
                     repr: repr,
                     span: Span::dummy(),
                 },
@@ -141,10 +141,10 @@ impl Term {
                     span: span,
                 }
             }
-            &Recursor(ref name, offset, ref ts) => {
+            &Recursor(ref name, ref ts, ref scrut) => {
                 Recursor(name.clone(),
-                         offset,
-                         ts.iter().map(|t| t.abst(index, x)).collect())
+                         ts.iter().map(|t| t.abst(index, x)).collect(),
+                         Box::new(scrut.abst(index, x)))
             }
             &Type => Type,
         }
@@ -199,10 +199,10 @@ impl Term {
                     span: span,
                 }
             }
-            &Recursor(ref name, offset, ref ts) => {
+            &Recursor(ref name, ref ts, ref scrut) => {
                 Recursor(name.clone(),
-                         offset,
-                         ts.iter().map(|t| t.replace(index, subst)).collect())
+                         ts.iter().map(|t| t.replace(index, subst)).collect(),
+                         Box::new(scrut.replace(index, subst)))
             }
             &Type => Type,
         }
@@ -327,6 +327,32 @@ impl Term {
                 Some(result.into_iter().rev().collect())
             }
             _ => None,
+        }
+    }
+
+    pub fn binders(&self) -> Option<Vec<&Term>> {
+        let mut cursor = self;
+        let mut binders = vec![];
+
+        while let &Term::Forall { ref ty, ref term, .. } = cursor {
+            binders.push(&**ty);
+            cursor = &**term;
+        }
+
+        if binders.len() > 0 {
+            return Some(binders);
+        }
+
+        // We didn't get the bindings from a forall, so let's try a lambda.
+        while let &Term::Lambda { ref ty, ref body, .. } = cursor {
+            binders.push(&**ty);
+            cursor = &**body;
+        }
+
+        if binders.len() > 0 {
+            return Some(binders);
+        } else {
+            return None;
         }
     }
 
@@ -460,11 +486,12 @@ impl Display for Term {
             &Lambda { ref name, ref ty, ref body, .. } => {
                 write!(formatter, "fun ({} : {}) => {}", name, ty, body)
             }
-            &Recursor(ref name, _, ref ts) => {
+            &Recursor(ref name, ref ts, ref s) => {
                 try!(writeln!(formatter, "recursor({}): {{", name));
                 for t in ts {
                     try!(writeln!(formatter, "{}", t));
                 }
+                try!(writeln!(formatter, "{}", s));
                 try!(writeln!(formatter, "}}"));
                 Ok(())
             }

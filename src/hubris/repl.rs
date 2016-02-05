@@ -7,7 +7,7 @@ use super::ast::{self, SourceMap};
 use super::typeck::{self, LocalCx};
 
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{PathBuf};
 use readline;
 
 use term::{self, Terminal, StdoutTerminal, Result as TResult};
@@ -131,6 +131,8 @@ impl Repl {
 
     /// Starts the read-eval-print-loop for querying the language.
     pub fn start(mut self) -> Result<(), Error> {
+        readline::read_history(&PathBuf::from("~/.hubris_history"));
+
         loop {
             // First we grab a line ...
             let input = match readline::readline("hubris> ") {
@@ -155,6 +157,8 @@ impl Repl {
                 }
             }
         }
+
+        readline::write_history(&PathBuf::from("~/.hubris_history"));
 
         Ok(())
     }
@@ -192,10 +196,13 @@ impl Repl {
     }
 
     fn type_check_term(&mut self, term: &core::Term) -> Result<core::Term, Error> {
-        let mut ltycx = LocalCx::from_cx(&self.elab_cx.ty_cx);
-        let term = try!(ltycx.type_infer_term(&term));
+        let term = {
+            let mut ltycx = LocalCx::from_cx(&self.elab_cx.ty_cx);
+            try!(ltycx.type_infer_term(&term))
+        };
 
-        Ok(term)
+        let ty = try!(self.elab_cx.ty_cx.eval(&term));
+        Ok(ty)
     }
 
     fn handle_input(&mut self, source: String) -> Result<(), Error> {

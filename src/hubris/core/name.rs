@@ -122,7 +122,7 @@ impl Display for Name {
         use self::Name::*;
 
         match self {
-            &DeBruijn { ref repr, .. } => try!(write!(formatter, "{}", repr)),
+            &DeBruijn { ref repr, ref index, .. } => try!(write!(formatter, "{}", repr)),
             &Qual { ref components, .. } => {
                 if components.len() == 1 {
                     try!(write!(formatter, "{}", components[0]))
@@ -133,8 +133,9 @@ impl Display for Name {
                 }
             }
             &Meta { number, .. } => try!(write!(formatter, "?{}", number)),
-            &Local { ref repr, number, .. } => {
-                try!(write!(formatter, "{}(local {})", repr, number))
+            &Local { ref repr, number, ref ty, .. } => {
+                // try!(write!(formatter, "{}(local {} : {})", repr, number, ty))
+                try!(write!(formatter, "{}", repr))
             }
         }
 
