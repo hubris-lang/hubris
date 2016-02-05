@@ -19,65 +19,66 @@ pub struct Parser {
     pub source_map: SourceMap,
 }
 
-// TODO: Create a propper error type with the correct Display trait
-pub type Error = String;
+// TODO: bring sourcemap along with this?
+#[derive(Debug, PartialEq, Clone)]
+pub enum Error {
+    InvalidToken {
+        location: usize,
+    },
+    UnrecognizedToken {
+        location: (usize, usize),
+        token: String,
+        expected: Vec<String>,
+    },
+    UnexpectedEOF {
+        expected: Vec<String>,
+    },
+    UserError {
+        error: tok::Error,
+    },
+    ExtraTokens {
+        location: (usize, usize),
+        token: String
+    }
+}
 
 impl Parser {
     pub fn parse(&self) -> Result<super::ast::Module, Error> {
         let tokenizer = tok::Tokenizer::new(&self.source_map.source[..], 0);
-        let module = try!(self.report_error(
-            hubris::parse_Module(&self.source_map.source[..],
-            tokenizer)));
+        let module = try!(hubris::parse_Module(&self.source_map.source[..], tokenizer)
+                              .map_err(Parser::translate_error));
         ensure_no_dummy_spans(&module);
         Ok(module)
     }
 
     pub fn parse_term(&self) -> Result<super::ast::Term, Error> {
         let tokenizer = tok::Tokenizer::new(&self.source_map.source[..], 0);
-        self.report_error(
-            hubris::parse_Term(&self.source_map.source[..],
-            tokenizer))
+        hubris::parse_Term(&self.source_map.source[..], tokenizer)
+            .map_err(Parser::translate_error)
     }
 
-    pub fn report_error<'input, R>(&self,
-        result: Result<R, ParseError<usize, tok::Tok<'input>, tok::Error>>) -> Result<R, Error> {
-        result.map_err(|e|
-            match e {
-                ParseError::InvalidToken { location } => {
-                    match self.source_map.find_line(location) {
-                        Some((offset, line)) => {
-                            let mut ptr = "\n".to_string();
-                            for _ in 0..offset {
-                                ptr.push(' ');
-                            }
-                            ptr.push('^');
-                            format!("invalid_token on:\n {}{}", line, ptr)
-                        }
-                        None => format!("invalid_token; location unknown")
-                    }
-                }
-                ParseError::UnrecognizedToken { token, expected } => {
-                    debug!("{:?} {:?}", token, expected);
-                    match token {
-                        None => format!("Unexpected EOF"),
-                        Some((start, token, end)) => {
-                            match self.source_map.find_line(start) {
-                                Some((offset, line)) => {
-                                    let mut ptr = "\n".to_string();
-                                    for _ in 0..offset {
-                                        ptr.push(' ');
-                                    }
-                                    ptr.push('^');
-                                    format!("unrecognized_token {:?} on:\n {}{}", token, line, ptr)
-                                }
-                                None => format!("unrecognized_token {:?}; location unknown", token)
-                            }
+    pub fn translate_error<'input>(error: ParseError<usize, tok::Tok<'input>, tok::Error>) -> Error {
+        match error {
+            ParseError::InvalidToken { location } =>
+                Error::InvalidToken { location: location },
+            ParseError::UnrecognizedToken { token, expected } => {
+                match token {
+                    None => Error::UnexpectedEOF { expected: expected },
+                    Some((start, token, end)) => {
+                        Error::UnrecognizedToken {
+                            location: (start, end),
+                            token: format!("{:?}", token),
+                            expected: expected,
                         }
                     }
                 }
-                e => format!("{:?}", e),
             }
-        )
+            ParseError::User { error } => Error::UserError { error: error },
+            ParseError::ExtraToken { token } => {
+                let (start, t, end) = token;
+                Error::ExtraTokens { location: (start, end), token: format!("{:?}", t) }
+            }
+        }
     }
 }
 
@@ -99,7 +100,5 @@ pub fn from_file<T: AsRef<Path>>(path: T) -> io::Result<Parser> {
 pub fn from_string(contents: String) -> io::Result<Parser> {
     let source_map = SourceMap::from_source(contents);
 
-    Ok(Parser {
-        source_map: source_map,
-    })
+    Ok(Parser { source_map: source_map })
 }
