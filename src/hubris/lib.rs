@@ -74,7 +74,7 @@ pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> Result
 
     let emodule = ecx.elaborate_module(path.as_ref());
 
-    let emodule = match emodule {
+    let _ = match emodule {
         Err(e) => panic!("elaboration error: {:?}", e),
         Ok(v) => v,
     };

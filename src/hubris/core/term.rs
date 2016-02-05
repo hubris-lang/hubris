@@ -472,7 +472,7 @@ impl Display for Term {
                     }
                     try!(write!(formatter, "{}", term));
                 } else {
-                    write!(formatter, "forall ({} : {})", name, ty);
+                    try!(write!(formatter, "forall ({} : {})", name, ty));
                     let mut cursor = &**term;
                     while let &Term::Forall { ref name, ref ty, ref term, .. } = cursor {
                         if name.is_placeholder() { break; }

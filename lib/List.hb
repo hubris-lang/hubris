@@ -18,9 +18,17 @@ end
 def range (upto : Nat) : List Nat :=
   Nat.rec
     (fun (x : Nat) : Type => List Nat)
-    (Cons Nat Z Nil)
+    (Cons Nat Z (Nil Nat))
     (fun (n : Nat) (recCase : List Nat) : List Nat => Cons Nat (S n) recCase)
     upto
+end
+
+def map (A : Type) (B : Type) (f : A -> B) (xs : List A) : List B :=
+  List.rec A
+      (fun (x : List A) : Type => List B)
+      (Nil B)
+      (fun (x : A) (zz : List A) (recCase : List B) : List B => Cons B (f x) recCase)
+      xs
 end
 
 // def foldl ()

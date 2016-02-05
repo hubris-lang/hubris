@@ -111,7 +111,7 @@ impl TyCtxt {
         // Should find a way to gracefully exit, or report error and continue function
         match emodule {
             Err(e) => {
-                e.report(&mut ecx);
+                try!(e.report(&mut ecx));
                 // We should return an import error here
                 Ok(())
             },
@@ -204,7 +204,7 @@ impl TyCtxt {
         self.axioms.insert(e.name.clone(), e.term.clone());
     }
 
-    pub fn type_check_def(&self, def: &Item) -> Result<(), Error> {
+    pub fn type_check_def(&mut self, def: &Item) -> Result<(), Error> {
         debug!("type_check_def: def={}", def);
         match def {
             &Item::Fn(ref fun) => {
@@ -213,9 +213,7 @@ impl TyCtxt {
                     ref body, ..
                 } = fun;
 
-                let mut lcx = LocalCx::from_cx(self);
-                println!("ret_ty: {}", ret_ty);
-                try!(lcx.type_check_term(&body, &ret_ty));
+                try!(self.type_check_term(&body, &ret_ty));
                 Ok(())
             }
             _ => Ok(()),
@@ -338,13 +336,10 @@ impl TyCtxt {
             }
             &Term::Var { ref name } => self.unfold_name(name),
             &Term::Recursor(ref ty_name, ref premises, ref scrutinee) => {
-                for t in premises {
-                    println!("ARG: {}", t);
-                }
-                println!("ty_name: {}", ty_name);
-                let scrutinee = try!(self.eval(scrutinee));
-                println!("scrutinee: {}", scrutinee);
 
+                debug!("ty_name: {}", ty_name);
+                let scrutinee = try!(self.eval(scrutinee));
+                debug!("scrutinee: {}", scrutinee);
                 match self.types.get(&ty_name) {
                     None => panic!("type checking bug: can not find inductive type {}", ty_name),
                     Some(dt) => {
@@ -376,15 +371,15 @@ impl TyCtxt {
                                                 premise.binders()
                                                        .unwrap();
 
-                                            println!("premise: {}", premise);
-                                            println!("scurtinee: {}", scrutinee);
+                                            // debug!("premise: {}", premise);
+                                            // debug!("scurtinee: {}", scrutinee);
 
                                             let mut term_args = vec![];
                                             let mut recursor_args = vec![];
 
                                             for (arg, ty) in args.zip(tys.into_iter()) {
-                                                println!("arg : {}", arg);
-                                                println!("ty : {}", ty);
+                                                // debug!("arg : {}", arg);
+                                                // println!("ty : {}", ty);
                                                 if ty.head().unwrap() == ty_name.to_term() {
                                                     let rec =
                                                     Recursor(
@@ -435,31 +430,6 @@ impl TyCtxt {
             Err(Error::DefUnequal(span, t.clone(), u.clone(), inequalities))
         }
     }
-}
-
-#[derive(Clone)]
-pub struct LocalCx<'tcx> {
-    ty_cx: &'tcx TyCtxt,
-    // Local entries in the typing context.
-    locals: HashMap<Name, Term>,
-    // I think this should be more flexible
-    equalities: HashMap<Term, Term>,
-}
-
-impl<'tcx> LocalCx<'tcx> {
-    pub fn from_cx(ty_cx: &'tcx TyCtxt) -> LocalCx<'tcx> {
-        LocalCx {
-            ty_cx: ty_cx,
-            locals: HashMap::new(),
-            equalities: HashMap::new(),
-        }
-    }
-
-    #[inline]
-    pub fn local(&mut self, name: &Name, ty: Term) -> Name {
-        self.ty_cx.local(name, ty)
-    }
-
 
     pub fn type_check_term(&mut self, term: &Term, ty: &Term) -> Result<Term, Error> {
         debug!("type_check_term: infering the type of {}", term);
@@ -467,7 +437,7 @@ impl<'tcx> LocalCx<'tcx> {
         debug!("type_check_term: checking {} againist the inferred type {}",
                ty,
                infer_ty);
-        let term = try!(self.ty_cx.def_eq(term.get_span(), ty, &infer_ty));
+        let term = try!(self.def_eq(term.get_span(), ty, &infer_ty));
         Ok(term)
     }
 
@@ -482,7 +452,7 @@ impl<'tcx> LocalCx<'tcx> {
             &Term::Var { ref name, .. } => {
                 match name {
                     &Name::Local { ref ty, .. } => Ok(*ty.clone()),
-                    q @ &Name::Qual { .. } => self.ty_cx.lookup_global(q).map(Clone::clone),
+                    q @ &Name::Qual { .. } => self.lookup_global(q).map(Clone::clone),
                     _ => {
                         panic!("internal error: all variable occurences must be free when type \
                                 checking
@@ -496,7 +466,7 @@ impl<'tcx> LocalCx<'tcx> {
                         // When doing inference I don't think we should try to check this
                         // constraint:
                         try!(self.type_check_term(arg, &*ty));
-                        self.ty_cx.eval(&term.instantiate(arg))
+                        self.eval(&term.instantiate(arg))
                     }
                     t => Err(Error::ApplicationMismatch(
                         span,

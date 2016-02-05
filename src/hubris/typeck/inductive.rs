@@ -1,5 +1,4 @@
-use super::{TyCtxt, Error, LocalCx};
-
+use super::{TyCtxt, Error};
 use super::super::core::*;
 //use super::name_generator::*;
 
@@ -28,14 +27,15 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
     fn  make_ind_hyp_ty(&self) -> Term {
         let mut pi =
             self.with_params(self.inductive_ty.ty.clone());
-        let mut result =
+        let  result =
             self.with_params(self.inductive_ty.name.to_term());
         let mut i = 0;
         let mut locals = vec![];
         while let Term::Forall { ty, term, .. } = pi {
-            let local = self.ty_cx.local_with_repr(format!("x{}", 0), *ty);
+            let local = self.ty_cx.local_with_repr(format!("x{}", i), *ty);
             locals.push(local);
             pi = *term;
+            i += 1;
         }
 
         let applied_ty =
@@ -164,10 +164,7 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
         // We compute the type of the constructor using the type checker
         // this allows us to rely on the type system to return the proper
         // set of indicies for us to bind.
-        let ty_of_ctor = {
-            let mut lcx = LocalCx::from_cx(self.ty_cx);
-            try!(lcx.type_infer_term(&ctor_application))
-        };
+        let ty_of_ctor = try!(self.ty_cx.type_infer_term(&ctor_application));
 
         // We then compute indicies in the same way as above.
         let num_params = self.inductive_ty.parameters.len();
@@ -211,7 +208,7 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
                         Term::abstract_pi(major_premise_args.clone(),
                             major_premise))));
 
-        let mut recursor_terms: Vec<_> =
+        let recursor_terms: Vec<_> =
             minor_premises
                 .iter()
                 .map(|x| x.to_term())

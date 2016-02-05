@@ -1,8 +1,7 @@
-use super::parser::{self, Error};
+use super::parser::{Error};
 use super::error_reporting::{Report, ErrorContext};
-use super::ast::{SourceMap, Span, HasSpan};
-use term::{Terminal, stdout, color, StdoutTerminal, Result as TResult, Error as TError};
-use std::io::{self, Write};
+use term::{Result as TResult, Error as TError};
+use std::io::{Write};
 
 impl<O: Write, E: ErrorContext<O>> Report<O, E> for Error {
     fn report(self, cx: &mut E) -> TResult<()> {

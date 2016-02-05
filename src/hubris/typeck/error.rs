@@ -1,12 +1,11 @@
 use super::super::ast::{Span, HasSpan};
 use super::super::core::{Term, Name};
 use super::super::error_reporting::{Report, ErrorContext};
-use super::TyCtxt;
 use parser;
 
 use std::io;
 use std::io::prelude::*;
-use term::{Terminal, color, Result as TResult};
+use term::{self, Result as TResult};
 
 #[derive(Debug)]
 pub enum Error {
@@ -19,7 +18,8 @@ pub enum Error {
     NoMain,
     Many(Vec<Error>),
     Io(io::Error),
-    Parser(parser::Error)
+    Parser(parser::Error),
+    Term(term::Error),
 }
 
 impl From<io::Error> for Error {
@@ -31,6 +31,12 @@ impl From<io::Error> for Error {
 impl From<parser::Error> for Error {
     fn from(err: parser::Error) -> Error {
         Error::Parser(err)
+    }
+}
+
+impl From<term::Error> for Error {
+    fn from(err: term::Error) -> Error {
+        Error::Term(err)
     }
 }
 

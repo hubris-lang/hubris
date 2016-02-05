@@ -1,10 +1,9 @@
 use super::core;
 use super::elaborate::{self, ElabCx, LocalElabCx};
 use super::error_reporting::{ErrorContext, Report};
-use super::syntax;
 use super::parser;
 use super::ast::{self, SourceMap};
-use super::typeck::{self, LocalCx};
+use super::typeck;
 
 use std::io::{self, Write};
 use std::path::{PathBuf};
@@ -50,6 +49,12 @@ impl From<typeck::Error> for Error {
     }
 }
 
+impl From<term::Error> for Error {
+    fn from(err: term::Error) -> Error {
+        Error::Term(err)
+    }
+}
+
 impl From<parser::Error> for Error {
     fn from(err: parser::Error) -> Error {
         Error::Parser(err)
@@ -63,6 +68,7 @@ pub enum Error {
     UnknownCommand(String),
     TypeCk(typeck::Error),
     Parser(parser::Error),
+    Term(term::Error),
 }
 
 #[derive(Debug)]
@@ -110,14 +116,8 @@ impl Repl {
                 // Ensure that if a type error occurs here we report it, ideally
                 // the REPL should launch anyways.
                 match ecx.elaborate_module(file_path) {
-                    Err(e) => { e.report(&mut ecx); },
+                    Err(e) => { try!(e.report(&mut ecx)) },
                     Ok(_) => {}
-                }
-
-                {
-                    // let main = try!(ecx.ty_cx.get_main_body());
-                    // let result = try!(ecx.ty_cx.eval(main));
-                    // println!("main={}", result);
                 }
 
                 Ok(Repl {
@@ -148,7 +148,9 @@ impl Repl {
 
             match self.repl_interation(input) {
                 // please make me look better
-                Err(e) => { e.report(&mut self); },
+                Err(e) => {
+                    try!(e.report(&mut self));
+                },
                 Ok(cont) => {
                     match cont {
                         Cont::Quit => break,
@@ -170,7 +172,11 @@ impl Repl {
             let cmd = self.parse_command(&input[1..]);
             match cmd {
                 Command::Quit => return Ok(Cont::Quit),
-                Command::Reload => panic!("unsupported command"),
+                Command::Reload => {
+                    let new_repl =
+                        try!(Repl::from_path(&self.root_file));
+                    *self = new_repl;
+                }
                 Command::Unknown(u) => return Err(Error::UnknownCommand(u)),
                 Command::TypeOf(t) => {
                     let term = try!(self.preprocess_term(t));
@@ -196,11 +202,7 @@ impl Repl {
     }
 
     fn type_check_term(&mut self, term: &core::Term) -> Result<core::Term, Error> {
-        let term = {
-            let mut ltycx = LocalCx::from_cx(&self.elab_cx.ty_cx);
-            try!(ltycx.type_infer_term(&term))
-        };
-
+        let term = try!(self.elab_cx.ty_cx.type_infer_term(&term));
         let ty = try!(self.elab_cx.ty_cx.eval(&term));
         Ok(ty)
     }
