@@ -5,3 +5,8 @@ sudo: false
 script:
   - cargo build --verbose
   - cargo test --verbose
+addons:
+  apt:
+    packages:
+    - llvm
+    - llvm-dev
