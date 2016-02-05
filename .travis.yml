@@ -2,11 +2,8 @@ language: rust
 rust:
   - nightly
 sudo: false
-script:
-  - cargo build --verbose
-  - cargo test --verbose
 addons:
   apt:
     packages:
-    - llvm
-    - llvm-dev
+    - llvm-3.6
+    - llvm-3.6-dev
