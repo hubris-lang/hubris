@@ -1,6 +1,7 @@
 use super::core;
 use super::elaborate::{self, ElabCx, LocalElabCx};
 use super::error_reporting::{ErrorContext, Report};
+use super::syntax;
 use super::parser;
 use super::ast::{self, SourceMap};
 use super::typeck::{self, LocalCx};
@@ -242,6 +243,9 @@ impl<O: Write, E: ErrorContext<O>> Report<O, E> for Error {
             }
             Error::Elaborator(elab_err) => {
                 elab_err.report(cx)
+            }
+            Error::Parser(parser_err) => {
+                parser_err.report(cx)
             }
             e => panic!("need to support better error printing for this {:?}", e),
         }

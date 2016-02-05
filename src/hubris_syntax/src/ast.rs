@@ -9,6 +9,7 @@ pub trait HasSpan {
     fn set_span(&mut self, span: Span);
 }
 
+/// A Span the start and end of a subset of a string. It can span multiple lines
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Span {
     pub lo: usize,

@@ -2,6 +2,7 @@ use std::path::Path;
 use std::fs::File;
 use std::io;
 use std::io::Read;
+use ast::{Span};
 
 // A way to verify the parser is not producing dummy spans
 // in debug mode, need to wrap this with cfg enable at some point.
@@ -23,10 +24,10 @@ pub struct Parser {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Error {
     InvalidToken {
-        location: usize,
+        location: Span,
     },
     UnrecognizedToken {
-        location: (usize, usize),
+        location: Span,
         token: String,
         expected: Vec<String>,
     },
@@ -37,8 +38,12 @@ pub enum Error {
         error: tok::Error,
     },
     ExtraTokens {
-        location: (usize, usize),
+        location: Span,
         token: String
+    },
+    TokenizerError {
+        location: Span,
+        message: String
     }
 }
 
@@ -60,24 +65,29 @@ impl Parser {
     pub fn translate_error<'input>(error: ParseError<usize, tok::Tok<'input>, tok::Error>) -> Error {
         match error {
             ParseError::InvalidToken { location } =>
-                Error::InvalidToken { location: location },
+                Error::InvalidToken { location: Span::new(location, location) },
             ParseError::UnrecognizedToken { token, expected } => {
                 match token {
                     None => Error::UnexpectedEOF { expected: expected },
                     Some((start, token, end)) => {
                         Error::UnrecognizedToken {
-                            location: (start, end),
+                            location: Span::new(start, end),
                             token: format!("{:?}", token),
                             expected: expected,
                         }
                     }
                 }
             }
-            ParseError::User { error } => Error::UserError { error: error },
             ParseError::ExtraToken { token } => {
                 let (start, t, end) = token;
-                Error::ExtraTokens { location: (start, end), token: format!("{:?}", t) }
-            }
+                Error::ExtraTokens { location: Span::new(start, end),
+                                     token: format!("{:?}", t) }
+            },
+            ParseError::User { error: tok::Error { location, code } } =>
+                Error::TokenizerError {
+                    location: Span::new(location, location),
+                    message: format!("{:?}", code)
+                }
         }
     }
 }

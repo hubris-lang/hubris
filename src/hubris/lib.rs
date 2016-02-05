@@ -30,6 +30,7 @@ pub mod parser {
 pub mod repl;
 pub mod server;
 pub mod typeck;
+pub mod syntax;
 
 use std::path::{PathBuf, Path};
 use std::io;

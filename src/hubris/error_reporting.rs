@@ -8,11 +8,12 @@ pub trait ErrorContext<O: Write> {
     fn get_source_map(&self) -> &SourceMap;
     fn get_terminal(&mut self) -> &mut Box<Terminal<Output=O> + Send>;
 
+    /// Reports a message at a given location. Underlines the Span.
     fn span_error(&mut self,
                   span: Span,
                   message: String) -> TResult<()> {
-        let (line_no, col_no) = self.get_source_map().position(span).unwrap();
-        let (line_with_padding, marker) = self.get_source_map().underline_span(span).unwrap();
+        let (line_no, col_no) = self.get_source_map().position(span).unwrap_or((0,0));
+        let (line_with_padding, marker) = self.get_source_map().underline_span(span).unwrap_or((format!("??"),format!("??")));
 
         let filename_str = format!("{}:{}:{}: {}:{} ",
                                self.get_source_map().file_name,
