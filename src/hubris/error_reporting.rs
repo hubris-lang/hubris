@@ -13,8 +13,12 @@ pub trait ErrorContext<O: Write> {
                   span: Span,
                   message: String) -> TResult<()> {
         // TODO: We need to know if we wrap around to more then one line.
-        let (line_no, col_no) = self.get_source_map().position(span).unwrap_or((0,0));
-        let (line_with_padding, marker) = self.get_source_map().underline_span(span).unwrap_or((format!("??"),format!("??")));
+        let (line_no, col_no) = self.get_source_map()
+                                    .position(span)
+                                    .unwrap_or((0,0));
+        let (line_with_padding, marker) = self.get_source_map()
+                                              .underline_span(span)
+                                              .unwrap_or((format!("??"),format!("??")));
 
         let filename_str = format!("{}:{}:{}: {}:{} ",
                                self.get_source_map().file_name,
