@@ -32,8 +32,11 @@ pub mod server;
 pub mod typeck;
 pub mod syntax;
 
+
 use std::path::{PathBuf, Path};
 use std::io;
+
+use self::error_reporting::{Report};
 
 #[derive(Debug)]
 pub enum Error {
@@ -74,10 +77,10 @@ pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> Result
 
     let emodule = ecx.elaborate_module(path.as_ref());
 
-    let _ = match emodule {
-        Err(e) => panic!("elaboration error: {:?}", e),
-        Ok(v) => v,
-    };
+    match emodule {
+        Err(e) => e.report(&mut ecx).unwrap(),
+        Ok(_) => {},
+    }
 
     {
         let main = try!(ecx.ty_cx.get_main_body());

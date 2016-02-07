@@ -22,15 +22,15 @@ Item: Item = {
 };
 
 ItemNoSpan: Item = {
-  <d: Data> => Item::Data(d),
-  <f: Fn> => Item::Fn(f),
+  <d: Inductive> => Item::Inductive(d),
+  <f: Def> => Item::Def(f),
   <e: Extern> => Item::Extern(e),
   <i: Import> => Item::Import(i),
 };
 
-Data: Data = {
+Inductive: Inductive = {
  "inductive" <n: Name> <ps : Parameters> <ty: (":" Term)?> <attrs: (<Constructor>)*> "end" =>
-  Data {
+  Inductive {
     span: Span::dummy(),
     name: n,
     parameters: ps,
@@ -43,9 +43,9 @@ Constructor: (Name, Term) = {
     "|" <n: Name> ":" <t: Term> =>  (n, t)
 };
 
-Fn: Function = {
+Def: Def = {
     "def" <n: Name> <args: (Arg*)> ":" <t: Term> ":=" <body: Term> "end" =>
-      Function {
+      Def {
           span: Span::dummy(),
           name: n,
           args: args,
@@ -99,10 +99,10 @@ TermUS: Term = {
       }
       result
   },
-  "fun" <args: (Binder+)> ":" <t: Term> "=>" <body: Term> => Term::Lambda {
+  "fun" <args: (Binder+)> <t: (":" Term)?> "=>" <body: Term> => Term::Lambda {
       span: Span::dummy(),
       args: args,
-      ret_ty: Box::new(t),
+      ret_ty: Box::new(t.map(|x| x.1)),
       body: Box::new(body)
   },
   "let" <bindings: (Binding ",")+> "in" <body: Term> => {
@@ -188,7 +188,6 @@ Pattern: Pattern = {
 
 PatternO: Pattern = {
     <n : Name> => Pattern::Name(n),
-    "_" => Pattern::Placeholder,
     "(" <p: Pattern> ")" => p,
 };
 
@@ -196,22 +195,29 @@ Name: Name = {
   <lo:@L> <nk : NameKind> <hi: @R> => {
         Name {
             span: Span::new(lo, hi),
-            repr: if nk.len() == 1 {
-                let unqual = nk[0].clone();
-                NameKind::Unqualified(unqual)
-            } else {
-                NameKind::Qualified(nk)
-            }
+            repr: nk,
         }
     },
 };
 
-NameKind: Vec<String> = {
-   <prefix : NameKind> "." <end : "Id"> => {
+NameKind: NameKind = {
+  <nk: NameVec> => if nk.len() == 1 {
+      let unqual = nk[0].clone();
+      NameKind::Unqualified(unqual)
+  } else {
+      NameKind::Qualified(nk)
+  },
+  "_" => NameKind::Placeholder,
+};
+
+NameVec: Vec<String> = {
+   <prefix : NameVec> "." <end : "Id"> => {
         let mut prefix = prefix; prefix.push(end.to_string()); prefix
     },
     <s : "Id"> => vec![s.to_string()],
 };
+
+
 
 extern {
     type Location = usize;

@@ -203,7 +203,7 @@ impl Repl {
     }
 
     fn type_check_term(&mut self, term: &core::Term) -> Result<core::Term, Error> {
-        let term = try!(self.elab_cx.ty_cx.type_infer_term(&term));
+        let (term, cs) = try!(self.elab_cx.ty_cx.type_infer_term(&term));
         let ty = try!(self.elab_cx.ty_cx.eval(&term));
         Ok(ty)
     }

@@ -11,6 +11,10 @@ path = "src/hubris/lib.rs"
 name = "hubris"
 path = "src/bin/hubris.rs"
 
+[[bin]]
+name = "test-hubris"
+path = "src/bin/test-hubris.rs"
+
 [dependencies.hubris_syntax]
 path = "src/hubris_syntax"
 

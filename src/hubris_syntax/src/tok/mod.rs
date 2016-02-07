@@ -236,6 +236,10 @@ impl<'input> Tokenizer<'input> {
                             self.bump();
                             Some(Ok((idx0, Arrow, idx1+1)))
                         }
+                        Some((_, '-')) => {
+                            self.take_until(|c| c == '\n');
+                            continue;
+                        }
                         _ => {
                             Some(error(UnrecognizedToken, idx0))
                         }
@@ -287,17 +291,6 @@ impl<'input> Tokenizer<'input> {
                 Some((idx0, '|')) => {
                     self.bump();
                     Some(Ok((idx0, Bar, idx0+1)))
-                }
-                Some((idx0, '/')) => {
-                    match self.bump() {
-                        Some((_, '/')) => {
-                            self.take_until(|c| c == '\n');
-                            continue;
-                        }
-                        _ => {
-                            Some(error(UnrecognizedToken, idx0))
-                        }
-                    }
                 }
                 Some((idx0, c)) if is_identifier_start(c) => {
                     Some(self.identifierish(idx0))

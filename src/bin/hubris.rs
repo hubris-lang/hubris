@@ -62,11 +62,14 @@ fn main() {
             pb
         });
 
-        let repl = hubris::repl::Repl::from_path(&pb).expect("Launching repl failed");
-        repl.start().expect("Starting repl failed");
+        match hubris::repl::Repl::from_path(&pb) {
+            Err(e) => panic!("{:?}", e),
+            Ok(repl) =>
+               repl.start().expect("Starting repl failed")
+        }
     } else {
         let input = args.arg_file.expect("No input files");
-        
+
         debug!("main: compiling {} output to {:?}",
                &input[..],
                args.flag_output);

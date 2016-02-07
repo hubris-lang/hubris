@@ -9,7 +9,7 @@ pub trait Visitor<'v> : Sized {
         walk_item(self, item)
     }
 
-    fn visit_data(&mut self, inductive: &'v Data) {
+    fn visit_data(&mut self, inductive: &'v Inductive) {
         walk_inductive(self, inductive)
     }
 
@@ -17,7 +17,7 @@ pub trait Visitor<'v> : Sized {
         panic!();
     }
 
-    fn visit_def(&mut self, def: &'v Function) {
+    fn visit_def(&mut self, def: &'v Def) {
         walk_def(self, def)
     }
 
@@ -57,15 +57,15 @@ pub fn walk_item<'v, V: Visitor<'v>>(visitor: &mut V, item: &'v Item) {
     use ast::Item::*;
 
     match item {
-        &Item::Data(ref d) => visitor.visit_data(d),
-        &Item::Fn(ref d) => visitor.visit_def(d),
+        &Item::Inductive(ref d) => visitor.visit_data(d),
+        &Item::Def(ref def) => visitor.visit_def(def),
         &Item::Extern(ref ext) => panic!(),
         &Item::Comment(()) => panic!(),
         &Item::Import(ref n) => visitor.visit_name(n),
     }
 }
 
-pub fn walk_inductive<'v, V: Visitor<'v>>(visitor: &mut V, inductive: &'v Data) {
+pub fn walk_inductive<'v, V: Visitor<'v>>(visitor: &mut V, inductive: &'v Inductive) {
     visitor.visit_span(inductive.span);
     visitor.visit_name(&inductive.name);
 
@@ -82,7 +82,7 @@ pub fn walk_inductive<'v, V: Visitor<'v>>(visitor: &mut V, inductive: &'v Data) 
     }
 }
 
-pub fn walk_def<'v, V: Visitor<'v>>(visitor: &mut V, def: &'v Function) {
+pub fn walk_def<'v, V: Visitor<'v>>(visitor: &mut V, def: &'v Def) {
     visitor.visit_span(def.span);
     visitor.visit_name(&def.name);
 
@@ -116,15 +116,19 @@ pub fn walk_term<'v, V: Visitor<'v>>(visitor: &mut V, term: &'v Term) {
             visitor.visit_term(ty);
             visitor.visit_term(term);
         }
-        &Metavar { ref name } =>
-            panic!(),
         &Lambda { span, ref args, ref ret_ty, ref body } => {
             visitor.visit_span(span);
             for &(ref n, ref t) in args {
                 visitor.visit_name(n);
                 visitor.visit_term(t);
             }
-            visitor.visit_term(ret_ty);
+
+            match **ret_ty {
+                None => {}
+                Some(ref rt) =>
+                    visitor.visit_term(rt),
+            }
+
             visitor.visit_term(body);
         }
         &Let { span, ref bindings, ref body } => {

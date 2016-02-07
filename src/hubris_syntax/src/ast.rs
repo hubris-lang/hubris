@@ -41,6 +41,7 @@ pub struct Name {
 pub enum NameKind {
     Unqualified(String),
     Qualified(Vec<String>),
+    Placeholder,
 }
 
 impl Name {
@@ -75,6 +76,7 @@ impl Name {
                     repr: NameKind::Qualified(vec![n.clone(), component]),
                 })
             }
+            _ => None,
         }
     }
 }
@@ -98,6 +100,7 @@ impl Display for Name {
         match &self.repr {
             &Unqualified(ref s) => write!(formatter, "{}", s),
             &Qualified(ref qn) => write!(formatter, "{:?}", qn),
+            &Placeholder => write!(formatter, "_"),
         }
     }
 }
@@ -135,8 +138,8 @@ impl Module {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Item {
-    Data(Data),
-    Fn(Function),
+    Inductive(Inductive),
+    Def(Def),
     Extern(Extern),
     Comment(()),
     Import(Name),
@@ -147,8 +150,8 @@ impl HasSpan for Item {
         use self::Item::*;
 
         match self {
-            &Data(ref data) => data.span,
-            &Fn(ref fun) => fun.span,
+            &Inductive(ref data) => data.span,
+            &Def(ref fun) => fun.span,
             &Extern(ref ext) => ext.span,
             &Comment(_) => Span::dummy(),
             &Import(_) => Span::dummy(),
@@ -159,9 +162,12 @@ impl HasSpan for Item {
         use self::Item::*;
 
         match self {
-            &mut Data(ref mut data) => data.span = sp,
-            &mut Fn(ref mut fun) => fun.span = sp,
-            &mut Extern(ref mut ext) => ext.span = sp,
+            &mut Inductive(ref mut inductive) =>
+                inductive.span = sp,
+            &mut Def(ref mut def) =>
+                def.span = sp,
+            &mut Extern(ref mut ext) =>
+                ext.span = sp,
             &mut Comment(_) => {},
             &mut Import(_) => {},
         }
@@ -169,7 +175,7 @@ impl HasSpan for Item {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct Data {
+pub struct Inductive {
     pub span: Span,
     pub name: Name,
     pub parameters: Vec<(Name, Term)>,
@@ -187,7 +193,7 @@ pub struct Extern {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Function {
+pub struct Def {
     pub span: Span,
     pub name: Name,
     pub args: Vec<(Name, Term)>,
@@ -202,8 +208,7 @@ pub enum Term {
     Match { span: Span, scrutinee: Box<Term>, cases: Vec<Case> },
     App { span: Span, fun: Box<Term>, arg: Box<Term> },
     Forall { span: Span, name: Name, ty: Box<Term>, term: Box<Term> },
-    Metavar { name: Name },
-    Lambda { span: Span, args: Vec<(Name, Term)>, ret_ty: Box<Term>, body: Box<Term> },
+    Lambda { span: Span, args: Vec<(Name, Term)>, ret_ty: Box<Option<Term>>, body: Box<Term> },
     Let { span: Span, bindings: Vec<(Name, Term, Term)>, body: Box<Term> },
     Type,
 }
@@ -219,7 +224,6 @@ impl HasSpan for Term {
             &App { span, .. } => span,
             &Forall { span, .. } => span,
             &Lambda { span, .. } => span,
-            &Metavar { ref name } => name.span,
             &Let { span, .. } => span,
             &Type => Span::dummy(),
         }
@@ -235,7 +239,6 @@ impl HasSpan for Term {
             &mut App { ref mut span, .. } => *span = sp,
             &mut Forall { ref mut span, .. } => *span = sp,
             &mut Lambda { ref mut span, .. } => *span = sp,
-            &mut Metavar { ref mut name } => name.span = sp,
             &mut Let { ref mut span, .. } => *span = sp,
             &mut Type => {},
         }

@@ -101,7 +101,7 @@ impl ElabCx {
 
         for def in ecx.module.items.clone() {
             match &def {
-                &ast::Item::Data(ref d) => {
+                &ast::Item::Inductive(ref d) => {
                     for ctor in &d.ctors {
                         ecx.constructors.insert(ctor.0.clone());
                     }
@@ -156,11 +156,11 @@ impl ElabCx {
         debug!("elaborate_def: def={:?}", def);
 
         match def {
-            ast::Item::Data(d) => {
+            ast::Item::Inductive(d) => {
                 let edata = core::Item::Data(try!(self.elaborate_data(d)));
                 Ok(Some(edata))
             }
-            ast::Item::Fn(f) => {
+            ast::Item::Def(f) => {
                 let efn = core::Item::Fn(try!(self.elaborate_fn(f)));
                 debug!("elaborate_def: fn={}", efn);
                 Ok(Some(efn))
@@ -174,7 +174,7 @@ impl ElabCx {
         }
     }
 
-    fn elaborate_data(&mut self, data: ast::Data) -> Result<core::Data, Error> {
+    fn elaborate_data(&mut self, data: ast::Inductive) -> Result<core::Data, Error> {
         let ast_rec_name = data.name.in_scope("rec".to_string()).unwrap();
         let ty_name = try!(self.elaborate_global_name(data.name));
 
@@ -212,7 +212,7 @@ impl ElabCx {
         })
     }
 
-    fn elaborate_fn(&mut self, fun: ast::Function) -> Result<core::Function, Error> {
+    fn elaborate_fn(&mut self, fun: ast::Def) -> Result<core::Function, Error> {
         let mut lcx = LocalElabCx::from_elab_cx(self);
 
         lcx.enter_scope(fun.args.clone(), move |lcx, args| {
@@ -258,6 +258,7 @@ impl ElabCx {
 
                 Ok(qn)
             }
+            ast::NameKind::Placeholder => Err(Error::UnexpectedQualifiedName),
         }
     }
 
@@ -299,6 +300,7 @@ impl<'ecx> LocalElabCx<'ecx> {
             let repr = match name.clone().repr {
                 ast::NameKind::Qualified(..) => panic!(),
                 ast::NameKind::Unqualified(s) => s,
+                ast::NameKind::Placeholder => "_".to_string(),
             };
 
             let eterm = try!(self.elaborate_term(t));
@@ -341,7 +343,9 @@ impl<'ecx> LocalElabCx<'ecx> {
             ast::Term::Var { name, .. } => {
                 Ok(core::Term::Var { name: try!(self.elaborate_name(name)) })
             }
-            ast::Term::Match { .. } => panic!("match elaboration is currently disabled"),
+            ast::Term::Match { scrutinee, cases, span } => {
+                panic!("match elaboration is currently disabled");
+            }
             ast::Term::App { fun, arg, span } => {
                 let efun = try!(self.elaborate_term(*fun));
                 let earg = try!(self.elaborate_term(*arg));
@@ -358,14 +362,32 @@ impl<'ecx> LocalElabCx<'ecx> {
                     Ok(core::Term::abstract_pi(locals, term))
                 })
             }
-            ast::Term::Metavar { .. } => panic!("can't elaborate meta-variables"),
             ast::Term::Lambda { args, body, .. } => {
                 self.enter_scope(args, move |lcx, locals| {
                     let ebody = try!(lcx.elaborate_term(*body));
                     Ok(core::Term::abstract_lambda(locals, ebody))
                 })
             }
-            ast::Term::Let { .. } => panic!("can't elaborate let-bindings"),
+            ast::Term::Let { bindings, body, span } => {
+                // // Currently we elaborate let expressions by
+                // // constructing a lambda in which we bind each
+                // // name that occurs in the let binding, then
+                // // apply it to the terms bound to the names
+                // // in sequence.
+                // let mut binders = vec![];
+                // let mut terms = vec![];
+                // for (n, ty, term) in bindings {
+                //     binders.push((n, ty));
+                //     terms.push(term);
+                // }
+                //
+                // self.enter_scope(binders, move |lcx, locals| {
+                //     let ebody = try!(lcx.elaborate_term(*body));
+                //     let lambda = core::Term::abstract_lambda(locals, ebody);
+                //     Ok(core::Term::apply_all(lambda, terms))
+                // })
+                panic!("let bindings can not be elaborated")
+            },
             ast::Term::Type => Ok(core::Term::Type),
         }
     }

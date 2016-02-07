@@ -6,13 +6,12 @@ inductive Nat
 end
 
 def add (n : Nat) (m : Nat) : Nat :=
-    Nat.rec
-    (fun (c : Nat) : Type => Nat)
-    m
-    (fun (nprime : Nat) (pN : Nat) : Nat => S pN)
-    n
+  match n with
+  | Z => m
+  | S np => add np m
+  end
 end
 
 def main : Nat :=
-  Z
+  let x := Z in add x x
 end

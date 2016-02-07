@@ -1,6 +1,6 @@
+mod constraint;
 mod error;
 mod inductive;
-// mod name_generator;
 
 use core::*;
 use super::ast::{SourceMap, Span, HasSpan};
@@ -12,8 +12,8 @@ use std::collections::HashMap;
 use std::io::{self};
 use std::path::{PathBuf, Path};
 
-// use self::name_generator::*;
 pub use self::error::Error;
+use self::constraint::*;
 use error_reporting::{ErrorContext, Report};
 use term::{Terminal, stdout, StdoutTerminal};
 
@@ -42,6 +42,8 @@ impl ErrorContext<io::Stdout> for TyCtxt {
         &mut self.terminal
     }
 }
+
+pub type CkResult = Result<(Term, ConstraintSeq), Error>;
 
 impl TyCtxt {
     pub fn empty() -> TyCtxt {
@@ -433,26 +435,40 @@ impl TyCtxt {
 
     pub fn type_check_term(&mut self, term: &Term, ty: &Term) -> Result<Term, Error> {
         debug!("type_check_term: infering the type of {}", term);
-        let infer_ty = try!(self.type_infer_term(term));
-        debug!("type_check_term: checking {} againist the inferred type {}",
-               ty,
-               infer_ty);
-        let term = try!(self.def_eq(term.get_span(), ty, &infer_ty));
-        Ok(term)
+        let (infer_ty, cs) = try!(self.type_infer_term(term));
+        if cs.len() > 0 {
+            panic!("unsat constraints")
+        } else {
+            self.def_eq(term.get_span(), ty, &infer_ty)
+        }
     }
 
-    pub fn type_infer_term(&mut self, term: &Term) -> Result<Term, Error> {
+    pub fn ensure_sort(&self, term: Term) -> CkResult {
+        if term.is_sort() {
+            Ok(constrain(term, vec![]))
+        } else {
+            panic!()
+        }
+    }
+
+    pub fn ensure_forall(&self, term: Term) -> CkResult {
+        if term.is_forall() {
+            Ok(constrain(term, vec![]))
+        } else {
+            panic!("not a forall : {}", term);
+        }
+    }
+
+    pub fn type_infer_term(&mut self, term: &Term) -> CkResult {
         match term {
-            &Term::Literal { ref lit, .. } => {
-                match lit {
-                    &Literal::Int(..) => Ok(panic!()),
-                    &Literal::Unit => Ok(Term::Var { name: Name::from_str("Unit") }),
-                }
-            }
             &Term::Var { ref name, .. } => {
                 match name {
-                    &Name::Local { ref ty, .. } => Ok(*ty.clone()),
-                    q @ &Name::Qual { .. } => self.lookup_global(q).map(Clone::clone),
+                    &Name::Local { ref ty, .. } =>
+                        Ok(constrain(*ty.clone(), vec![])),
+                    q @ &Name::Qual { .. } => {
+                        let global_ty = try!(self.lookup_global(q).map(Clone::clone));
+                        Ok(constrain(global_ty, vec![]))
+                    }
                     _ => {
                         panic!("internal error: all variable occurences must be free when type \
                                 checking
@@ -461,12 +477,22 @@ impl TyCtxt {
                 }
             }
             &Term::App { ref fun, ref arg, span } => {
-                match try!(self.type_infer_term(fun)) {
+                let mut constraints = vec![];
+
+                let (pi_type, pi_cs) =
+                    try!(self.type_infer_term(fun));
+
+                let (pi_type, ensure_cs) =
+                    try!(self.ensure_forall(pi_type));
+
+                constraints.extend(pi_cs.into_iter());
+                constraints.extend(ensure_cs.into_iter());
+
+                match pi_type {
                     Term::Forall { term, ty, .. } => {
-                        // When doing inference I don't think we should try to check this
-                        // constraint:
                         try!(self.type_check_term(arg, &*ty));
-                        self.eval(&term.instantiate(arg))
+                        let term = try!(self.eval(&term.instantiate(arg)));
+                        Ok(constrain(term, constraints))
                     }
                     t => Err(Error::ApplicationMismatch(
                         span,
@@ -483,23 +509,36 @@ impl TyCtxt {
                 try!(self.type_check_term(&*ty, &Term::Type));
                 try!(self.type_check_term(&term, &Term::Type));
 
-                Ok(Term::Type)
+                Ok(constrain(Term::Type, vec![]))
             }
             &Term::Lambda { ref name, ref ty, ref body, span, } => {
-                let local = self.local(name, *ty.clone());
+                let mut constraints = vec![];
 
+                let (arg_ty, arg_cs) = try!(self.type_infer_term(&ty));
+                let (_, sort_cs) = try!(self.ensure_sort(arg_ty));
+
+                constraints.extend(arg_cs.into_iter());
+                constraints.extend(sort_cs.into_iter());
+
+                let local = self.local(name, *ty.clone());
                 let body = body.instantiate(&local.to_term());
 
-                let pi_body = try!(self.type_infer_term(&body)).abstr(&local);
+                let (pi_body, body_cs) =
+                    try!(self.type_infer_term(&body));
 
-                Ok(Term::Forall {
+                constraints.extend(body_cs.into_iter());
+
+                let forall = Term::Forall {
                     span: span,
                     name: name.clone(),
                     ty: ty.clone(),
-                    term: Box::new(pi_body),
-                })
+                    term: Box::new(pi_body.abstr(&local)),
+                };
+
+                Ok(constrain(forall, constraints))
             }
-            &Term::Type => Ok(Term::Type),
+            &Term::Type =>
+                Ok(constrain(Term::Type, vec![])),
             _ => panic!(),
         }
     }

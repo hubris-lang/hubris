@@ -330,6 +330,20 @@ impl Term {
         }
     }
 
+    pub fn is_sort(&self) -> bool {
+        match self {
+            &Term::Type => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_forall(&self) -> bool {
+        match self {
+            &Term::Forall {..} => true,
+            _ => false,
+        }
+    }
+
     pub fn binders(&self) -> Option<Vec<&Term>> {
         let mut cursor = self;
         let mut binders = vec![];

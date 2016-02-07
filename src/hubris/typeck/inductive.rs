@@ -164,7 +164,10 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
         // We compute the type of the constructor using the type checker
         // this allows us to rely on the type system to return the proper
         // set of indicies for us to bind.
-        let ty_of_ctor = try!(self.ty_cx.type_infer_term(&ctor_application));
+        let (ty_of_ctor, cs) =
+            try!(self.ty_cx.type_infer_term(&ctor_application));
+
+        // We should assert that this resulting term contains no meta variables
 
         // We then compute indicies in the same way as above.
         let num_params = self.inductive_ty.parameters.len();
