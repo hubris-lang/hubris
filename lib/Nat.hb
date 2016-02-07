@@ -13,5 +13,6 @@ def add (n : Nat) (m : Nat) : Nat :=
 end
 
 def main : Nat :=
-  let x := Z in add x x
+  let x : Nat := Z,
+  in add x x
 end

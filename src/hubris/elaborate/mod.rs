@@ -1,9 +1,11 @@
+mod pattern_matching;
 mod util;
 
 use ast::{self, SourceMap, HasSpan};
 use core;
 use typeck::{self, TyCtxt};
 use self::util::to_qualified_name;
+use self::pattern_matching::elaborate_pattern_match;
 use super::error_reporting::{Report, ErrorContext};
 use term::{Terminal, Result as TResult};
 
@@ -344,7 +346,7 @@ impl<'ecx> LocalElabCx<'ecx> {
                 Ok(core::Term::Var { name: try!(self.elaborate_name(name)) })
             }
             ast::Term::Match { scrutinee, cases, span } => {
-                panic!("match elaboration is currently disabled");
+                elaborate_pattern_match(self, *scrutinee, cases)
             }
             ast::Term::App { fun, arg, span } => {
                 let efun = try!(self.elaborate_term(*fun));
