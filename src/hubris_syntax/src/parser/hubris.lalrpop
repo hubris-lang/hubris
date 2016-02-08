@@ -44,7 +44,7 @@ Constructor: (Name, Term) = {
 };
 
 Def: Def = {
-    "def" <n: Name> <args: (Arg*)> ":" <t: Term> ":=" <body: Term> "end" =>
+    "def" <n: Name> <args: Parameters> ":" <t: Term> ":=" <body: Term> "end" =>
       Def {
           span: Span::dummy(),
           name: n,
@@ -67,16 +67,23 @@ Import: Name = {
     "import" <n : Name> => n,
 };
 
-Arg: (Name, Term) = {
-    "(" <n : Name> ":" <ty : Term> ")" => (n, ty)
+Parameters: Vec<Binder> = {
+  <ps: Binder*> => ps,
 };
 
-Binder: (Name, Term) = {
-    "(" <n : Name> ":" <ty : Term1> ")" => (n, ty)
-};
-
-Parameters: Vec<(Name, Term)> = {
-  <params: Binder*> => params,
+Binder: Binder = {
+    "(" <n : Name> ":" <ty : Term1> ")" => Binder {
+        span: Span::new(n.span.lo - 1, ty.get_span().hi + 1),
+        name: n,
+        ty: ty,
+        mode: BindingMode::Explicit,
+    },
+    "{" <n : Name> ":" <ty: Term1> "}" => Binder {
+        span: Span::new(n.span.lo - 1, ty.get_span().hi + 1),
+        name: n,
+        ty: ty,
+        mode: BindingMode::Implicit,
+    },
 };
 
 pub Term: Term = {
@@ -89,15 +96,11 @@ pub Term: Term = {
 
 TermUS: Term = {
    "forall" <args: (Binder+)> "," <body: Term> => {
-      let mut result = body; for (n, t) in args.into_iter().rev() {
-          result = Term::Forall {
-            span: Span::dummy(),
-            name: n,
-            ty: Box::new(t),
-            term: Box::new(result)
-          };
+      Term::Forall {
+          span: Span::dummy(),
+          binders: args,
+          term: Box::new(body)
       }
-      result
   },
   "fun" <args: (Binder+)> <t: (":" Term)?> "=>" <body: Term> => Term::Lambda {
       span: Span::dummy(),
@@ -115,26 +118,40 @@ TermUS: Term = {
   <t: TermFnType> => t
 };
 
-Binding : (Name, Term, Term) = {
-    <n: Name> ":" <ty: Term> ":=" <rhs: Term> => (n, ty, rhs)
+Binding : (Binder, Term) = {
+    <n: Name> ":" <ty: Term> ":=" <rhs: Term> => {
+        let binder = Binder {
+            span: n.span,
+            name: n,
+            ty: ty,
+            mode: BindingMode::Explicit,
+        };
+
+        (binder, rhs)
+    }
 };
 
 TermFnType : Term = {
   <t1: Term1> "->" <t2: TermFnType> => {
-      let span = Span::new(0, 1);
+      let span = Span::new(
+        t1.get_span().lo,
+        t2.get_span().hi);
 
-        // t1.get_span().lo,
-        // t2.get_span().hi);
+      let mut name =
+        Name::from_str("");
 
-        let mut name =
-            Name::from_str("");
+      name.set_span(t1.get_span());
 
-        // name.set_span(t1.get_span());
+      let binder = Binder {
+        span: t1.get_span(),
+        name: name,
+        ty: t1,
+        mode: BindingMode::Explicit,
+      };
 
       Term::Forall {
         span: span,
-        name: name,
-        ty: Box::new(t1),
+        binders: vec![binder],
         term: Box::new(t2)
       }
   },
@@ -217,8 +234,6 @@ NameVec: Vec<String> = {
     <s : "Id"> => vec![s.to_string()],
 };
 
-
-
 extern {
     type Location = usize;
     type Error = tok::Error;
@@ -242,6 +257,8 @@ extern {
         ":=" => Tok::ColonEq,
         "(" => Tok::LeftParen,
         ")" => Tok::RightParen,
+        "{" => Tok::LeftBrace,
+        "}" => Tok::RightBrace,
         "," => Tok::Comma,
         "=>" => Tok::FatArrow,
         "->" => Tok::Arrow,

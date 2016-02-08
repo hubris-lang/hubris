@@ -204,6 +204,11 @@ impl Repl {
 
     fn type_check_term(&mut self, term: &core::Term) -> Result<core::Term, Error> {
         let (term, cs) = try!(self.elab_cx.ty_cx.type_infer_term(&term));
+        
+        if cs.len() > 0 {
+            panic!("found constraints");
+        }
+
         let ty = try!(self.elab_cx.ty_cx.eval(&term));
         Ok(ty)
     }

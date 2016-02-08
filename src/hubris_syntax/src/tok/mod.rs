@@ -314,53 +314,6 @@ impl<'input> Tokenizer<'input> {
         self.lookahead
     }
 
-    fn code(&mut self, idx0: usize, open_delims: &str, close_delims: &str) -> Result<usize, Error> {
-        // This is the interesting case. To find the end of the code,
-        // we have to scan ahead, matching (), [], and {}, and looking
-        // for a suitable terminator: `,`, `;`, `]`, `}`, or `)`.
-        let mut balance = 0; // number of unclosed `(` etc
-        loop {
-            if let Some((idx, c)) = self.lookahead {
-                if c == '"' {
-                    self.bump();
-                    try!(self.string_literal(idx)); // discard the produced token
-                    continue;
-                } else if c == '/' {
-                    self.bump();
-                    if let Some((_, '/')) = self.lookahead {
-                        self.take_until(|c| c == '\n');
-                    }
-                    continue;
-                } else if open_delims.find(c).is_some() {
-                    balance += 1;
-                } else if balance > 0 {
-                    if close_delims.find(c).is_some() {
-                        balance -= 1;
-                    }
-                } else {
-                    debug_assert!(balance == 0);
-
-                    if c == ',' || c == ';' || close_delims.find(c).is_some() {
-                        // Note: we do not consume the
-                        // terminator. The code is everything *up
-                        // to but not including* the terminating
-                        // `,`, `;`, etc.
-                        return Ok(idx);
-                    }
-                }
-            } else if balance > 0 {
-                // the input should not end with an
-                // unbalanced number of `{` etc!
-                return error(UnterminatedCode, idx0);
-            } else {
-                debug_assert!(balance == 0);
-                return Ok(self.text.len());
-            }
-
-            self.bump();
-        }
-    }
-
     fn string_literal(&mut self, idx0: usize) -> Result<Spanned<Tok<'input>>, Error> {
         let mut escape = false;
         let terminate = |c: char| {

@@ -175,10 +175,24 @@ impl HasSpan for Item {
 }
 
 #[derive(PartialEq, Debug, Clone)]
+pub enum BindingMode {
+    Explicit,
+    Implicit,
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub struct Binder {
+    pub span: Span,
+    pub name: Name,
+    pub ty: Term,
+    pub mode: BindingMode,
+}
+
+#[derive(PartialEq, Debug, Clone)]
 pub struct Inductive {
     pub span: Span,
     pub name: Name,
-    pub parameters: Vec<(Name, Term)>,
+    pub parameters: Vec<Binder>,
     pub ty: Term,
     pub ctors: Vec<Constructor>
 }
@@ -196,7 +210,7 @@ pub struct Extern {
 pub struct Def {
     pub span: Span,
     pub name: Name,
-    pub args: Vec<(Name, Term)>,
+    pub args: Vec<Binder>,
     pub ty: Term,
     pub body: Term,
 }
@@ -207,9 +221,9 @@ pub enum Term {
     Var { name: Name },
     Match { span: Span, scrutinee: Box<Term>, cases: Vec<Case> },
     App { span: Span, fun: Box<Term>, arg: Box<Term> },
-    Forall { span: Span, name: Name, ty: Box<Term>, term: Box<Term> },
-    Lambda { span: Span, args: Vec<(Name, Term)>, ret_ty: Box<Option<Term>>, body: Box<Term> },
-    Let { span: Span, bindings: Vec<(Name, Term, Term)>, body: Box<Term> },
+    Forall { span: Span, binders: Vec<Binder>, term: Box<Term> },
+    Lambda { span: Span, args: Vec<Binder>, ret_ty: Box<Option<Term>>, body: Box<Term> },
+    Let { span: Span, bindings: Vec<(Binder, Term)>, body: Box<Term> },
     Type,
 }
 

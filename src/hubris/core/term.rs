@@ -344,6 +344,13 @@ impl Term {
         }
     }
 
+    pub fn is_meta(&self) -> bool {
+        match self {
+            &Term::Var { ref name, .. } => true,
+            _ => false,
+        }
+    }
+
     pub fn binders(&self) -> Option<Vec<&Term>> {
         let mut cursor = self;
         let mut binders = vec![];

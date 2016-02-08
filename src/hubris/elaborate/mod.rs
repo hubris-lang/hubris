@@ -147,7 +147,7 @@ impl ElabCx {
     }
 
     pub fn elaborate_import(&mut self, name: ast::Name) -> Result<core::Name, Error> {
-        let core_name = to_qualified_name(name);
+        let core_name = to_qualified_name(name).unwrap();
         let main_file = PathBuf::from(self.ty_cx.source_map.file_name.clone());
         let load_path = main_file.parent().unwrap();
         try!(self.ty_cx.load_import(load_path, &core_name));
@@ -273,6 +273,11 @@ impl ElabCx {
         self.metavar_counter += 1;
         Ok(meta)
     }
+
+    fn make_placeholder(&mut self) -> Result<core::Name, Error> {
+        let ty = try!(self.meta(core::Term::Type));
+        self.meta(ty.to_term())
+    }
 }
 
 pub struct LocalElabCx<'ecx> {
@@ -289,7 +294,7 @@ impl<'ecx> LocalElabCx<'ecx> {
     }
 
     fn enter_scope<F, R>(&mut self,
-                         binders: Vec<(ast::Name, ast::Term)>,
+                         binders: Vec<ast::Binder>,
                          body: F)
                          -> Result<R, Error>
         where F: FnOnce(&mut LocalElabCx, Vec<core::Name>) -> Result<R, Error>
@@ -298,7 +303,10 @@ impl<'ecx> LocalElabCx<'ecx> {
 
         let old_context = self.locals.clone();
 
-        for (name, t) in binders {
+        for binder in binders {
+            let name = binder.name;
+            let t = binder.ty;
+
             let repr = match name.clone().repr {
                 ast::NameKind::Qualified(..) => panic!(),
                 ast::NameKind::Unqualified(s) => s,
@@ -358,8 +366,8 @@ impl<'ecx> LocalElabCx<'ecx> {
                     arg: Box::new(earg),
                 })
             }
-            ast::Term::Forall { name, ty, term, .. } => {
-                self.enter_scope(vec![(name.clone(), *ty)], move |lcx, locals| {
+            ast::Term::Forall { binders, term, .. } => {
+                self.enter_scope(binders, move |lcx, locals| {
                     let term = try!(lcx.elaborate_term(*term));
                     Ok(core::Term::abstract_pi(locals, term))
                 })
@@ -401,8 +409,14 @@ impl<'ecx> LocalElabCx<'ecx> {
         }
     }
 
-    fn elaborate_name(&self, name: ast::Name) -> Result<core::Name, Error> {
+    fn elaborate_name(&mut self, name: ast::Name) -> Result<core::Name, Error> {
         debug!("elaborate_name: name={}", name);
+
+        // Wish we had seme regions
+        let placeholder = match name.repr {
+            ast::NameKind::Placeholder => Some(try!(self.cx.make_placeholder())),
+            _ => None,
+        };
 
         // It is most likely to be a local
         let mut core_name = match self.locals.get(&name) {
@@ -412,8 +426,12 @@ impl<'ecx> LocalElabCx<'ecx> {
                     // If it isn't a global we are going to see if the name has already been
                     // loading into the type context, if not this is an error.
                     None => {
-                        let core_name = to_qualified_name(name.clone());
-                        if self.cx.ty_cx.in_scope(&core_name) {
+                        let core_name = match to_qualified_name(name.clone()) {
+                            None => placeholder.unwrap(),
+                            Some(cn) => cn,
+                        };
+
+                        if self.cx.ty_cx.in_scope(&core_name) || core_name.is_meta() {
                             core_name
                         } else {
                             return Err(Error::UnknownVariable(name.clone()))

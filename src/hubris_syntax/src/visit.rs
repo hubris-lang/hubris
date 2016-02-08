@@ -25,6 +25,10 @@ pub trait Visitor<'v> : Sized {
         walk_term(self, term)
     }
 
+    fn visit_binder(&mut self, binder: &'v Binder) {
+        walk_binder(self, binder)
+    }
+
     fn visit_span(&mut self, _span: Span) {}
 
     fn visit_case(&mut self, case: &'v Case) {
@@ -69,9 +73,8 @@ pub fn walk_inductive<'v, V: Visitor<'v>>(visitor: &mut V, inductive: &'v Induct
     visitor.visit_span(inductive.span);
     visitor.visit_name(&inductive.name);
 
-    for &(ref n, ref t) in &inductive.parameters {
-        visitor.visit_name(n);
-        visitor.visit_term(t);
+    for binder in &inductive.parameters {
+        visitor.visit_binder(binder);
     }
 
     visitor.visit_term(&inductive.ty);
@@ -86,9 +89,8 @@ pub fn walk_def<'v, V: Visitor<'v>>(visitor: &mut V, def: &'v Def) {
     visitor.visit_span(def.span);
     visitor.visit_name(&def.name);
 
-    for &(ref n, ref t) in &def.args {
-        visitor.visit_name(n);
-        visitor.visit_term(t);
+    for binder in &def.args {
+        visitor.visit_binder(binder);
     }
 
     visitor.visit_term(&def.ty);
@@ -110,17 +112,18 @@ pub fn walk_term<'v, V: Visitor<'v>>(visitor: &mut V, term: &'v Term) {
             visitor.visit_term(fun);
             visitor.visit_term(arg);
         }
-        &Forall { span, ref name, ref ty, ref term } => {
+        &Forall { span, ref binders, ref term } => {
             visitor.visit_span(span);
-            visitor.visit_name(name);
-            visitor.visit_term(ty);
+            for binder in binders {
+                visitor.visit_binder(binder);
+            }
+
             visitor.visit_term(term);
         }
         &Lambda { span, ref args, ref ret_ty, ref body } => {
             visitor.visit_span(span);
-            for &(ref n, ref t) in args {
-                visitor.visit_name(n);
-                visitor.visit_term(t);
+            for binder in args {
+                visitor.visit_binder(binder);
             }
 
             match **ret_ty {
@@ -141,4 +144,10 @@ pub fn walk_term<'v, V: Visitor<'v>>(visitor: &mut V, term: &'v Term) {
 
 pub fn walk_name<'v, V: Visitor<'v>>(visitor: &mut V, name: &'v Name) {
     visitor.visit_span(name.span);
+}
+
+pub fn walk_binder<'v, V: Visitor<'v>>(visitor: &mut V, binder: &'v Binder) {
+    visitor.visit_span(binder.span);
+    visitor.visit_name(&binder.name);
+    visitor.visit_term(&binder.ty);
 }

@@ -469,10 +469,12 @@ impl TyCtxt {
                         let global_ty = try!(self.lookup_global(q).map(Clone::clone));
                         Ok(constrain(global_ty, vec![]))
                     }
+                    &Name::Meta { ref ty, .. } => {
+                        Ok(constrain(*ty.clone(), vec![]))
+                    }
                     _ => {
                         panic!("internal error: all variable occurences must be free when type \
-                                checking
-                            term that is a variable")
+                                checking a variable")
                     }
                 }
             }
@@ -490,7 +492,8 @@ impl TyCtxt {
 
                 match pi_type {
                     Term::Forall { term, ty, .. } => {
-                        try!(self.type_check_term(arg, &*ty));
+                        let (arg_ty, arg_cs) =
+                            try!(self.type_infer_term(arg));
                         let term = try!(self.eval(&term.instantiate(arg)));
                         Ok(constrain(term, constraints))
                     }
@@ -503,13 +506,21 @@ impl TyCtxt {
                 }
             }
             &Term::Forall { ref name, ref ty, ref term, .. } => {
+                let mut constraints = vec![];
                 let local = self.local(name, *ty.clone());
                 let term = term.instantiate(&local.to_term());
 
-                try!(self.type_check_term(&*ty, &Term::Type));
-                try!(self.type_check_term(&term, &Term::Type));
+                let (sort, ty_cs) = try!(self.type_infer_term(&*ty));
+                let (_, sort_cs) = try!(self.ensure_sort(sort));
+                constraints.extend(ty_cs.into_iter());
+                constraints.extend(sort_cs.into_iter());
 
-                Ok(constrain(Term::Type, vec![]))
+                let (sort, ty_cs) = try!(self.type_infer_term(&term));
+                let (_, sort_cs) = try!(self.ensure_sort(sort));
+                constraints.extend(ty_cs.into_iter());
+                constraints.extend(sort_cs.into_iter());
+
+                Ok(constrain(Term::Type, constraints))
             }
             &Term::Lambda { ref name, ref ty, ref body, span, } => {
                 let mut constraints = vec![];

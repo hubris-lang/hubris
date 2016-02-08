@@ -6,13 +6,9 @@ inductive Nat
 end
 
 def add (n : Nat) (m : Nat) : Nat :=
-  match n with
-  | Z => m
-  | S np => add np m
-  end
+    Nat.rec _ m (fun (_ : Nat) (pN : Nat) => S pN) n
 end
 
 def main : Nat :=
-  let x : Nat := Z,
-  in add x x
+  Z
 end

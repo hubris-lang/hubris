@@ -49,6 +49,15 @@ impl Name {
         }
     }
 
+    pub fn is_meta(&self) -> bool {
+        use self::Name::*;
+
+        match self {
+            &Meta { .. } => true,
+            _ => false,
+        }
+    }
+
     pub fn qualified(components: Vec<String>) -> Name {
         Name::Qual {
             span: Span::dummy(),
