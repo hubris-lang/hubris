@@ -141,7 +141,7 @@ pub enum Item {
     Inductive(Inductive),
     Def(Def),
     Extern(Extern),
-    Comment(()),
+    Comment(String),
     Import(Name),
 }
 

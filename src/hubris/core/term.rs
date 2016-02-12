@@ -295,6 +295,19 @@ impl Term {
     //     }
     // }
 
+    pub fn is_stuck(&self) -> Option<Term> {
+        match self {
+            &Term::Recursor(..) => panic!(),
+            t => t.head().and_then(|h| match &h {
+                &Term::Var { ref name } => match name {
+                    m @ &Name::Meta { .. } => Some(m.to_term()),
+                    _ => None
+                },
+                _ => None
+            }),
+        }
+    }
+
     /// Will return the "head" of a term
     pub fn head(&self) -> Option<Term> {
         use self::Term::*;
@@ -377,6 +390,11 @@ impl Term {
         }
     }
 
+    pub fn is_stuck(&self) -> bool {
+        self.head()
+            .map(|h| h.is_meta())
+            .unwrap_or(false)
+    }
     // Replace all sub-terms satisfying pred.
     pub fn replace_term<F: Fn(&Term) -> bool>(&mut self, replacement: &Term, pred: &F) {
         use self::Term::*;

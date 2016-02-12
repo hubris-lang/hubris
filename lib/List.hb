@@ -14,7 +14,8 @@ def append (A : Type) (xs : List A) (ys : List A) : List A :=
     (fun (x : A) (zz : List A) (recCase : List A) : List A => Cons A x recCase)
     xs
 end
-
+--| This function does ...
+--| 
 def range (upto : Nat) : List Nat :=
   Nat.rec
     (fun (x : Nat) : Type => List Nat)

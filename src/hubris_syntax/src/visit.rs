@@ -64,7 +64,7 @@ pub fn walk_item<'v, V: Visitor<'v>>(visitor: &mut V, item: &'v Item) {
         &Item::Inductive(ref d) => visitor.visit_data(d),
         &Item::Def(ref def) => visitor.visit_def(def),
         &Item::Extern(ref ext) => panic!(),
-        &Item::Comment(()) => panic!(),
+        &Item::Comment(ref s) => panic!(),
         &Item::Import(ref n) => visitor.visit_name(n),
     }
 }

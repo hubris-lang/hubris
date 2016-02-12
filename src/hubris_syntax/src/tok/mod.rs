@@ -237,8 +237,17 @@ impl<'input> Tokenizer<'input> {
                             Some(Ok((idx0, Arrow, idx1+1)))
                         }
                         Some((_, '-')) => {
-                            self.take_until(|c| c == '\n');
-                            continue;
+                            match self.bump() {
+                                Some((_, '|')) => {
+                                    Some(self.doc_comment())
+                                }
+                                // This case makes it feel like we will need to move away
+                                // from LALRPOP at some point towards a custom parser.
+                                _ => {
+                                    self.take_until(|c| c == '\n');
+                                    continue;
+                                }
+                            }
                         }
                         _ => {
                             Some(error(UnrecognizedToken, idx0))
@@ -312,6 +321,10 @@ impl<'input> Tokenizer<'input> {
     fn bump(&mut self) -> Option<(usize, char)> {
         self.lookahead = self.chars.next();
         self.lookahead
+    }
+
+    fn doc_comment(&mut self) -> Result<Spanned<Tok<'input>>, Error> {
+        panic!()
     }
 
     fn string_literal(&mut self, idx0: usize) -> Result<Spanned<Tok<'input>>, Error> {

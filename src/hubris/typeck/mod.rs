@@ -1,21 +1,21 @@
 mod constraint;
 mod error;
 mod inductive;
+mod solver;
 
 use core::*;
 use super::ast::{SourceMap, Span, HasSpan};
 use super::parser;
 use super::elaborate::{self};
+pub use self::error::Error;
+use self::constraint::*;
+use error_reporting::{ErrorContext, Report};
+use term::{Terminal, stdout, StdoutTerminal};
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::{self};
 use std::path::{PathBuf, Path};
-
-pub use self::error::Error;
-use self::constraint::*;
-use error_reporting::{ErrorContext, Report};
-use term::{Terminal, stdout, StdoutTerminal};
 
 /// A global context for type checking containing the necessary information
 /// needed across type checking all definitions.
@@ -303,6 +303,10 @@ impl TyCtxt {
         return is_rec;
     }
 
+    pub fn whnf(&self, term: &Term) -> CkResult {
+        panic!()
+    }
+
     pub fn eval(&self, term: &Term) -> Result<Term, Error> {
         use core::Term::*;
 
@@ -418,34 +422,46 @@ impl TyCtxt {
     // TODO: currently this reports that two terms are not equal, we should probably
     // specialize this for type checking saying that for term T, with inferred type
     // U, is not equal to specified type W.
-    pub fn def_eq(&self, span: Span, t: &Term, u: &Term) -> Result<Term, Error> {
+    pub fn def_eq(&self, span: Span, t: &Term, u: &Term) -> CkResult {
         debug!("def_eq: {} {}", t, u);
         let t = try!(self.eval(t));
         let u = try!(self.eval(u));
 
-        let mut inequalities = vec![];
-        let is_def_eq = def_eq_modulo(&t, &u, &mut inequalities);
+        let mut constraints = vec![];
+
+        let is_def_eq = def_eq_modulo(
+            &t,
+            &u,
+            &mut constraints);
+
         if is_def_eq {
-            assert_eq!(inequalities.len(), 0);
-            Ok(t.clone())
+            Ok((t.clone(), constraints))
         } else {
-            Err(Error::DefUnequal(span, t.clone(), u.clone(), inequalities))
+            // Should
+            Err(Error::DefUnequal(span, t.clone(), u.clone(), vec![]))
         }
     }
 
     pub fn type_check_term(&mut self, term: &Term, ty: &Term) -> Result<Term, Error> {
         debug!("type_check_term: infering the type of {}", term);
-        let (infer_ty, cs) = try!(self.type_infer_term(term));
-        if cs.len() > 0 {
+        let (infer_ty, mut infer_cs) = try!(self.type_infer_term(term));
+        let (result_ty, ck_cs) = try!(self.def_eq(term.get_span(), ty, &infer_ty));
+
+        infer_cs.extend(ck_cs.into_iter());
+
+        if infer_cs.len() > 0 {
+            for c in infer_cs {
+                println!("{}", c);
+            }
             panic!("unsat constraints")
         } else {
-            self.def_eq(term.get_span(), ty, &infer_ty)
+            Ok(result_ty)
         }
     }
 
     pub fn ensure_sort(&self, term: Term) -> CkResult {
         if term.is_sort() {
-            Ok(constrain(term, vec![]))
+            return Ok(constrain(term, vec![]));
         } else {
             panic!()
         }
@@ -453,9 +469,17 @@ impl TyCtxt {
 
     pub fn ensure_forall(&self, term: Term) -> CkResult {
         if term.is_forall() {
-            Ok(constrain(term, vec![]))
+            return Ok(constrain(term, vec![]));
+        }
+
+        let (tp, cs) = try!(self.whnf(&term));
+
+        if tp.is_forall() {
+            Ok((tp, cs))
+        } else if let Some(m) = tp.is_stuck() {
+            panic!()
         } else {
-            panic!("not a forall : {}", term);
+            panic!("type error should be a pi")
         }
     }
 
@@ -559,7 +583,10 @@ impl TyCtxt {
     }
 }
 
-fn def_eq_modulo(t1: &Term, t2: &Term, equalities: &mut Vec<(Term, Term)>) -> bool {
+fn def_eq_modulo(
+    t1: &Term,
+    t2: &Term,
+    constraints: &mut ConstraintSeq) -> bool {
     use core::Term::*;
 
     debug!("equal_modulo: {} == {}", t1, t2);
@@ -567,24 +594,67 @@ fn def_eq_modulo(t1: &Term, t2: &Term, equalities: &mut Vec<(Term, Term)>) -> bo
     match (t1, t2) {
         (&App { fun: ref fun1, arg: ref arg1, .. },
          &App { fun: ref fun2, arg: ref arg2, .. }) => {
-            def_eq_modulo(fun1, fun2, equalities) && def_eq_modulo(arg1, arg2, equalities)
+            def_eq_modulo(fun1, fun2, constraints) &&
+            def_eq_modulo(arg1, arg2, constraints)
         }
         (&Forall { ty: ref ty1, term: ref term1, .. },
          &Forall { ty: ref ty2, term: ref term2, .. }) => {
-            def_eq_modulo(ty1, ty2, equalities) && def_eq_modulo(term1, term2, equalities)
+            def_eq_modulo(ty1, ty2, constraints) &&
+            def_eq_modulo(term1, term2, constraints)
         }
         (&Lambda { ty: ref ty1, body: ref body1, .. },
          &Lambda { ty: ref ty2, body: ref body2, ..}) => {
-            def_eq_modulo(ty1, ty2, equalities) && def_eq_modulo(body1, body2, equalities)
+            def_eq_modulo(ty1, ty2, constraints) &&
+            def_eq_modulo(body1, body2, constraints)
         }
-        (t, u) => {
-            if t == u {
-                true
+        (&Var { name: ref name1 }, &Var { name: ref name2 }) => {
+            def_eq_name_modulo(name1, name2, constraints)
+        }
+        (&Recursor(ref name1, ref premises1, ref scrut1),
+         &Recursor(ref name2, ref premises2, ref scrut2)) => {
+            if def_eq_name_modulo(name1, name2, constraints) {
+                // Should we check premises1.len() == premises2.len()?
+                premises1.iter().zip(premises2.iter()).all(|(p1, p2)|
+                    def_eq_modulo(p1, p2, constraints));
+
+                def_eq_modulo(scrut1, scrut2, constraints)
             } else {
-                equalities.push((t.clone(), u.clone()));
                 false
             }
+         }
+        (t, u) => {
+            if t.is_stuck().is_some() || u.is_stuck().is_some() {
+                let constraint = Constraint::Unification(
+                    t.clone(),
+                    u.clone(), Justification::Asserted);
+                constraints.push(constraint);
+                true
+            } else {
+                t == u
+            }
         }
+    }
+}
+
+fn def_eq_name_modulo(
+    n1: &Name,
+    n2: &Name,
+    constraints: &mut ConstraintSeq) -> bool {
+    use core::Name::*;
+
+    debug!("equal_name_modulo: {} == {}", n1, n2);
+
+    match (n1, n2) {
+        (&Name::Meta { .. }, &Name::Meta { .. }) => {
+            panic!()
+        }
+        (&Name::Meta { .. }, n) => {
+            panic!()
+        }
+        (n, &Name::Meta { .. }) => {
+            panic!()
+        }
+        _ => n1 == n2
     }
 }
 
