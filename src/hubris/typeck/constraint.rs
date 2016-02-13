@@ -16,7 +16,22 @@ pub enum Constraint {
 
 impl Constraint {
     pub fn categorize(self) -> CategorizedConstraint {
-        panic!()
+        use self::Constraint::*;
+        use self::ConstraintCategory::*;
+
+        let category = match &self {
+            &Unification(ref t, ref u, ref j) => {
+                println!("t: {}", t);
+                println!("u: {}", u);
+                Pattern
+            }
+            &Choice => panic!(),
+        };
+
+        CategorizedConstraint {
+            constraint: self,
+            category: category
+        }
     }
 }
 
@@ -38,14 +53,20 @@ pub enum Justification {
     Join(Box<Justification>, Box<Justification>)
 }
 
-trait Join {
+pub trait Join {
     fn join(self, j: Justification) -> Self;
+}
+
+impl Join for Justification {
+    fn join(self, j: Justification) -> Self {
+        panic!()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CategorizedConstraint {
-    category: ConstraintCategory,
-    constraint: Constraint,
+    pub category: ConstraintCategory,
+    pub constraint: Constraint,
 }
 
 impl Ord for CategorizedConstraint {
@@ -98,5 +119,3 @@ impl PartialOrd for ConstraintCategory {
 pub fn constrain<T>(value: T, constraints: ConstraintSeq) -> (T, ConstraintSeq) {
     (value, constraints)
 }
-
-pub simplify(ty_cx: &mut TyCtxt, constraint: Constraint)

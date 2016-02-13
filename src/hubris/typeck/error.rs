@@ -2,6 +2,7 @@ use super::super::ast::{Span, HasSpan};
 use super::super::core::{Term, Name};
 use super::super::error_reporting::{Report, ErrorContext};
 use parser;
+use super::solver;
 
 use std::io;
 use std::io::prelude::*;
@@ -20,6 +21,7 @@ pub enum Error {
     Io(io::Error),
     Parser(parser::Error),
     Term(term::Error),
+    Solver(solver::Error),
 }
 
 impl From<io::Error> for Error {
@@ -37,6 +39,12 @@ impl From<parser::Error> for Error {
 impl From<term::Error> for Error {
     fn from(err: term::Error) -> Error {
         Error::Term(err)
+    }
+}
+
+impl From<solver::Error> for Error {
+    fn from(err: solver::Error) -> Error {
+        Error::Solver(err)
     }
 }
 

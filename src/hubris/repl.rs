@@ -78,6 +78,7 @@ enum Command {
     Reload,
     Unknown(String),
     TypeOf(String),
+    Def(String),
     Help,
 }
 
@@ -183,6 +184,16 @@ impl Repl {
                     let term = try!(self.preprocess_term(t));
                     println!("{}", try!(self.type_check_term(&term)));
                 }
+                Command::Def(name) => {
+                    // TODO: need to do like name parsing here or something?
+                    let name = core::Name::from_str("add"); // &name[..]);
+                    match self.elab_cx.ty_cx.unfold_name(&name).ok() {
+                        None => println!("no definition"),
+                        Some(t) => {
+                            println!("{}", t);
+                        }
+                    }
+                }
                 Command::Help => println!("{}", HELP_MESSAGE),
             }
         } else {
@@ -204,7 +215,7 @@ impl Repl {
 
     fn type_check_term(&mut self, term: &core::Term) -> Result<core::Term, Error> {
         let (term, cs) = try!(self.elab_cx.ty_cx.type_infer_term(&term));
-        
+
         if cs.len() > 0 {
             panic!("found constraints");
         }
@@ -234,6 +245,8 @@ impl Repl {
             Command::TypeOf(arg.to_string())
         } else if "help".starts_with(command) {
             Command::Help
+        } else if "def".starts_with(command) {
+            Command::Def(arg.to_string())
         } else {
             Command::Unknown(command_text.to_string())
         }

@@ -283,6 +283,9 @@ impl ElabCx {
 pub struct LocalElabCx<'ecx> {
     cx: &'ecx mut ElabCx,
     locals: HashMap<ast::Name, core::Name>,
+    // This is kind of a shitty hack to keep the HashMap above ordered, should probably
+    // write a utility data strcture.
+    locals_in_order: Vec<core::Name>,
 }
 
 impl<'ecx> LocalElabCx<'ecx> {
@@ -290,6 +293,7 @@ impl<'ecx> LocalElabCx<'ecx> {
         LocalElabCx {
             cx: ecx,
             locals: HashMap::new(),
+            locals_in_order: Vec::new(),
         }
     }
 
@@ -302,6 +306,7 @@ impl<'ecx> LocalElabCx<'ecx> {
         let mut locals = vec![];
 
         let old_context = self.locals.clone();
+        let old_locals_in_order = self.locals_in_order.clone();
 
         for binder in binders {
             let name = binder.name;
@@ -317,12 +322,14 @@ impl<'ecx> LocalElabCx<'ecx> {
             let local = self.cx.ty_cx.local_with_repr(repr, eterm.clone());
 
             self.locals.insert(name, local.clone());
+            self.locals_in_order.push(local.clone());
             locals.push(local);
         }
 
         let result = try!(body(self, locals));
 
         self.locals = old_context;
+        self.locals_in_order = old_locals_in_order;
 
         Ok(result)
     }
@@ -449,5 +456,27 @@ impl<'ecx> LocalElabCx<'ecx> {
         core_name.set_span(name.span);
 
         Ok(core_name)
+    }
+
+    fn meta_in_context(&mut self, ty: core::Term) -> Result<core::Term, Error> {
+        let meta_no = self.cx.metavar_counter;
+
+        let ty =
+            core::Term::abstract_pi(self.locals_in_order.clone(), ty);
+
+        let meta = core::Name::Meta {
+            number: meta_no,
+            ty: Box::new(ty),
+        };
+
+        self.cx.metavar_counter += 1;
+
+        let args =
+            self.locals_in_order
+                .iter()
+                .map(core::Name::to_term)
+                .collect();
+
+        Ok(core::Term::apply_all(meta.to_term(), args))
     }
 }

@@ -43,7 +43,7 @@ impl Term {
 
             let (repr, ty) = match local {
                 Name::Local { repr, ty, .. } => (repr, ty),
-                _ => panic!(),
+                n => panic!("trying to abstract over {:?}", n),
             };
 
             result = Term::Lambda {
@@ -295,12 +295,14 @@ impl Term {
     //     }
     // }
 
-    pub fn is_stuck(&self) -> Option<Term> {
+    /// Check if we are stuck returning the meta-variable which is
+    /// the head of the stuck term or recursor.
+    pub fn is_stuck(&self) -> Option<Name> {
         match self {
             &Term::Recursor(..) => panic!(),
             t => t.head().and_then(|h| match &h {
                 &Term::Var { ref name } => match name {
-                    m @ &Name::Meta { .. } => Some(m.to_term()),
+                    m @ &Name::Meta { .. } => Some(m.clone()),
                     _ => None
                 },
                 _ => None
@@ -364,6 +366,38 @@ impl Term {
         }
     }
 
+    pub fn head_is_local(&self) -> bool {
+        self.head().map(|h| match &h {
+            &Term::Var { ref name, .. } => match name {
+                &Name::Local { .. } => true,
+                _ => false
+            },
+            _ => false
+        }).unwrap_or(false)
+    }
+
+    pub fn head_is_global(&self) -> bool {
+        self.head().map(|h| match &h {
+            &Term::Var { ref name, .. } => match name {
+                &Name::Qual { .. } => true,
+                _ => false
+            },
+            _ => false
+        }).unwrap_or(false)
+    }
+
+    ///
+    pub fn is_bi_reducible(&self) -> bool {
+        // self.head().map(|h| {
+        //     !h.is_meta()
+        // }).unwrap_or(false)
+        false
+    }
+
+    pub fn instantiate_meta(&self, meta: &Name, term: &Term) -> Term {
+        panic!()
+    }
+
     pub fn binders(&self) -> Option<Vec<&Term>> {
         let mut cursor = self;
         let mut binders = vec![];
@@ -390,11 +424,6 @@ impl Term {
         }
     }
 
-    pub fn is_stuck(&self) -> bool {
-        self.head()
-            .map(|h| h.is_meta())
-            .unwrap_or(false)
-    }
     // Replace all sub-terms satisfying pred.
     pub fn replace_term<F: Fn(&Term) -> bool>(&mut self, replacement: &Term, pred: &F) {
         use self::Term::*;

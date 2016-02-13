@@ -16,10 +16,11 @@ pub struct Solver<'tcx> {
     ty_cx: &'tcx mut TyCtxt,
     constraints: BinaryHeap<CategorizedConstraint>,
     constraint_mapping: HashMap<Name, Vec<Constraint>>,
-    solution_mapping: HashMap<Name, (Term, Justification)>,
+    pub solution_mapping: HashMap<Name, (Term, Justification)>,
     choice_stack: Vec<Choice>,
 }
 
+#[derive(Debug, Clone)]
 pub enum Error {
     SolverErr
 }
@@ -35,36 +36,100 @@ impl<'tcx> Solver<'tcx> {
         }
     }
 
-    pub fn new(ty_cx: &'tcx mut TyCtxt, cs: ConstraintSeq) -> Solver {
-        let solver = Solver::empty(ty_cx);
+    /// Take a typing context and a sequence of constraints, and setup an
+    /// instance of the solver.
+    pub fn new(ty_cx: &'tcx mut TyCtxt, cs: ConstraintSeq) -> Result<Solver, Error> {
+        let mut solver = Solver::empty(ty_cx);
         for c in cs {
-            solver.visit(c);
+            match &c {
+                &Constraint::Unification(ref t, ref u, ref j) => {
+                    let simple_cs = solver.simplify(t.clone(), u.clone(), j.clone());
+                    for sc in simple_cs {
+                        solver.visit(sc);
+                    }
+                },
+                &Constraint::Choice(..) => {
+                    solver.visit(c.clone().categorize())
+                }
+            }
         }
+        Ok(solver)
     }
 
-    pub fn visit(&self, c: Constraint) {
-        match &c {
-            &Constraint::Unification(t, u, j) =>
-                self.visit_unification(t, u, j),
-            &Constraint::Choice(..) =>
+    pub fn visit(&mut self, c: CategorizedConstraint) {
+        let CategorizedConstraint {
+            category,
+            constraint,
+        } = c;
+
+        match constraint {
+            Constraint::Unification(t, u, j) =>
+                self.visit_unification(t, u, j, category),
+            Constraint::Choice(..) =>
                 panic!("choice constraints aren't impl"),
         }
     }
 
-    pub fn visit_unification(&mut self, r: Term, s: Term, j: Justification) {
-        let r_stuck = r.is_stuck();
-        let s_stuck = s.is_stuck();
+    pub fn solution_for(&self, name: &Name) -> Option<(Term, Justification)> {
+        self.solution_mapping.get(name).map(|x| x.clone())
+    }
 
-        if r_stuck.is_meta() || s_stuck.is_meta() {
-            let r = r.instantiate_meta(panic!("?m"));
-            self.simplify(r, s, j);
+    pub fn visit_unification(&mut self, r: Term, s: Term, j: Justification, category: ConstraintCategory) {
+        // Find if either term is stuck, if so store the meta-variable
+        let meta = match r.is_stuck() {
+            Some(m) => m,
+            None => match s.is_stuck() {
+                None => panic!("one of these should be stuck otherwise the constraint should be gone already I think?"),
+                Some(m) => m,
+            }
+        };
+
+        // See if we have a solution in the solution map,
+        // if we have a solution for ?m we should substitute
+        // it in both terms and reconstruct the equality
+        // constraint.
+        //
+        // Finally we need to visit every constraint that
+        // results.
+        if let Some((t, j_m)) = self.solution_for(&meta) {
+            let simp_c = self.simplify(
+                r.instantiate_meta(&meta, &t),
+                s.instantiate_meta(&meta, &t),
+                j.join(j_m));
+
+            for sc in simp_c {
+                self.visit(sc);
+            }
+        // If the constraint is a pattern constraint
+        //
+        } else if category == ConstraintCategory::Pattern {
+            // left or right?
+            let meta = match r.head().unwrap() {
+                Term::Var { name } => name,
+                _ => panic!("mis-idetnfied pattern constraint")
+            };
+
+            let locals = r.args().unwrap();
+            println!("meta {}", meta);
+
+            let locals: Vec<_> =
+                locals.into_iter().map(|l|
+                match l {
+                    Term::Var { ref name } => name.clone(),
+                    _ => panic!("mis-idetnfied pattern constraint")
+                }).collect();
+
+            let solution = Term::abstract_lambda(locals, s);
+
+            self.solution_mapping.insert(meta, (solution, j));
+            // else if the constraint is a pattern h?m ℓ ≈ t, ji then
+            // add the assignment ?m 7→ h(abstractλ ℓ t), ji to S
+            // for each c in U[?m], visit (c)
+        } else {
+            panic!()
+            // self.add_constraint_for(meta, )
+            // else update U, and insert constraint into Q
         }
-// if r or s is stuck by some ?m and ?m 7→ ht, jmi in S then
-// visit (simp hr[?m := t] ≈ s[?m := t], j ⊲⊳ jmi)
-// else if the constraint is a pattern h?m ℓ ≈ t, ji then
-// add the assignment ?m 7→ h(abstractλ ℓ t), ji to S
-// for each c in U[?m], visit (c)
-// else update U, and insert constraint into Q
     }
 
     pub fn simplify(&self, t: Term, u: Term, j: Justification) -> Vec<CategorizedConstraint> {
@@ -78,7 +143,7 @@ impl<'tcx> Solver<'tcx> {
         // Case 2: if t can beta/iota reduce to then
         // we reduce t ==> t' and create a constraint
         // between t' and u (t' = u).
-        else if t.can_bi_reduce() {
+        else if t.is_bi_reducible() {
             panic!();
         }
 
@@ -87,11 +152,12 @@ impl<'tcx> Solver<'tcx> {
         // arguments for example l s_1 .. s_n = l t_1 .. t_n
         // creates (s_1 = t_1, j) ... (s_n = t_n, j).
         else if t.head_is_local() && u.head_is_local() {
-
+                panic!()
         }
 
         else if t.head_is_global() &&
-                u.head_is_global() && t.head == u.head {
+                u.head_is_global() &&
+                t.head() == u.head() {
                     // if t.args.meta_free() && u.args.meta_free() {
                     //      self.simplify(t.unfold(f) = u.unfold(f))
                     // } else if !f.reducible() {
@@ -106,14 +172,45 @@ impl<'tcx> Solver<'tcx> {
             panic!()
         }
 
+        // else if t.is_lambda() && u.is_lambda() {
+        //     panic!()
+        // }
+
         else if t.is_forall() && u.is_forall() {
-            panic!()
+            match (t, u) {
+                (Term::Forall { name: name1, ty: ty1, term: term1, .. },
+                 Term::Forall { name: name2, ty: ty2, term: term2, .. }) => {
+                     let local = self.ty_cx.local(&name1, *ty1.clone()).to_term();
+                     let mut arg_cs = self.simplify(*ty1, *ty2, j.clone());
+
+                     let t_sub = term1.instantiate(&local);
+                     let u_sub = term2.instantiate(&local);
+
+                     let body_cs = self.simplify(t_sub, u_sub, j.clone());
+                     arg_cs.extend(body_cs.into_iter());
+
+                     arg_cs
+                 }
+                 _ => panic!("this should be impossible")
+            }
         } else {
-            if t.is_stuck() || u.is_stuck() {
-                panic!() // t = u
+            if t.is_stuck().is_some() ||
+               u.is_stuck().is_some() {
+                vec![Constraint::Unification(t, u, j).categorize()]
             } else {
-                panic!("use judgement to report error")
+                panic!("use judgement to report error {:?}", j)
             }
         }
+    }
+
+    fn process(&self) {
+        for c in &self.constraints {
+            println!("{:?}", c);
+        }
+    }
+
+    pub fn solve(self) -> Result<HashMap<Name, (Term, Justification)>, Error> {
+        self.process();
+        Ok(self.solution_mapping)
     }
 }

@@ -222,7 +222,7 @@ impl TyCtxt {
         }
     }
 
-    fn lookup_global(&self, name: &Name) -> Result<&Term, Error> {
+    pub fn lookup_global(&self, name: &Name) -> Result<&Term, Error> {
         match self.definitions.get(name) {
             None => {
                 match self.axioms.get(name) {
@@ -445,17 +445,32 @@ impl TyCtxt {
     pub fn type_check_term(&mut self, term: &Term, ty: &Term) -> Result<Term, Error> {
         debug!("type_check_term: infering the type of {}", term);
         let (infer_ty, mut infer_cs) = try!(self.type_infer_term(term));
-        let (result_ty, ck_cs) = try!(self.def_eq(term.get_span(), ty, &infer_ty));
 
-        infer_cs.extend(ck_cs.into_iter());
+        infer_cs.push(
+            Constraint::Unification(
+                infer_ty,
+                ty.clone(),
+                Justification::Asserted));
 
         if infer_cs.len() > 0 {
-            for c in infer_cs {
+            for c in &infer_cs {
                 println!("{}", c);
             }
-            panic!("unsat constraints")
+            {
+                let mut solver =
+                    try!(solver::Solver::new(self,  infer_cs));
+
+                let solutions = try!(solver.solve());
+
+                for sol in solutions {
+                    println!("{}", (sol.1).0);
+                }
+
+                // panic!("unsat constraints")
+            }
+            Ok(ty.clone())
         } else {
-            Ok(result_ty)
+            Ok(ty.clone())
         }
     }
 
@@ -624,10 +639,10 @@ fn def_eq_modulo(
          }
         (t, u) => {
             if t.is_stuck().is_some() || u.is_stuck().is_some() {
-                let constraint = Constraint::Unification(
-                    t.clone(),
-                    u.clone(), Justification::Asserted);
-                constraints.push(constraint);
+                // let constraint = Constraint::Unification(
+                //     t.clone(),
+                //     u.clone(), Justification::Asserted);
+                // constraints.push(constraint);
                 true
             } else {
                 t == u
