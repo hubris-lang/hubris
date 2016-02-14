@@ -361,7 +361,8 @@ impl Term {
 
     pub fn is_meta(&self) -> bool {
         match self {
-            &Term::Var { ref name, .. } => true,
+            &Term::Var { ref name, .. } =>
+                name.is_meta(),
             _ => false,
         }
     }

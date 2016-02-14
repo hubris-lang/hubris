@@ -29,6 +29,7 @@ pub mod parser {
 
 pub mod repl;
 pub mod server;
+pub mod session;
 pub mod typeck;
 pub mod syntax;
 
@@ -73,9 +74,18 @@ impl From<parser::Error> for Error {
 pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> Result<(), Error> {
     let parser = try!(parser::from_file(path.as_ref()));
     let module = try!(parser.parse());
-    let mut ecx = elaborate::ElabCx::from_module(module, parser.source_map.clone());
 
-    let emodule = ecx.elaborate_module(path.as_ref());
+    let session =
+        session::Session::from_root(
+            path.as_ref(),
+            parser.source_map.clone());
+
+    let mut ecx =
+        elaborate::ElabCx::from_module(
+            module,
+            session);
+
+    let emodule = ecx.elaborate_module();
 
     match emodule {
         Err(e) => e.report(&mut ecx).unwrap(),

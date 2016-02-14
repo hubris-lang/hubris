@@ -93,7 +93,8 @@ impl PartialEq for Name {
             (&Local { number: ref n1, .. },
              &Local { number: ref n2, .. }) =>
                 n1 == n2,
-            (&Meta { ..}, &Meta {..}) => panic!(),
+            (&Meta { number: number1, ..}, &Meta { number: number2, .. }) =>
+                number1 == number2,
             _ => false
         }
     }

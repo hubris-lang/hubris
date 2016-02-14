@@ -14,7 +14,7 @@ pub trait Visitor<'v> : Sized {
     }
 
     fn visit_extern(&mut self, ext: &'v Extern) {
-        panic!();
+        walk_extern(self, ext)
     }
 
     fn visit_def(&mut self, def: &'v Def) {
@@ -63,7 +63,7 @@ pub fn walk_item<'v, V: Visitor<'v>>(visitor: &mut V, item: &'v Item) {
     match item {
         &Item::Inductive(ref d) => visitor.visit_data(d),
         &Item::Def(ref def) => visitor.visit_def(def),
-        &Item::Extern(ref ext) => panic!(),
+        &Item::Extern(ref ext) => visitor.visit_extern(ext),
         &Item::Comment(ref s) => panic!(),
         &Item::Import(ref n) => visitor.visit_name(n),
     }
@@ -95,6 +95,12 @@ pub fn walk_def<'v, V: Visitor<'v>>(visitor: &mut V, def: &'v Def) {
 
     visitor.visit_term(&def.ty);
     visitor.visit_term(&def.body);
+}
+
+pub fn walk_extern<'v, V: Visitor<'v>>(visitor: &mut V, ext: &'v Extern) {
+    visitor.visit_span(ext.span);
+    visitor.visit_name(&ext.name);
+    visitor.visit_term(&ext.term);
 }
 
 pub fn walk_term<'v, V: Visitor<'v>>(visitor: &mut V, term: &'v Term) {

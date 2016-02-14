@@ -2,6 +2,7 @@ use super::core;
 use super::elaborate::{self, ElabCx, LocalElabCx};
 use super::error_reporting::{ErrorContext, Report};
 use super::parser;
+use super::session::Session;
 use super::ast::{self, SourceMap};
 use super::typeck;
 
@@ -102,7 +103,8 @@ impl Repl {
     pub fn from_path(file: &Option<PathBuf>) -> Result<Repl, Error> {
         match file {
             &None => {
-                let ecx = ElabCx::from_module(ast::Module::empty(), SourceMap::empty());
+                let ecx = ElabCx::from_module(ast::Module::empty(), Session::empty());
+
                 Ok(Repl {
                     elab_cx: ecx,
                     root_file: None,
@@ -113,11 +115,12 @@ impl Repl {
                 let parser = try!(parser::from_file(file_path));
                 let module = try!(parser.parse());
 
-                let mut ecx = ElabCx::from_module(module, parser.source_map.clone());
+                let session = Session::from_root(file_path, parser.source_map);
+                let mut ecx = ElabCx::from_module(module, session);
 
                 // Ensure that if a type error occurs here we report it, ideally
                 // the REPL should launch anyways.
-                match ecx.elaborate_module(file_path) {
+                match ecx.elaborate_module() {
                     Err(e) => { try!(e.report(&mut ecx)) },
                     Ok(_) => {}
                 }
@@ -185,10 +188,12 @@ impl Repl {
                     println!("{}", try!(self.type_check_term(&term)));
                 }
                 Command::Def(name) => {
-                    // TODO: need to do like name parsing here or something?
-                    let name = core::Name::from_str("add"); // &name[..]);
+                    let parser = parser::from_string(name).unwrap();
+                    let name = try!(parser.parse_name());
+                    let name = try!(self.elab_cx.elaborate_global_name(name));
+
                     match self.elab_cx.ty_cx.unfold_name(&name).ok() {
-                        None => println!("no definition"),
+                        None => println!("could not find a definition for {}", name),
                         Some(t) => {
                             println!("{}", t);
                         }
@@ -255,11 +260,11 @@ impl Repl {
 
 impl ErrorContext<io::Stdout> for Repl {
     fn get_source_map(&self) -> &SourceMap {
-        &self.elab_cx.ty_cx.source_map
+        self.elab_cx.ty_cx.get_source_map()
     }
 
     fn get_terminal(&mut self) -> &mut Box<Terminal<Output=io::Stdout> + Send> {
-        &mut self.elab_cx.ty_cx.terminal
+        self.elab_cx.ty_cx.get_terminal()
     }
 }
 

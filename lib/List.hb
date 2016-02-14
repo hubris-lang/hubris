@@ -9,26 +9,24 @@ end
 
 def append (A : Type) (xs : List A) (ys : List A) : List A :=
   List.rec A
-    (fun (x : List A) : Type => List A)
+    _
     ys
     (fun (x : A) (zz : List A) (recCase : List A) : List A => Cons A x recCase)
     xs
 end
---| This function does ...
---| 
+
 def range (upto : Nat) : List Nat :=
-  Nat.rec
-    (fun (x : Nat) : Type => List Nat)
+  Nat.rec _
     (Cons Nat Z (Nil Nat))
-    (fun (n : Nat) (recCase : List Nat) : List Nat => Cons Nat (S n) recCase)
+    (fun (n : Nat) (recCase : List Nat) => Cons Nat (S n) recCase)
     upto
 end
 
-def map (A : Type) (B : Type) (f : A -> B) (xs : List A) : List B :=
+def map (A : Type) (B : Type) (f : (A -> B)) (xs : List A) : List B :=
   List.rec A
-      (fun (x : List A) : Type => List B)
+      _
       (Nil B)
-      (fun (x : A) (zz : List A) (recCase : List B) : List B => Cons B (f x) recCase)
+      (fun (x : A) (zz : List A) (recCase : List B) => Cons B (f x) recCase)
       xs
 end
 

@@ -26,6 +26,7 @@ ItemNoSpan: Item = {
   <f: Def> => Item::Def(f),
   <e: Extern> => Item::Extern(e),
   <i: Import> => Item::Import(i),
+  <dc: "DocComment"> => Item::Comment(dc.to_owned()),
 };
 
 Inductive: Inductive = {
@@ -208,7 +209,7 @@ PatternO: Pattern = {
     "(" <p: Pattern> ")" => p,
 };
 
-Name: Name = {
+pub Name: Name = {
   <lo:@L> <nk : NameKind> <hi: @R> => {
         Name {
             span: Span::new(lo, hi),
@@ -264,7 +265,7 @@ extern {
         "->" => Tok::Arrow,
         "_" => Tok::Underscore,
         "." => Tok::Period,
-        "Comment" => Tok::Comment(<&'input str>),
+        "DocComment" => Tok::DocComment(<&'input str>),
         "Id" => Tok::Id(<&'input str>),
     }
 }

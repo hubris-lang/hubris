@@ -4,6 +4,7 @@ mod util;
 use ast::{self, SourceMap, HasSpan};
 use core;
 use typeck::{self, TyCtxt};
+use session::Session;
 use self::util::to_qualified_name;
 use self::pattern_matching::elaborate_pattern_match;
 use super::error_reporting::{Report, ErrorContext};
@@ -51,36 +52,43 @@ impl<O: Write, E: ErrorContext<O>> Report<O, E> for Error {
 }
 
 pub struct ElabCx {
+    /// The current module being elaborated.
     module: ast::Module,
-
     /// The set of declared constructor names in scope
     /// we need this to differentiate between a name
     /// binding or null-ary constructor in pattern
     /// matching.
     constructors: HashSet<ast::Name>,
+    /// Set of globally translated names.
     globals: HashMap<ast::Name, core::Name>,
+    /// A global counter for metavariable numbers, this should probably
+    /// be thread specific.
     metavar_counter: usize,
+    /// Elaboration relies on type checking, the type checker produces
+    /// an "inferred" type containing meta variables along with a set
+    /// of constraints that must be solved, in order for type checking
+    /// to be complete.
     pub ty_cx: TyCtxt,
 }
 
 impl ErrorContext<io::Stdout> for ElabCx {
     fn get_source_map(&self) -> &SourceMap {
-        &self.ty_cx.source_map
+        self.ty_cx.get_source_map()
     }
 
     fn get_terminal(&mut self) -> &mut Box<Terminal<Output=io::Stdout> + Send> {
-        &mut self.ty_cx.terminal
+        self.ty_cx.get_terminal()
     }
 }
 
 impl ElabCx {
-    pub fn from_module(module: ast::Module, source_map: SourceMap) -> ElabCx {
+    pub fn from_module(module: ast::Module, session: Session) -> ElabCx {
         // Elaboration relies on type checking, so first we setup a typing context to use
         // while elaborating the program. We will run the type checker in inference mode
         // to setup constraints, and then we will solve the constraints, and check the
         // term again.
         let mut ty_cx = TyCtxt::empty();
-        ty_cx.source_map = source_map;
+        ty_cx.session = session;
 
         ElabCx {
             module: module,
@@ -91,37 +99,36 @@ impl ElabCx {
         }
     }
 
-    pub fn elaborate_module<P: AsRef<Path>>(&mut self, path: P) -> Result<core::Module, Error> {
-        let ecx = self;
-        let module_name = ecx.module.name.clone();
+    pub fn elaborate_module(&mut self) -> Result<core::Module, Error> {
+        let module_name = self.module.name.clone();
 
-        let name = try!(ecx.elaborate_global_name(module_name));
+        let name = try!(self.elaborate_global_name(module_name));
 
         let mut errors = vec![];
         let mut defs = vec![];
         let mut imports = vec![];
 
-        for def in ecx.module.items.clone() {
+        for def in self.module.items.clone() {
             match &def {
                 &ast::Item::Inductive(ref d) => {
                     for ctor in &d.ctors {
-                        ecx.constructors.insert(ctor.0.clone());
+                        self.constructors.insert(ctor.0.clone());
                     }
                 }
-                &ast::Item::Import(ref n) => imports.push(try!(ecx.elaborate_import(n.clone()))),
+                &ast::Item::Import(ref n) => imports.push(try!(self.elaborate_import(n.clone()))),
                 _ => {}
             }
 
 
-            match ecx.elaborate_def(def) {
+            match self.elaborate_def(def) {
                 Err(e) => errors.push(e),
                 Ok(edef) => match edef {
                     None => {},
                     Some(edef) => {
                         match &edef {
-                            &core::Item::Data(ref d) => try!(ecx.ty_cx.declare_datatype(d)),
-                            &core::Item::Fn(ref f) => ecx.ty_cx.declare_def(f),
-                            &core::Item::Extern(ref e) => ecx.ty_cx.declare_extern(e),
+                            &core::Item::Data(ref d) => try!(self.ty_cx.declare_datatype(d)),
+                            &core::Item::Fn(ref f) => self.ty_cx.declare_def(f),
+                            &core::Item::Extern(ref e) => self.ty_cx.declare_extern(e),
                         }
 
                         defs.push(edef);
@@ -134,13 +141,13 @@ impl ElabCx {
             Err(Error::Many(errors))
         } else {
             let module = core::Module {
-                file_name: path.as_ref().to_owned(),
+                file_name: self.ty_cx.session.root_file().to_owned(),
                 name: name,
                 defs: defs,
                 imports: imports,
             };
 
-            try!(ecx.ty_cx.type_check_module(&module));
+            try!(self.ty_cx.type_check_module(&module));
 
             Ok(module)
         }
@@ -148,7 +155,7 @@ impl ElabCx {
 
     pub fn elaborate_import(&mut self, name: ast::Name) -> Result<core::Name, Error> {
         let core_name = to_qualified_name(name).unwrap();
-        let main_file = PathBuf::from(self.ty_cx.source_map.file_name.clone());
+        let main_file = self.ty_cx.session.root_file().to_owned();
         let load_path = main_file.parent().unwrap();
         try!(self.ty_cx.load_import(load_path, &core_name));
         Ok(core_name)
@@ -247,7 +254,7 @@ impl ElabCx {
         })
     }
 
-    fn elaborate_global_name(&mut self, n: ast::Name) -> Result<core::Name, Error> {
+    pub fn elaborate_global_name(&mut self, n: ast::Name) -> Result<core::Name, Error> {
         match n.repr.clone() {
             ast::NameKind::Qualified(_) => Err(Error::UnexpectedQualifiedName),
             ast::NameKind::Unqualified(name) => {

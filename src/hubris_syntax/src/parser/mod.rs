@@ -62,6 +62,12 @@ impl Parser {
             .map_err(Parser::translate_error)
     }
 
+    pub fn parse_name(&self) -> Result<super::ast::Name, Error> {
+        let tokenizer = tok::Tokenizer::new(&self.source_map.source[..], 0);
+        hubris::parse_Name(&self.source_map.source[..], tokenizer)
+            .map_err(Parser::translate_error)
+    }
+
     pub fn translate_error<'input>(error: ParseError<usize, tok::Tok<'input>, tok::Error>) -> Error {
         match error {
             ParseError::InvalidToken { location } =>

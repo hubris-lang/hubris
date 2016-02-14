@@ -47,6 +47,7 @@ pub enum Tok<'input> {
     //     <s: r"[a-zA-Z_][a-zA-Z0-9_]*"> => s.to_string()
     // };
     Id(&'input str),
+    DocComment(&'input str),
     StringLiteral(&'input str),
     // NumericLit(&'input str),
 
@@ -324,7 +325,9 @@ impl<'input> Tokenizer<'input> {
     }
 
     fn doc_comment(&mut self) -> Result<Spanned<Tok<'input>>, Error> {
-        panic!()
+        let res = self.take_until(|c| c == '\n');
+        // &self.text
+        Ok((0, DocComment("doc comment"), 1))
     }
 
     fn string_literal(&mut self, idx0: usize) -> Result<Spanned<Tok<'input>>, Error> {

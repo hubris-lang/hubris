@@ -6,6 +6,7 @@ mod solver;
 use core::*;
 use super::ast::{SourceMap, Span, HasSpan};
 use super::parser;
+use super::session::Session;
 use super::elaborate::{self};
 pub use self::error::Error;
 use self::constraint::*;
@@ -27,7 +28,7 @@ pub struct TyCtxt {
     axioms: HashMap<Name, Term>,
     definitions: HashMap<Name, (Term, Term)>,
 
-    pub source_map: SourceMap,
+    pub session: Session,
 
     local_counter: RefCell<usize>,
     pub terminal: Box<StdoutTerminal>,
@@ -35,7 +36,7 @@ pub struct TyCtxt {
 
 impl ErrorContext<io::Stdout> for TyCtxt {
     fn get_source_map(&self) -> &SourceMap {
-        &self.source_map
+        self.session.source_map()
     }
 
     fn get_terminal(&mut self) -> &mut Box<Terminal<Output=io::Stdout> + Send> {
@@ -52,15 +53,15 @@ impl TyCtxt {
             functions: HashMap::new(),
             axioms: HashMap::new(),
             definitions: HashMap::new(),
-            source_map: SourceMap::from_file("".to_string(), "".to_string()),
+            session: Session::empty(),
             local_counter: RefCell::new(0),
             terminal: stdout().unwrap(),
         }
     }
 
-    pub fn from_module(module: &Module, source_map: SourceMap) -> Result<TyCtxt, Error> {
+    pub fn from_module(module: &Module, session: Session) -> Result<TyCtxt, Error> {
         let mut ty_cx = TyCtxt::empty();
-        ty_cx.source_map = source_map;
+        ty_cx.session = session;
 
         try!(ty_cx.type_check_module(module));
 
@@ -106,9 +107,11 @@ impl TyCtxt {
 
         let parser = try!(parser::from_file(&file_to_load));
         let module = try!(parser.parse());
-        let mut ecx = elaborate::ElabCx::from_module(module, parser.source_map.clone());
 
-        let emodule = ecx.elaborate_module(&file_to_load);
+        let mut ecx = elaborate::ElabCx::from_module(module, self.session.clone());
+
+        let emodule =
+            ecx.elaborate_module();
 
         // Should find a way to gracefully exit, or report error and continue function
         match emodule {
@@ -118,7 +121,7 @@ impl TyCtxt {
                 Ok(())
             },
             Ok(emodule) => {
-                let ty_cx = try!(TyCtxt::from_module(&emodule, self.source_map.clone()));
+                let ty_cx = try!(TyCtxt::from_module(&emodule, self.session.clone()));
                 self.merge(ty_cx)
             }
         }
@@ -194,7 +197,8 @@ impl TyCtxt {
 
     pub fn declare_def(&mut self, f: &Function) {
         self.functions.insert(f.name.clone(), f.clone());
-        self.definitions.insert(f.name.clone(), (f.ret_ty.clone(), f.body.clone()));
+        let (term, ty) = self.type_check_term(&f.body, &f.ret_ty).unwrap();
+        self.definitions.insert(f.name.clone(), (ty, term));
     }
 
     /// Declaring an external function creates an axiom in the type checker
@@ -442,7 +446,7 @@ impl TyCtxt {
         }
     }
 
-    pub fn type_check_term(&mut self, term: &Term, ty: &Term) -> Result<Term, Error> {
+    pub fn type_check_term(&mut self, term: &Term, ty: &Term) -> Result<(Term, Term), Error> {
         debug!("type_check_term: infering the type of {}", term);
         let (infer_ty, mut infer_cs) = try!(self.type_infer_term(term));
 
@@ -462,15 +466,16 @@ impl TyCtxt {
 
                 let solutions = try!(solver.solve());
 
-                for sol in solutions {
+                for sol in &solutions {
                     println!("{}", (sol.1).0);
                 }
 
-                // panic!("unsat constraints")
+                let new_term = subst_meta(term.clone(), &solutions);
+
+                Ok((new_term, ty.clone()))
             }
-            Ok(ty.clone())
         } else {
-            Ok(ty.clone())
+            Ok((term.clone(), ty.clone()))
         }
     }
 
@@ -690,5 +695,43 @@ fn name_to_path(name: &Name) -> Option<PathBuf> {
             Some(path)
         }
         _ => None,
+    }
+}
+
+pub fn subst_meta(t: Term, subst_map: &HashMap<Name, (Term, Justification)>) -> Term {
+    use core::Term::*;
+
+    match t {
+        App { fun, arg, span } => {
+            App {
+                fun: Box::new(subst_meta(*fun, subst_map)),
+                arg: Box::new(subst_meta(*arg, subst_map)),
+                span: span,
+            }
+        }
+        Forall { name, ty, term, span } => {
+            Forall {
+                name: name,
+                ty: Box::new(subst_meta(*ty, subst_map)),
+                term: Box::new(subst_meta(*term, subst_map)),
+                span: span,
+            }
+        }
+        Lambda { name, ty, body, span } => {
+            Lambda {
+                name: name,
+                ty: Box::new(subst_meta(*ty, subst_map)),
+                body: Box::new(subst_meta(*body, subst_map)),
+                span: span,
+            }
+        }
+        Var { name } => {
+            subst_map.get(&name)
+                     .map(|x| x.clone().0)
+                     .unwrap_or(name.to_term())
+        }
+        Type => Type,
+        Recursor(..) => panic!(),
+        _ => panic!(),
     }
 }
