@@ -67,6 +67,9 @@ impl Session   {
     }
 
     pub fn source_map(&self) -> &SourceMap {
-        panic!()
+        match self.ty {
+            SessionType::Compiler { ref source_map, .. } => source_map,
+            SessionType::Repl { ref source_map, .. } => source_map,
+        }
     }
 }

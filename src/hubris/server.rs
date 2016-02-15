@@ -1,36 +1,25 @@
-extern crate iron;
-// extern crate time;
-
 use iron::prelude::*;
-// use iron::{BeforeMiddleware, AfterMiddleware, typemap};
-// use time::precise_time_ns;
-//
-// struct ResponseTime;
-//
-// impl typemap::Key for ResponseTime { type Value = u64; }
-//
-// impl BeforeMiddleware for ResponseTime {
-//     fn before(&self, req: &mut Request) -> IronResult<()> {
-//         req.extensions.insert::<ResponseTime>(precise_time_ns());
-//         Ok(())
-//     }
-// }
-//
-// impl AfterMiddleware for ResponseTime {
-//     fn after(&self, req: &mut Request, res: Response) -> IronResult<Response> {
-//         let delta = precise_time_ns() - *req.extensions.get::<ResponseTime>().unwrap();
-//         println!("Request took: {} ms", (delta as f64) / 1000000.0);
-//         Ok(res)
-//     }
-// }
+use iron::status;
+use router::Router;
+use urlencoded::UrlEncodedQuery;
 
-fn hello_world(_: &mut Request) -> IronResult<Response> {
-    Ok(Response::with((iron::status::Ok, "Hello World")))
-}
+pub fn run() {
+    let mut router = Router::new();  // Alternative syntax:
+    router.get("/check", handler);  //                      get "/:query" => handler);
 
-pub fn server_main() {
-    let chain = Chain::new(hello_world);
-    // chain.link_before(ResponseTime);
-    // chain.link_after(ResponseTime);
-    Iron::new(chain).http("localhost:8001").unwrap();
+    Iron::new(router).http("127.0.0.1:3000").unwrap();
+
+    fn handler(req: &mut Request) -> IronResult<Response> {
+        match req.get_ref::<UrlEncodedQuery>() {
+            Err(ref e) => {
+                let err_msg = format!("{:?}", e);
+                Ok(Response::with((status::Ok, &err_msg[..])))
+            },
+            Ok(ref hashmap) => {
+                println!("Parsed GET request query string:\n {:?}", hashmap);
+                Ok(Response::with((status::Ok, "he")))
+            }
+        }
+
+    }
 }

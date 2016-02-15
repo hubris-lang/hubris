@@ -9,8 +9,10 @@ extern crate log;
 extern crate llvm_sys;
 extern crate readline;
 extern crate rmp_serde;
+extern crate router;
 extern crate serde;
 extern crate term;
+extern crate urlencoded;
 
 pub mod ast {
     pub use hubris_syntax::ast::*;

@@ -51,7 +51,7 @@ fn main() {
         println!("hubris 0.0.1.0 (we are trying)");
     } else if args.cmd_server {
         println!("Starting Server...");
-        hubris::server::server_main();
+        hubris::server::run();
     } else if args.cmd_repl {
         // verify file exists
         let pb = args.arg_file.map(|f| {

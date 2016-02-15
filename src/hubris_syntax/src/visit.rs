@@ -142,7 +142,11 @@ pub fn walk_term<'v, V: Visitor<'v>>(visitor: &mut V, term: &'v Term) {
         }
         &Let { span, ref bindings, ref body } => {
             visitor.visit_span(span);
-            panic!()
+            for &(ref binding, ref body) in bindings {
+                visitor.visit_binder(binding);
+                visitor.visit_term(body);
+            }
+            visitor.visit_term(body);
         }
         &Type => {}
     }

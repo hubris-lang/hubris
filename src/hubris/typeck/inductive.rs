@@ -277,6 +277,11 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
 
         (arguments, premise)
     }
+
+    pub fn make_below(&self) {
+        // nat.below [reducible] [unfold 1] : Π {C : ℕ → Type}, ℕ → Type
+        // λ {C : ℕ → Type} (n : ℕ), nat.rec poly_unit (λ (a : ℕ) (v_0 : Type), C a × v_0) n
+    }
 }
 
 /// Construct a recursor for `data_type`.
