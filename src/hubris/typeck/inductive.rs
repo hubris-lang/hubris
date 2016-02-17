@@ -1,4 +1,4 @@
-use super::{TyCtxt, Error};
+use super::{TyCtxt, Definition, Error};
 use super::super::core::*;
 //use super::name_generator::*;
 
@@ -312,9 +312,11 @@ pub fn make_recursor(ty_cx: &mut TyCtxt, data_type: &Data) -> Result<(), Error> 
 
     let recursor_name = data_type.name.in_scope("rec".to_string()).unwrap();
 
+    let def = Definition::new(recursor_ty, recursor_body);
+
     rcx.ty_cx
        .definitions
-       .insert(recursor_name, (recursor_ty, recursor_body));
+       .insert(recursor_name, def);
 
     Ok(())
 }

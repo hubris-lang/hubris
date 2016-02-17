@@ -18,6 +18,27 @@ use std::collections::HashMap;
 use std::io::{self};
 use std::path::{PathBuf, Path};
 
+pub enum DeltaReduction {
+    Reducible,
+    Semireducible,
+    Irreducible,
+}
+/// A definition
+pub struct Definition {
+    ty: Term,
+    term: Term,
+    reduction: DeltaReduction,
+}
+
+impl Definition {
+    fn new(ty: Term, term: Term) -> Definition {
+        Definition {
+            ty: ty,
+            term: term,
+            reduction: DeltaReduction::Reducible,
+        }
+    }
+}
 /// A global context for type checking containing the necessary information
 /// needed across type checking all definitions.
 pub struct TyCtxt {
@@ -26,7 +47,7 @@ pub struct TyCtxt {
     functions: HashMap<Name, Function>,
 
     axioms: HashMap<Name, Term>,
-    definitions: HashMap<Name, (Term, Term)>,
+    definitions: HashMap<Name, Definition>,
 
     pub session: Session,
 
@@ -198,7 +219,8 @@ impl TyCtxt {
     pub fn declare_def(&mut self, f: &Function) {
         self.functions.insert(f.name.clone(), f.clone());
         let (term, ty) = self.type_check_term(&f.body, &f.ret_ty).unwrap();
-        self.definitions.insert(f.name.clone(), (ty, term));
+        let def = Definition::new(ty, term);
+        self.definitions.insert(f.name.clone(), def);
     }
 
     /// Declaring an external function creates an axiom in the type checker
@@ -234,7 +256,7 @@ impl TyCtxt {
                     Some(t) => Ok(t),
                 }
             }
-            Some(t) => Ok(&t.0),
+            Some(t) => Ok(&t.ty),
         }
     }
 
@@ -270,7 +292,7 @@ impl TyCtxt {
                 // Or we can't implement this
                 match self.definitions.get(q) {
                     None => Ok(n.to_term()), // panic!("failed to lookup name {}", q),
-                    Some(t) => Ok(t.1.clone()),
+                    Some(t) => Ok(t.term.clone()),
                 }
             }
             &DeBruijn { .. } |
@@ -308,7 +330,8 @@ impl TyCtxt {
     }
 
     pub fn whnf(&self, term: &Term) -> CkResult {
-        panic!()
+        debug!("whnf: {}", term);
+        Ok((term.clone(), vec![]))
     }
 
     pub fn eval(&self, term: &Term) -> Result<Term, Error> {
@@ -499,7 +522,7 @@ impl TyCtxt {
         } else if let Some(m) = tp.is_stuck() {
             panic!()
         } else {
-            panic!("type error should be a pi")
+            Err(Error::ExpectedFunction(term.get_span(), term))
         }
     }
 
@@ -660,7 +683,6 @@ fn def_eq_name_modulo(
     n1: &Name,
     n2: &Name,
     constraints: &mut ConstraintSeq) -> bool {
-    use core::Name::*;
 
     debug!("equal_name_modulo: {} == {}", n1, n2);
 

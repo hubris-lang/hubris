@@ -6,6 +6,8 @@ use super::ast::Span;
 
 pub mod name;
 pub mod term;
+// pub mod visit;
+// pub mod validate;
 
 pub use self::name::*;
 pub use self::term::*;

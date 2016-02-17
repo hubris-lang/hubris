@@ -203,14 +203,39 @@ impl<'tcx> Solver<'tcx> {
         }
     }
 
-    fn process(&self) {
-        for c in &self.constraints {
-            println!("{:?}", c);
-        }
+    // The set of constraints should probably just be a lazy list.
+    fn process(&self, cs: Vec<CategorizedConstraint>, j: Justification) {
+        // for c in &self.constraints {
+        //     println!("{:?}", c);
+        //     match c.constraint {
+        //         Constraint::Choice(..) => panic!("can't process choice constraints"),
+        //         Constraint::Unification(..) => {
+        //             match c.category {
+        //
+        //             }
+        //         }
+        //
+        //     }
+        // }
+        // assert!(self.constraints.len() > 0);
     }
 
-    pub fn solve(self) -> Result<HashMap<Name, (Term, Justification)>, Error> {
-        self.process();
+    pub fn solve(mut self) -> Result<HashMap<Name, (Term, Justification)>, Error> {
+        while let Some(c) = self.constraints.pop() {
+            println!("{:?}", c);
+            match c.constraint {
+                Constraint::Choice(..) => panic!("can't process choice constraints"),
+                Constraint::Unification(..) => {
+                    panic!("{:?}", c)
+                }
+            }
+        }
+
+
         Ok(self.solution_mapping)
+    }
+
+    pub fn resolve(&self, just: Justification) -> Result<(), Error> {
+        panic!("{:?}", just);
     }
 }

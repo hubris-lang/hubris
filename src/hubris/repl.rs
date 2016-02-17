@@ -2,7 +2,7 @@ use super::core;
 use super::elaborate::{self, ElabCx, LocalElabCx};
 use super::error_reporting::{ErrorContext, Report};
 use super::parser;
-use super::session::Session;
+use super::session::{Session, SessionType};
 use super::ast::{self, SourceMap};
 use super::typeck;
 
@@ -190,6 +190,13 @@ impl Repl {
                 Command::Def(name) => {
                     let parser = parser::from_string(name).unwrap();
                     let name = try!(parser.parse_name());
+
+                    match &mut self.elab_cx.ty_cx.session.ty {
+                        &mut SessionType::Repl { ref mut source_map, .. } =>
+                            *source_map = parser.source_map,
+                        _ => panic!()
+                    }
+                    
                     let name = try!(self.elab_cx.elaborate_global_name(name));
 
                     match self.elab_cx.ty_cx.unfold_name(&name).ok() {

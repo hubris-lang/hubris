@@ -15,7 +15,7 @@ pub struct Session {
     /// The global terminal that is used for errors and warnings.
     pub terminal: (),
     /// This might be the wrong set up.
-    ty: SessionType,
+    pub ty: SessionType,
 }
 
 #[derive(Clone)]

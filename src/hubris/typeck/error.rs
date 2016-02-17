@@ -10,6 +10,7 @@ use term::{self, Result as TResult};
 
 #[derive(Debug)]
 pub enum Error {
+    ExpectedFunction(Span, Term),
     ApplicationMismatch(Span, Term, Term, Term, Term),
     DefUnequal(Span, Term, Term, Vec<(Term, Term)>),
     UnknownVariable(Name),
@@ -79,6 +80,12 @@ impl<O: Write, E: ErrorContext<O>> Report<O, E> for Error {
                 try!(cx.span_error(span, msg));
 
                 Ok(())
+            }
+            Error::ExpectedFunction(span, f) => {
+                let msg = format!(
+                    "can not apply `{}` to arguments because it does not have function type", f);
+
+                cx.span_error(span, msg)
             }
             e => panic!("error with printing support: {:?}", e),
             // Error::Many(errs) => {

@@ -3,6 +3,9 @@ use iron::status;
 use router::Router;
 use urlencoded::UrlEncodedQuery;
 
+// struct Session {
+//
+// }
 pub fn run() {
     let mut router = Router::new();  // Alternative syntax:
     router.get("/check", handler);  //                      get "/:query" => handler);
