@@ -6,6 +6,8 @@ experimentation and research.
 It is still very much a work in progress and there is much to do, if
 you are interested in developing please email @jroesch, or open a PR.
 
+You can find more in depth documentation in our [wiki](https://github.com/hubris-lang/hubris/wiki).
+
 ## Development
 
 Currently development of Hubris is on Rust Nightly. For instructions on how to
