@@ -1,54 +1,96 @@
 use super::ast::*;
 
-pub trait Visitor<'v> : Sized {
-    fn visit_module(&mut self, module: &'v Module) {
+pub enum Mut {}
+pub enum Imm {}
+
+trait MutType<'v, T> {
+    type Output;
+}
+
+impl<'v, T: 'v> MutType<'v, T> for Mut {
+    type Output = &'v mut T;
+}
+
+impl<'v, T: 'v> MutType<'v, T> for Imm {
+    type Output = &'v T;
+}
+
+pub trait Ref<'v, M: MutType<'v, Self>> : Sized {
+    type T;
+}
+
+impl<'v, T: 'v, M: MutType<'v, T>> Ref<'v, M> for T {
+    type T = M::Output;
+}
+
+// fn as_ref<'v, M, U: Ref<'v, M>>(x: U) -> U::T {
+//     panic!()
+// }
+
+pub trait Visitor<'v, M> : Sized {
+    fn visit_module(&mut self, module: <Module as Ref<'v, M>>::T)
+    where M : MutType<'v, Module> {
         walk_module(self, module)
     }
 
-    fn visit_item(&mut self, item: &'v Item) {
+    fn visit_item(&mut self, item: <Item as Ref<'v, M>>::T)
+    where M : MutType<'v, Item> {
         walk_item(self, item)
     }
 
-    fn visit_data(&mut self, inductive: &'v Inductive) {
+    fn visit_data(&mut self, inductive: <Inductive as Ref<'v, M>>::T)
+    where M : MutType<'v, Inductive> {
         walk_inductive(self, inductive)
     }
 
-    fn visit_extern(&mut self, ext: &'v Extern) {
+    fn visit_extern(&mut self, ext: <Extern as Ref<'v, M>>::T)
+    where M : MutType<'v, Extern> {
         walk_extern(self, ext)
     }
 
-    fn visit_def(&mut self, def: &'v Def) {
+    fn visit_def(&mut self, def: <Def as Ref<'v, M>>::T)
+    where M : MutType<'v, Def> {
         walk_def(self, def)
     }
 
-    fn visit_term(&mut self, term: &'v Term) {
+    fn visit_term(&mut self, term: <Term as Ref<'v, M>>::T)
+    where M : MutType<'v, Term> {
         walk_term(self, term)
     }
 
-    fn visit_binder(&mut self, binder: &'v Binder) {
+    fn visit_binder(&mut self, binder: <Binder as Ref<'v, M>>::T)
+    where M : MutType<'v, Binder> {
         walk_binder(self, binder)
     }
 
-    fn visit_span(&mut self, _span: Span) {}
+    fn visit_span(&mut self, span: <Span as Ref<'v, M>>::T)
+    where M : MutType<'v, Span> {}
 
-    fn visit_case(&mut self, case: &'v Case) {
+    fn visit_case(&mut self, _case: <Case as Ref<'v, M>>::T)
+    where M : MutType<'v, Case> {
         panic!();
     }
 
-    fn visit_pattern(&mut self, pattern: &'v Pattern) {
+    fn visit_pattern(&mut self, _pattern: <Pattern as Ref<'v, M>>::T)
+    where M : MutType<'v, Pattern> {
         panic!();
     }
 
-    fn visit_literal(&mut self, lit: &'v Literal) {
+    fn visit_literal(&mut self, _lit: <Literal as Ref<'v, M>>::T)
+    where M : MutType<'v, Literal> {
         panic!();
     }
 
-    fn visit_name(&mut self, name: &'v Name) {
+    fn visit_name(&mut self, name: <Name as Ref<'v, M>>::T)
+    where M : MutType<'v, Name> {
         walk_name(self, name)
     }
 }
 
-pub fn walk_module<'v, V: Visitor<'v>>(visitor: &mut V, module: &'v Module) {
+pub fn walk_module<'v, M: MutType<'v, Module>, V: Visitor<'v, M>>(
+    visitor: &mut V,
+    module: <Module as Ref<'v, M>>::T) {
+
     visitor.visit_span(module.span);
     visitor.visit_name(&module.name);
 
@@ -57,7 +99,9 @@ pub fn walk_module<'v, V: Visitor<'v>>(visitor: &mut V, module: &'v Module) {
     }
 }
 
-pub fn walk_item<'v, V: Visitor<'v>>(visitor: &mut V, item: &'v Item) {
+pub fn walk_item<'v, M: MutType<'v, Item>, V: Visitor<'v, M>>(
+    visitor: &mut V,
+    item: <Item as Ref<'v, M>>::T) {
     use ast::Item::*;
 
     match item {
@@ -69,7 +113,9 @@ pub fn walk_item<'v, V: Visitor<'v>>(visitor: &mut V, item: &'v Item) {
     }
 }
 
-pub fn walk_inductive<'v, V: Visitor<'v>>(visitor: &mut V, inductive: &'v Inductive) {
+pub fn walk_inductive<'v, M: MutType<'v, Inductive>, V: Visitor<'v, M>>(
+    visitor: &mut V,
+    inductive: <Inductive as Ref<'v, M>>::T) {
     visitor.visit_span(inductive.span);
     visitor.visit_name(&inductive.name);
 
@@ -85,7 +131,7 @@ pub fn walk_inductive<'v, V: Visitor<'v>>(visitor: &mut V, inductive: &'v Induct
     }
 }
 
-pub fn walk_def<'v, V: Visitor<'v>>(visitor: &mut V, def: &'v Def) {
+pub fn walk_def<'v, M: MutType<'v, Def>, V: Visitor<'v, M>>(visitor: &mut V, def: <Def as Ref<'v, M>>::T) {
     visitor.visit_span(def.span);
     visitor.visit_name(&def.name);
 
@@ -97,13 +143,17 @@ pub fn walk_def<'v, V: Visitor<'v>>(visitor: &mut V, def: &'v Def) {
     visitor.visit_term(&def.body);
 }
 
-pub fn walk_extern<'v, V: Visitor<'v>>(visitor: &mut V, ext: &'v Extern) {
+pub fn walk_extern<'v, M: MutType<'v, Extern>, V: Visitor<'v, M>>(
+        visitor: &mut V,
+        ext: <Extern as Ref<'v, M>>::T) {
     visitor.visit_span(ext.span);
     visitor.visit_name(&ext.name);
     visitor.visit_term(&ext.term);
 }
 
-pub fn walk_term<'v, V: Visitor<'v>>(visitor: &mut V, term: &'v Term) {
+pub fn walk_term<'v, M: MutType<'v, Term>, V: Visitor<'v, M>>(
+        visitor: &mut V,
+        term: <Term as Ref<'v, M>>::T) {
     use ast::Term::*;
 
     match term {
@@ -152,11 +202,13 @@ pub fn walk_term<'v, V: Visitor<'v>>(visitor: &mut V, term: &'v Term) {
     }
 }
 
-pub fn walk_name<'v, V: Visitor<'v>>(visitor: &mut V, name: &'v Name) {
+pub fn walk_name<'v, M: MutType<'v, Name>, V: Visitor<'v, M>>(visitor: &mut V, name: <Name as Ref<'v, M>>::T) {
     visitor.visit_span(name.span);
 }
 
-pub fn walk_binder<'v, V: Visitor<'v>>(visitor: &mut V, binder: &'v Binder) {
+pub fn walk_binder<'v, M: MutType<'v, Binder>, V: Visitor<'v, M>>(
+    visitor: &mut V,
+    binder: <Binder as Ref<'v, M>>::T) {
     visitor.visit_span(binder.span);
     visitor.visit_name(&binder.name);
     visitor.visit_term(&binder.ty);
