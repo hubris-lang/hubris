@@ -9,9 +9,12 @@ pub trait HasSpan {
     fn set_span(&mut self, span: Span);
 }
 
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ModuleId(pub usize);
 /// A Span the start and end of a subset of a string. It can span multiple lines
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Span {
+    pub module_id: ModuleId,
     pub lo: usize,
     pub hi: usize,
 }
@@ -20,6 +23,7 @@ impl Span {
     #[inline]
     pub fn new(lo: usize, hi: usize) -> Span {
         Span {
+            module_id: ModuleId(0),
             lo: lo,
             hi: hi,
         }
@@ -117,6 +121,7 @@ impl HasSpan for Name {
 
 #[derive(Debug)]
 pub struct Module {
+    pub id: ModuleId,
     pub span: Span,
     pub name: Name,
     pub items: Vec<Item>,
@@ -129,6 +134,7 @@ impl Module {
 
     pub fn empty() -> Module {
         Module {
+            id: ModuleId(0),
             span: Span::dummy(),
             name: Name::from_str("REPL"),
             items: vec![],

@@ -2,8 +2,10 @@ use std::path::Path;
 use std::fs::File;
 use std::io;
 use std::io::Read;
-use ast::{Span};
+use ast::{Span, ModuleId};
 
+// A pass that adds module ids to every span.
+mod annotate_module_id;
 // A way to verify the parser is not producing dummy spans
 // in debug mode, need to wrap this with cfg enable at some point.
 mod dummy_span_debug;
@@ -18,9 +20,9 @@ use self::dummy_span_debug::*;
 
 pub struct Parser {
     pub source_map: SourceMap,
+    pub id: ModuleId,
 }
 
-// TODO: bring sourcemap along with this?
 #[derive(Debug, PartialEq, Clone)]
 pub enum Error {
     InvalidToken {
@@ -98,7 +100,7 @@ impl Parser {
     }
 }
 
-pub fn from_file<T: AsRef<Path>>(path: T) -> io::Result<Parser> {
+pub fn from_file<T: AsRef<Path>>(path: T, id: ModuleId) -> io::Result<Parser> {
     let path = path.as_ref();
 
     let mut file = try!(File::open(path));
@@ -110,11 +112,12 @@ pub fn from_file<T: AsRef<Path>>(path: T) -> io::Result<Parser> {
         source_map: SourceMap::from_file(
             format!("{}", path.to_owned().display()),
             contents),
+        id: id,
     })
 }
 
-pub fn from_string(contents: String) -> io::Result<Parser> {
+/// For use in the REPL or editor server.
+pub fn from_string(contents: String, id: ModuleId) -> io::Result<Parser> {
     let source_map = SourceMap::from_source(contents);
-
-    Ok(Parser { source_map: source_map })
+    Ok(Parser { source_map: source_map, id: id })
 }

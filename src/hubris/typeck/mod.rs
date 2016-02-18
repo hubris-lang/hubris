@@ -4,7 +4,7 @@ mod inductive;
 mod solver;
 
 use core::*;
-use super::ast::{SourceMap, Span, HasSpan};
+use super::ast::{SourceMap, ModuleId, Span, HasSpan};
 use super::parser;
 use super::session::Session;
 use super::elaborate::{self};
@@ -56,8 +56,8 @@ pub struct TyCtxt {
 }
 
 impl ErrorContext<io::Stdout> for TyCtxt {
-    fn get_source_map(&self) -> &SourceMap {
-        self.session.source_map()
+    fn get_source_map(&self, id: ModuleId) -> &SourceMap {
+        self.session.get_source_map(id)
     }
 
     fn get_terminal(&mut self) -> &mut Box<Terminal<Output=io::Stdout> + Send> {
@@ -126,10 +126,15 @@ impl TyCtxt {
         let file_to_load = path.join(file_suffix);
         debug!("load_import: file_to_load={}", file_to_load.display());
 
-        let parser = try!(parser::from_file(&file_to_load));
+        let id = self.session.next_module_id();
+        let parser = try!(parser::from_file(&file_to_load, id));
         let module = try!(parser.parse());
 
-        let mut ecx = elaborate::ElabCx::from_module(module, self.session.clone());
+        self.session.add_source_map_for(id, parser.source_map);
+
+        let mut ecx = elaborate::ElabCx::from_module(
+            module,
+            self.session.clone());
 
         let emodule =
             ecx.elaborate_module();
@@ -510,7 +515,7 @@ impl TyCtxt {
         }
     }
 
-    pub fn ensure_forall(&self, term: Term) -> CkResult {
+    pub fn ensure_forall(&self, term: Term, sp: Span) -> CkResult {
         if term.is_forall() {
             return Ok(constrain(term, vec![]));
         }
@@ -522,7 +527,7 @@ impl TyCtxt {
         } else if let Some(m) = tp.is_stuck() {
             panic!()
         } else {
-            Err(Error::ExpectedFunction(term.get_span(), term))
+            Err(Error::ExpectedFunction(sp, term))
         }
     }
 
@@ -552,7 +557,7 @@ impl TyCtxt {
                     try!(self.type_infer_term(fun));
 
                 let (pi_type, ensure_cs) =
-                    try!(self.ensure_forall(pi_type));
+                    try!(self.ensure_forall(pi_type, fun.get_span()));
 
                 constraints.extend(pi_cs.into_iter());
                 constraints.extend(ensure_cs.into_iter());

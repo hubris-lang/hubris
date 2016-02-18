@@ -1,7 +1,7 @@
 mod pattern_matching;
 mod util;
 
-use ast::{self, SourceMap, HasSpan};
+use ast::{self, SourceMap, ModuleId, HasSpan};
 use core;
 use typeck::{self, TyCtxt};
 use session::Session;
@@ -72,8 +72,8 @@ pub struct ElabCx {
 }
 
 impl ErrorContext<io::Stdout> for ElabCx {
-    fn get_source_map(&self) -> &SourceMap {
-        self.ty_cx.get_source_map()
+    fn get_source_map(&self, id: ModuleId) -> &SourceMap {
+        self.ty_cx.get_source_map(id)
     }
 
     fn get_terminal(&mut self) -> &mut Box<Terminal<Output=io::Stdout> + Send> {

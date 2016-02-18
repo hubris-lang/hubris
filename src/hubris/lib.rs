@@ -74,7 +74,8 @@ impl From<parser::Error> for Error {
 }
 
 pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> Result<(), Error> {
-    let parser = try!(parser::from_file(path.as_ref()));
+    let module_id = ast::ModuleId(0);
+    let parser = try!(parser::from_file(path.as_ref(), module_id));
     let module = try!(parser.parse());
 
     let session =

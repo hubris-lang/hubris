@@ -1,27 +1,30 @@
-use super::ast::{Span, SourceMap};
+use super::ast::{Span, ModuleId, SourceMap};
 
 use std::io::prelude::*;
 use term::{Terminal, color, Result as TResult};
 
 pub trait ErrorContext<O: Write> {
     // I don't particularly like these names - JR
-    fn get_source_map(&self) -> &SourceMap;
+    fn get_source_map(&self, module_id: ModuleId) -> &SourceMap;
     fn get_terminal(&mut self) -> &mut Box<Terminal<Output=O> + Send>;
 
     /// Reports a message at a given location. Underlines the Span.
     fn span_error(&mut self,
                   span: Span,
                   message: String) -> TResult<()> {
+        let module_id = span.module_id;
+
         // TODO: We need to know if we wrap around to more then one line.
-        let (line_no, col_no) = self.get_source_map()
+        let (line_no, col_no) = self.get_source_map(module_id)
                                     .position(span)
                                     .unwrap_or((0,0));
-        let (line_with_padding, marker) = self.get_source_map()
+
+        let (line_with_padding, marker) = self.get_source_map(module_id)
                                               .underline_span(span)
                                               .unwrap_or((format!("??"),format!("??")));
 
         let filename_str = format!("{}:{}:{}: {}:{} ",
-                               self.get_source_map().file_name,
+                               self.get_source_map(module_id).file_name,
                                line_no,
                                col_no,
                                line_no, // this should be the line where we end, not the same line
@@ -36,7 +39,7 @@ pub trait ErrorContext<O: Write> {
 
         let file_str_simple =
             format!("{}:{}: ",
-            self.get_source_map().file_name,
+            self.get_source_map(module_id).file_name,
             line_no);
 
         try!(write!(self.get_terminal(), "{} {}", file_str_simple, line_with_padding));

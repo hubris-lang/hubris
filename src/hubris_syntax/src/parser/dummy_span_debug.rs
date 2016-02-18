@@ -17,8 +17,8 @@ impl<'v> Visitor<'v> for DummySpanVisitor {
         walk_term(self, term)
     }
 
-    fn visit_span(&mut self, span: Span) {
-        if span == Span::dummy() {
+    fn visit_span(&mut self, span: &'v Span) {
+        if span == &Span::dummy() {
             self.count += 1;
             panic!()
         }

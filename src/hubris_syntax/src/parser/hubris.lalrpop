@@ -8,6 +8,7 @@ grammar<'input>(text: &'input str)["LALR(1)"];
 pub Module: Module =  {
   <lo:@L> "module" <n: Name> <ds: (Item)*> <hi:@R> =>
     Module {
+        id: ModuleId(0),
         span: Span::new(lo, hi),
         name: n,
         items: ds,

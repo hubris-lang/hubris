@@ -3,7 +3,7 @@ use super::elaborate::{self, ElabCx, LocalElabCx};
 use super::error_reporting::{ErrorContext, Report};
 use super::parser;
 use super::session::{Session, SessionType};
-use super::ast::{self, SourceMap};
+use super::ast::{self, ModuleId, SourceMap};
 use super::typeck;
 
 use std::io::{self, Write};
@@ -22,8 +22,7 @@ Commands:
 
 pub struct Repl {
     elab_cx: ElabCx,
-    root_file: Option<PathBuf>,
-    terminal: Box<StdoutTerminal>,
+    session: Session,
 }
 
 // impl From<parser::Error> for Error {
@@ -101,22 +100,32 @@ fn split_command(command_text: &str) -> (&str, &str) {
 
 impl Repl {
     pub fn from_path(file: &Option<PathBuf>) -> Result<Repl, Error> {
+        let session = Session::empty();
         match file {
             &None => {
-                let ecx = ElabCx::from_module(ast::Module::empty(), Session::empty());
+                let ecx = ElabCx::from_module(
+                    ast::Module::empty(),
+                    session.clone());
 
                 Ok(Repl {
                     elab_cx: ecx,
-                    root_file: None,
-                    terminal: term::stdout().unwrap(),
+                    session: session,
                 })
             }
             &Some(ref file_path) => {
-                let parser = try!(parser::from_file(file_path));
-                let module = try!(parser.parse());
+                let id = session.next_module_id();
 
-                let session = Session::from_root(file_path, parser.source_map);
-                let mut ecx = ElabCx::from_module(module, session);
+                let parser =
+                    try!(parser::from_file(file_path, id));
+
+                let module =
+                    try!(parser.parse());
+
+                session.add_source_map_for(id, parser.source_map);
+
+                let mut ecx = ElabCx::from_module(
+                    module,
+                    session.clone());
 
                 // Ensure that if a type error occurs here we report it, ideally
                 // the REPL should launch anyways.
@@ -127,8 +136,7 @@ impl Repl {
 
                 Ok(Repl {
                     elab_cx: ecx,
-                    root_file: file.clone(),
-                    terminal: term::stdout().unwrap(),
+                    session: session,
                 })
             }
         }
@@ -178,8 +186,9 @@ impl Repl {
             match cmd {
                 Command::Quit => return Ok(Cont::Quit),
                 Command::Reload => {
+                    let path = self.session.root_file().to_owned();
                     let new_repl =
-                        try!(Repl::from_path(&self.root_file));
+                        try!(Repl::from_path(&Some(path)));
                     *self = new_repl;
                 }
                 Command::Unknown(u) => return Err(Error::UnknownCommand(u)),
@@ -188,15 +197,17 @@ impl Repl {
                     println!("{}", try!(self.type_check_term(&term)));
                 }
                 Command::Def(name) => {
-                    let parser = parser::from_string(name).unwrap();
+                    let parser = parser::from_string(name, ast::ModuleId(0)).unwrap();
                     let name = try!(parser.parse_name());
 
-                    match &mut self.elab_cx.ty_cx.session.ty {
-                        &mut SessionType::Repl { ref mut source_map, .. } =>
-                            *source_map = parser.source_map,
-                        _ => panic!()
-                    }
-                    
+                    // Not really sure why I put this code here ...
+                    //
+                    // match &mut self.elab_cx.ty_cx.session.ty {
+                    //     &mut SessionType::Repl { ref mut source_map, .. } =>
+                    //         *source_map = parser.source_map,
+                    //     _ => panic!()
+                    // }
+
                     let name = try!(self.elab_cx.elaborate_global_name(name));
 
                     match self.elab_cx.ty_cx.unfold_name(&name).ok() {
@@ -216,7 +227,7 @@ impl Repl {
     }
 
     fn preprocess_term(&mut self, source: String) -> Result<core::Term, Error> {
-        let parser = parser::from_string(source).unwrap();
+        let parser = parser::from_string(source, ModuleId(0)).unwrap();
         let term = try!(parser.parse_term());
 
         let mut lcx = LocalElabCx::from_elab_cx(&mut self.elab_cx);
@@ -266,8 +277,8 @@ impl Repl {
 }
 
 impl ErrorContext<io::Stdout> for Repl {
-    fn get_source_map(&self) -> &SourceMap {
-        self.elab_cx.ty_cx.get_source_map()
+    fn get_source_map(&self, id: ModuleId) -> &SourceMap {
+        self.elab_cx.ty_cx.get_source_map(id)
     }
 
     fn get_terminal(&mut self) -> &mut Box<Terminal<Output=io::Stdout> + Send> {
