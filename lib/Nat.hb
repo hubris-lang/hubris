@@ -1,10 +1,7 @@
 module Nat
 
+import Unit
 import Product
-
-inductive Unit
-  | Star : Unit
-end
 
 inductive Nat
   | Z : Nat

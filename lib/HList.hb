@@ -11,6 +11,6 @@ def main : HList Nil :=
   HNil
 end
 
-def order [Ord A, Eq B] {A B} (f : A) (g : B) : C :=
-  match f with
-  | X =>
+-- def order [Ord A, Eq B] {A B} (f : A) (g : B) : C :=
+--  match f with
+--  | X =>
