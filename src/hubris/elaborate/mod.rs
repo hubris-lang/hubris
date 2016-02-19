@@ -4,10 +4,9 @@ mod util;
 use ast::{self, SourceMap, ModuleId, HasSpan};
 use core;
 use typeck::{self, TyCtxt};
-use session::Session;
+use session::{HasSession, Session, Reportable};
 use self::util::to_qualified_name;
 use self::pattern_matching::elaborate_pattern_match;
-use super::error_reporting::{Report, ErrorContext};
 use term::{Terminal, Result as TResult};
 
 use std::io::{self, Write};
@@ -29,19 +28,19 @@ impl From<typeck::Error> for Error {
     }
 }
 
-impl<O: Write, E: ErrorContext<O>> Report<O, E> for Error {
-    fn report(self, cx: &mut E) -> TResult<()> {
+impl Reportable for Error {
+    fn report(self, session: &Session) -> io::Result<()> {
         match self {
             Error::TypeCk(ty_ck_err) => {
-                ty_ck_err.report(cx)
+                ty_ck_err.report(session)
             }
             Error::UnknownVariable(n) => {
-                cx.span_error(n.span,
+                session.span_error(n.span,
                     format!("unresolved name `{}`", n))
             }
             Error::Many(es) => {
                 for e in es {
-                    try!(e.report(cx))
+                    try!(e.report(session))
                 }
 
                 Ok(())
@@ -71,13 +70,9 @@ pub struct ElabCx {
     pub ty_cx: TyCtxt,
 }
 
-impl ErrorContext<io::Stdout> for ElabCx {
-    fn get_source_map(&self, id: ModuleId) -> &SourceMap {
-        self.ty_cx.get_source_map(id)
-    }
-
-    fn get_terminal(&mut self) -> &mut Box<Terminal<Output=io::Stdout> + Send> {
-        self.ty_cx.get_terminal()
+impl HasSession for ElabCx {
+    fn session(&self) -> &Session {
+        &self.ty_cx.session
     }
 }
 
@@ -127,7 +122,7 @@ impl ElabCx {
                     Some(edef) => {
                         match &edef {
                             &core::Item::Data(ref d) => try!(self.ty_cx.declare_datatype(d)),
-                            &core::Item::Fn(ref f) => self.ty_cx.declare_def(f),
+                            &core::Item::Fn(ref f) => try!(self.ty_cx.declare_def(f)),
                             &core::Item::Extern(ref e) => self.ty_cx.declare_extern(e),
                         }
 

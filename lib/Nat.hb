@@ -25,5 +25,5 @@ def below (C : (Nat -> Type)) : Nat -> Type :=
 end
 
 def main : Nat :=
-  Z
+  (fun (A : Type) => A) Z
 end

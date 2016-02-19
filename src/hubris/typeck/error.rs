@@ -1,12 +1,11 @@
 use super::super::ast::{Span, HasSpan};
 use super::super::core::{Term, Name};
-use super::super::error_reporting::{Report, ErrorContext};
+use super::super::session::{Reportable, Session};
 use parser;
 use super::solver;
 
 use std::io;
-use std::io::prelude::*;
-use term::{self, Result as TResult};
+use term;
 
 #[derive(Debug)]
 pub enum Error {
@@ -49,8 +48,8 @@ impl From<solver::Error> for Error {
     }
 }
 
-impl<O: Write, E: ErrorContext<O>> Report<O, E> for Error {
-    fn report(self, cx: &mut E) -> TResult<()> {
+impl Reportable for Error {
+    fn report(self, cx: &Session) -> io::Result<()> {
         match self {
             Error::UnknownVariable(name) => {
                 cx.span_error(name.get_span(),
@@ -61,13 +60,13 @@ impl<O: Write, E: ErrorContext<O>> Report<O, E> for Error {
 
                 try!(cx.span_error(span, msg));
 
-                if disequalities.len() > 1 {
-                    try!(writeln!(cx.get_terminal(), "in particular:"));
-
-                    for (t, u) in disequalities {
-                        try!(writeln!(cx.get_terminal(), "    {} not equal to {}", t, u));
-                    }
-                }
+                // if disequalities.len() > 1 {
+                //     try!(writeln!(cx.get_terminal(), "in particular:"));
+                //
+                //     for (t, u) in disequalities {
+                //         try!(writeln!(cx.get_terminal(), "    {} not equal to {}", t, u));
+                //     }
+                // }
 
                 Ok(())
             }
@@ -83,7 +82,8 @@ impl<O: Write, E: ErrorContext<O>> Report<O, E> for Error {
             }
             Error::ExpectedFunction(span, f) => {
                 let msg = format!(
-                    "can not apply `{}` to arguments because it does not have function type", f);
+                    "can not apply term with type `{}` to arguments,
+                     only terms with function types can be applied", f);
 
                 cx.span_error(span, msg)
             }

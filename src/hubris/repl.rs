@@ -1,8 +1,7 @@
 use super::core;
 use super::elaborate::{self, ElabCx, LocalElabCx};
-use super::error_reporting::{ErrorContext, Report};
 use super::parser;
-use super::session::{Session, SessionType};
+use super::session::{Session, Reportable, HasSession};
 use super::ast::{self, ModuleId, SourceMap};
 use super::typeck;
 
@@ -100,9 +99,10 @@ fn split_command(command_text: &str) -> (&str, &str) {
 
 impl Repl {
     pub fn from_path(file: &Option<PathBuf>) -> Result<Repl, Error> {
-        let session = Session::empty();
         match file {
             &None => {
+                let session = Session::empty();
+
                 let ecx = ElabCx::from_module(
                     ast::Module::empty(),
                     session.clone());
@@ -113,6 +113,7 @@ impl Repl {
                 })
             }
             &Some(ref file_path) => {
+                let session = Session::from_root(file_path);
                 let id = session.next_module_id();
 
                 let parser =
@@ -130,7 +131,7 @@ impl Repl {
                 // Ensure that if a type error occurs here we report it, ideally
                 // the REPL should launch anyways.
                 match ecx.elaborate_module() {
-                    Err(e) => { try!(e.report(&mut ecx)) },
+                    Err(e) => { try!(ecx.report(e)) },
                     Ok(_) => {}
                 }
 
@@ -162,7 +163,7 @@ impl Repl {
             match self.repl_interation(input) {
                 // please make me look better
                 Err(e) => {
-                    try!(e.report(&mut self));
+                    try!(self.report(e));
                 },
                 Ok(cont) => {
                     match cont {
@@ -276,27 +277,23 @@ impl Repl {
     }
 }
 
-impl ErrorContext<io::Stdout> for Repl {
-    fn get_source_map(&self, id: ModuleId) -> &SourceMap {
-        self.elab_cx.ty_cx.get_source_map(id)
-    }
-
-    fn get_terminal(&mut self) -> &mut Box<Terminal<Output=io::Stdout> + Send> {
-        self.elab_cx.ty_cx.get_terminal()
+impl HasSession for Repl {
+    fn session(&self) -> &Session {
+        &self.session
     }
 }
 
-impl<O: Write, E: ErrorContext<O>> Report<O, E> for Error {
-    fn report(self, cx: &mut E) -> TResult<()> {
+impl Reportable for Error {
+    fn report(self, session: &Session) -> io::Result<()> {
         match self {
             Error::TypeCk(ty_ck_err) => {
-                ty_ck_err.report(cx)
+                ty_ck_err.report(session)
             }
             Error::Elaborator(elab_err) => {
-                elab_err.report(cx)
+                elab_err.report(session)
             }
             Error::Parser(parser_err) => {
-                parser_err.report(cx)
+                parser_err.report(session)
             }
             e => panic!("need to support better error printing for this {:?}", e),
         }

@@ -6,11 +6,10 @@ mod solver;
 use core::*;
 use super::ast::{SourceMap, ModuleId, Span, HasSpan};
 use super::parser;
-use super::session::Session;
+use super::session::{HasSession, Session, Reportable};
 use super::elaborate::{self};
 pub use self::error::Error;
 use self::constraint::*;
-use error_reporting::{ErrorContext, Report};
 use term::{Terminal, stdout, StdoutTerminal};
 
 use std::cell::RefCell;
@@ -55,16 +54,6 @@ pub struct TyCtxt {
     pub terminal: Box<StdoutTerminal>,
 }
 
-impl ErrorContext<io::Stdout> for TyCtxt {
-    fn get_source_map(&self, id: ModuleId) -> &SourceMap {
-        self.session.get_source_map(id)
-    }
-
-    fn get_terminal(&mut self) -> &mut Box<Terminal<Output=io::Stdout> + Send> {
-        &mut self.terminal
-    }
-}
-
 pub type CkResult = Result<(Term, ConstraintSeq), Error>;
 
 impl TyCtxt {
@@ -101,7 +90,7 @@ impl TyCtxt {
         for def in &module.defs {
             match def {
                 &Item::Data(ref d) => try!(self.declare_datatype(d)),
-                &Item::Fn(ref f) => self.declare_def(f),
+                &Item::Fn(ref f) => try!(self.declare_def(f)),
                 &Item::Extern(ref e) => self.declare_extern(e),
             }
 
@@ -142,7 +131,7 @@ impl TyCtxt {
         // Should find a way to gracefully exit, or report error and continue function
         match emodule {
             Err(e) => {
-                try!(e.report(&mut ecx));
+                try!(ecx.report(e));
                 // We should return an import error here
                 Ok(())
             },
@@ -221,11 +210,13 @@ impl TyCtxt {
         inductive::make_recursor(self, data_type)
     }
 
-    pub fn declare_def(&mut self, f: &Function) {
+    pub fn declare_def(&mut self, f: &Function) -> Result<(), Error> {
         self.functions.insert(f.name.clone(), f.clone());
-        let (term, ty) = self.type_check_term(&f.body, &f.ret_ty).unwrap();
+        let (term, ty) = try!(self.type_check_term(&f.body, &f.ret_ty));
         let def = Definition::new(ty, term);
         self.definitions.insert(f.name.clone(), def);
+
+        Ok(())
     }
 
     /// Declaring an external function creates an axiom in the type checker

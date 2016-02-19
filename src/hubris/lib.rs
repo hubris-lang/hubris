@@ -21,7 +21,6 @@ pub mod ast {
 // pub mod backend;
 pub mod core;
 // pub mod cps;
-pub mod error_reporting;
 pub mod elaborate;
 pub mod llvm;
 
@@ -39,7 +38,7 @@ pub mod syntax;
 use std::path::{PathBuf, Path};
 use std::io;
 
-use self::error_reporting::{Report};
+use self::session::{HasSession, Reportable};
 
 #[derive(Debug)]
 pub enum Error {
@@ -73,6 +72,19 @@ impl From<parser::Error> for Error {
     }
 }
 
+impl Reportable for Error {
+    fn report(self, session: &session::Session) -> io::Result<()> {
+        use self::Error::*;
+
+        match self {
+            Io(io_err) => Err(io_err),
+            Elaborator(elab_err) => session.report(elab_err),
+            TypeCk(ty_cx_err) => session.report(ty_cx_err),
+            Parser(parse_err) => session.report(parse_err),
+        }
+    }
+}
+
 pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> Result<(), Error> {
     let module_id = ast::ModuleId(0);
     let parser = try!(parser::from_file(path.as_ref(), module_id));
@@ -80,8 +92,11 @@ pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> Result
 
     let session =
         session::Session::from_root(
-            path.as_ref(),
-            parser.source_map.clone());
+            path.as_ref());
+
+    session.add_source_map_for(
+        module_id,
+        parser.source_map);
 
     let mut ecx =
         elaborate::ElabCx::from_module(
@@ -91,7 +106,7 @@ pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> Result
     let emodule = ecx.elaborate_module();
 
     match emodule {
-        Err(e) => e.report(&mut ecx).unwrap(),
+        Err(e) => try!(ecx.report(e)),
         Ok(_) => {},
     }
 

@@ -1,25 +1,26 @@
 use super::parser::{Error};
-use super::error_reporting::{Report, ErrorContext};
+use session::{Session, Reportable};
 use term::{Result as TResult, Error as TError};
-use std::io::{Write};
+use std::io::{self, Write};
 
-impl<O: Write, E: ErrorContext<O>> Report<O, E> for Error {
-    fn report(self, cx: &mut E) -> TResult<()> {
+impl Reportable for Error {
+    fn report(self, session: &Session) -> io::Result<()> {
         match self {
             Error::InvalidToken { location } =>
-                cx.span_error(location, format!("invalid token")),
+                session.span_error(location, format!("invalid token")),
             Error::UnrecognizedToken { location, token, expected } =>
-                cx.span_error(location,
+                session.span_error(location,
                     format!("unrecognized token {}; expected {:?}", token, expected)),
             Error::UnexpectedEOF { expected } =>
-                writeln!(cx.get_terminal(), "unexpected EOF; expected {:?}", expected)
-                    .map_err(TError::Io),
+                // session.error("unexpected EOF; expected {:?}", expected),
+                panic!(),
             Error::UserError { error } =>
-                writeln!(cx.get_terminal(), "user error: {:?}", error).map_err(TError::Io),
+                // writeln!(session.get_terminal(), "user error: {:?}", error).map_err(TError::Io),
+                panic!(),
             Error::ExtraTokens { location, token } =>
-                cx.span_error(location, format!("extra tokens {:?}", token)),
+                session.span_error(location, format!("extra tokens {:?}", token)),
             Error::TokenizerError { location, message } =>
-                cx.span_error(location, message)
+                session.span_error(location, message)
         }
     }
 }
