@@ -178,9 +178,15 @@ impl<'tcx> Solver<'tcx> {
 
         else if t.is_forall() && u.is_forall() {
             match (t, u) {
-                (Term::Forall { name: name1, ty: ty1, term: term1, .. },
-                 Term::Forall { name: name2, ty: ty2, term: term2, .. }) => {
-                     let local = self.ty_cx.local(&name1, *ty1.clone()).to_term();
+                (Term::Forall { binder: binder1, term: term1, .. },
+                 Term::Forall { binder: binder2, term: term2, .. }) => {
+                     let name1 = binder1.name.clone();
+                     let name2 = binder2.name;
+
+                     let ty1 = binder1.ty.clone();
+                     let ty2 = binder2.ty;
+
+                     let local = self.ty_cx.local(binder1).to_term();
                      let mut arg_cs = self.simplify(*ty1, *ty2, j.clone());
 
                      let t_sub = term1.instantiate(&local);

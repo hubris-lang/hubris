@@ -4,6 +4,7 @@ use std::fmt::{self, Display, Formatter};
 use std::hash::{Hash, Hasher};
 
 use super::Name;
+use super::Binder;
 
 #[derive(Debug, Clone, Eq)]
 pub enum Term {
@@ -21,14 +22,12 @@ pub enum Term {
     },
     Forall {
         span: Span,
-        name: Name,
-        ty: Box<Term>,
+        binder: Binder,
         term: Box<Term>,
     },
     Lambda {
         span: Span,
-        name: Name,
-        ty: Box<Term>,
+        binder: Binder,
         body: Box<Term>,
     },
     Recursor(Name, Vec<Term>, Box<Term>),
@@ -47,12 +46,13 @@ impl Term {
             };
 
             result = Term::Lambda {
-                name: Name::DeBruijn {
-                    index: 0,
-                    repr: repr,
-                    span: Span::dummy(),
-                },
-                ty: ty,
+                binder: Binder::explicit(
+                    Name::DeBruijn {
+                        index: 0,
+                        repr: repr,
+                        span: Span::dummy(),
+                    },
+                    *ty),
                 body: Box::new(body),
                 span: Span::dummy(),
             };
@@ -65,18 +65,25 @@ impl Term {
         for local in locals.into_iter().rev() {
             let body = result.abstr(&local);
 
-            let (repr, ty) = match local {
-                Name::Local { repr, ty, .. } => (repr, ty),
+            let (repr, ty, mode) = match local {
+                Name::Local { repr, ty, binding_info, .. } => (repr, ty, binding_info),
                 _ => panic!(),
             };
 
-            result = Term::Forall {
-                name: Name::DeBruijn {
-                    index: 0,
-                    repr: repr,
-                    span: Span::dummy(),
-                },
+            let name = Name::DeBruijn {
+                index: 0,
+                repr: repr,
+                span: Span::dummy(),
+            };
+
+            let binder = Binder {
+                name: name,
                 ty: ty,
+                mode: mode,
+            };
+
+            result = Term::Forall {
+                binder: binder,
                 term: Box::new(body),
                 span: Span::dummy(),
             };
@@ -92,7 +99,7 @@ impl Term {
         result
     }
 
-    fn abst(&self, index: usize, x: &Name) -> Term {
+    pub fn abst(&self, index: usize, x: &Name) -> Term {
         use self::Term::*;
         use super::Name::*;
 
@@ -125,18 +132,16 @@ impl Term {
                     span: span,
                 }
             }
-            &Forall { ref name, ref ty, ref term, span } => {
+            &Forall { ref binder, ref term, span } => {
                 Forall {
-                    name: name.clone(),
-                    ty: Box::new(ty.abst(index, x)),
+                    binder: binder.abst(index, x),
                     term: Box::new(term.abst(index + 1, x)),
                     span: span,
                 }
             }
-            &Lambda {  ref name, ref ty, ref body, span } => {
+            &Lambda {  ref binder, ref body, span } => {
                 Lambda {
-                    name: name.clone(),
-                    ty: Box::new(ty.abst(index, x)),
+                    binder: binder.abst(index, x),
                     body: Box::new(body.abst(index + 1, x)),
                     span: span,
                 }
@@ -152,7 +157,7 @@ impl Term {
 
     pub fn instantiate(&self, subst: &Term) -> Term {
         debug!("instantaite: self={} subst={}", self, subst);
-        assert!(subst.is_closed());
+        // assert!(subst.is_closed());
         self.replace(0, subst)
     }
 
@@ -183,18 +188,16 @@ impl Term {
                     span: span,
                 }
             }
-            &Forall { ref name, ref ty, ref term, span } => {
+            &Forall { ref binder, ref term, span } => {
                 Forall {
-                    name: name.clone(),
-                    ty: Box::new(ty.replace(index, subst)),
+                    binder: binder.replace(index, subst),
                     term: Box::new(term.replace(index + 1, subst)),
                     span: span,
                 }
             }
-            &Lambda { ref name, ref ty, ref body, span } => {
+            &Lambda { ref binder, ref body, span } => {
                 Lambda {
-                    name: name.clone(),
-                    ty: Box::new(ty.replace(index, subst)),
+                    binder: binder.replace(index, subst),
                     body: Box::new(body.replace(index + 1, subst)),
                     span: span,
                 }
@@ -208,24 +211,24 @@ impl Term {
         }
     }
 
-    pub fn is_closed(&self) -> bool {
-        use self::Term::*;
-        use super::Name::*;
-
-        match self {
-            &Var { ref name } => {
-                match name {
-                    &DeBruijn { .. } | &Qual { .. } | &Meta { .. } => true,
-                    &Local { .. } => true,
-                }
-            }
-            &App { ref fun, ref arg, .. } => fun.is_closed() && arg.is_closed(),
-            &Forall { ref ty, ref term, .. } => ty.is_closed() && term.is_closed(),
-            &Lambda { ref ty, ref body,.. } => ty.is_closed() && body.is_closed(),
-            &Recursor(..) => true,
-            &Literal { .. } | &Type => true,
-        }
-    }
+    // pub fn is_closed(&self) -> bool {
+    //     use self::Term::*;
+    //     use super::Name::*;
+    //
+    //     match self {
+    //         &Var { ref name } => {
+    //             match name {
+    //                 &DeBruijn { .. } | &Qual { .. } | &Meta { .. } => true,
+    //                 &Local { .. } => true,
+    //             }
+    //         }
+    //         &App { ref fun, ref arg, .. } => fun.is_closed() && arg.is_closed(),
+    //         &Forall { ref ty, ref term, .. } => ty.is_closed() && term.is_closed(),
+    //         &Lambda { ref ty, ref body,.. } => ty.is_closed() && body.is_closed(),
+    //         &Recursor(..) => true,
+    //         &Literal { .. } | &Type => true,
+    //     }
+    // }
 
     pub fn apply(t: Term, u: Term) -> Term {
         Term::App {
@@ -403,8 +406,8 @@ impl Term {
         let mut cursor = self;
         let mut binders = vec![];
 
-        while let &Term::Forall { ref ty, ref term, .. } = cursor {
-            binders.push(&**ty);
+        while let &Term::Forall { ref binder, ref term, .. } = cursor {
+            binders.push(&*binder.ty);
             cursor = &**term;
         }
 
@@ -413,8 +416,8 @@ impl Term {
         }
 
         // We didn't get the bindings from a forall, so let's try a lambda.
-        while let &Term::Lambda { ref ty, ref body, .. } = cursor {
-            binders.push(&**ty);
+        while let &Term::Lambda { ref binder, ref body, .. } = cursor {
+            binders.push(&*binder.ty);
             cursor = &**body;
         }
 
@@ -437,12 +440,12 @@ impl Term {
                     fun.replace_term(&replacement, pred);
                     arg.replace_term(&replacement, pred);
                 }
-                &mut Forall { ref mut ty, ref mut term, .. } => {
-                    ty.replace_term(&replacement, pred);
+                &mut Forall { ref mut binder, ref mut term, .. } => {
+                    binder.ty.replace_term(&replacement, pred);
                     term.replace_term(&replacement, pred);
                 }
-                &mut Lambda { ref mut ty, ref mut body, .. } => {
-                    ty.replace_term(&replacement, pred);
+                &mut Lambda { ref mut binder, ref mut body, .. } => {
+                    binder.ty.replace_term(&replacement, pred);
                     body.replace_term(&replacement, pred);
                 }
                 &mut Recursor(..) => panic!(),
@@ -462,13 +465,13 @@ impl PartialEq for Term {
             (&Var { name: ref name1, .. }, &Var { name: ref name2, .. }) => name1 == name2,
             (&App { fun: ref fun1, arg: ref arg1, .. },
              &App { fun: ref fun2, arg: ref arg2, .. }) => fun1 == fun2 && arg1 == arg2,
-            (&Forall { name: ref name1, ty: ref ty1, term: ref term1, .. },
-             &Forall { name: ref name2, ty: ref ty2, term: ref term2, .. }) => {
-                name1 == name2 && ty1 == ty2 && term1 == term2
+            (&Forall { binder: ref binder1, term: ref term1, .. },
+             &Forall { binder: ref binder2, term: ref term2, .. }) => {
+                binder1 == binder2 && term1 == term2
             }
-            (&Lambda { name: ref args1, ty: ref ret_ty1, body: ref body1, .. },
-             &Lambda { name: ref args2, ty: ref ret_ty2, body: ref body2, ..}) => {
-                args1 == args2 && ret_ty1 == ret_ty2 && body1 == body2
+            (&Lambda { binder: ref binder1, body: ref body1, .. },
+             &Lambda { binder: ref binder2, body: ref body2, ..}) => {
+                binder1 == binder2 && body1 == body2
             }
             // TODO: Deal with Intro/Recursor eq
             (&Type, &Type) => true,
@@ -498,16 +501,14 @@ impl Hash for Term {
                 fun.hash(state);
                 arg.hash(state);
             }
-            &Forall { ref name, ref ty, ref term, .. } => {
+            &Forall { ref binder, ref term, .. } => {
                 3.hash(state);
-                name.hash(state);
-                ty.hash(state);
+                binder.hash(state);
                 term.hash(state);
             }
-            &Lambda { ref name, ref ty, ref body, .. } => {
+            &Lambda { ref binder, ref body, .. } => {
                 4.hash(state);
-                name.hash(state);
-                ty.hash(state);
+                binder.hash(state);
                 body.hash(state);
             }
             &Recursor(..) => {
@@ -533,27 +534,38 @@ impl Display for Term {
                     _ => write!(formatter, "{} {}", fun, arg),
                 }
             }
-            &Forall { ref name, ref ty, ref term, .. } => {
-                if name.is_placeholder() {
-                    match &**ty {
-                        &Forall {..} => try!(write!(formatter, "({}) -> ", ty)),
-                        _ => try!(write!(formatter, "{} -> ", ty)),
+            &Forall { ref binder, ref term, .. } => {
+                if binder.name.is_placeholder() {
+                    match &*binder.ty {
+                        &Forall {..} => try!(write!(formatter, "({}) -> ", binder.ty)),
+                        _ => try!(write!(formatter, "{} -> ", binder.ty)),
                     }
                     try!(write!(formatter, "{}", term));
                 } else {
-                    try!(write!(formatter, "forall ({} : {})", name, ty));
+                    if binder.is_implicit() {
+                        try!(write!(formatter, "forall {{{} : {}}}", binder.name, binder.ty));
+                    } else {
+                        try!(write!(formatter, "forall ({} : {})", binder.name, binder.ty));
+                    }
                     let mut cursor = &**term;
-                    while let &Term::Forall { ref name, ref ty, ref term, .. } = cursor {
-                        if name.is_placeholder() { break; }
-                        try!(write!(formatter, " ({} : {})", name, ty));
+                    while let &Term::Forall { ref binder, ref term, .. } = cursor {
+                        if binder.name.is_placeholder() { break; }
+                        if binder.is_implicit() {
+                            try!(write!(formatter, " {{{} : {}}}", binder.name, binder.ty));
+                        } else {
+                            try!(write!(formatter, " ({} : {})", binder.name, binder.ty));
+                        }
                         cursor = term;
                     }
                     try!(write!(formatter, ", {}", cursor));
                 }
                 Ok(())
             }
-            &Lambda { ref name, ref ty, ref body, .. } => {
-                write!(formatter, "fun ({} : {}) => {}", name, ty, body)
+            &Lambda { ref binder, ref body, .. } => {
+                write!(formatter, "fun ({} : {}) => {}",
+                    binder.name,
+                    binder.ty,
+                    body)
             }
             &Recursor(ref name, ref ts, ref s) => {
                 try!(writeln!(formatter, "recursor({}): {{", name));

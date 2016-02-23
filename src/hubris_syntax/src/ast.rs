@@ -189,7 +189,7 @@ pub enum BindingMode {
 #[derive(PartialEq, Debug, Clone)]
 pub struct Binder {
     pub span: Span,
-    pub name: Name,
+    pub names: Vec<Name>,
     pub ty: Term,
     pub mode: BindingMode,
 }

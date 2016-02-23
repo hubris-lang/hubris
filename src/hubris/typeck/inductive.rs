@@ -29,10 +29,17 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
             self.with_params(self.inductive_ty.ty.clone());
         let  result =
             self.with_params(self.inductive_ty.name.to_term());
+
         let mut i = 0;
         let mut locals = vec![];
-        while let Term::Forall { ty, term, .. } = pi {
-            let local = self.ty_cx.local_with_repr(format!("x{}", i), *ty);
+
+        while let Term::Forall { binder, term, .. } = pi {
+            let local =
+                self.ty_cx
+                    .local_with_repr(
+                        format!("x{}", i),
+                        *binder.ty);
+
             locals.push(local);
             pi = *term;
             i += 1;
@@ -110,7 +117,10 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
         let mut arguments = Vec::new();
         let mut pi = ctor_ty_with_params;
 
-        while let Term::Forall { ty, term, .. } = pi {
+        while let Term::Forall { binder, term, .. } = pi {
+            let name = binder.name;
+            let ty = binder.ty;
+
             // Create a local with a fresh name and type of the binder.
             let arg_local =
                 self.ty_cx.local_with_repr(
@@ -246,8 +256,8 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
             self.inductive_ty.ty.clone());
 
         let mut arguments = Vec::new();
-        while let Term::Forall { ty, term, .. } = data_type_ty {
-            arguments.push(*ty.clone());
+        while let Term::Forall { binder, term,.. } = data_type_ty {
+            arguments.push(*binder.ty);
             data_type_ty = *term;
         }
 

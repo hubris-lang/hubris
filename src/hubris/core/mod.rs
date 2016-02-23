@@ -4,11 +4,12 @@ use std::hash::Hasher;
 
 use super::ast::Span;
 
+pub mod binder;
 pub mod name;
 pub mod term;
 // pub mod visit;
 // pub mod validate;
-
+pub use self::binder::*;
 pub use self::name::*;
 pub use self::term::*;
 

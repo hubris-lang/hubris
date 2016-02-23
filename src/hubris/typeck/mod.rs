@@ -45,7 +45,7 @@ pub struct TyCtxt {
     types: HashMap<Name, Data>,
     functions: HashMap<Name, Function>,
 
-    axioms: HashMap<Name, Term>,
+    pub axioms: HashMap<Name, Term>,
     definitions: HashMap<Name, Definition>,
 
     pub session: Session,
@@ -256,13 +256,13 @@ impl TyCtxt {
         }
     }
 
-    pub fn local(&self, name: &Name, ty: Term) -> Name {
-        let repr = match name {
+    pub fn local(&self, binder: Binder) -> Name {
+        let repr = match &binder.name {
             &Name::DeBruijn { ref repr, .. } => repr,
-            _ => panic!("creating local {:?}", name),
+            _ => panic!("creating local {:?}", binder.name),
         };
 
-        self.local_with_repr(repr.clone(), ty)
+        self.local_with_repr_and_mode(repr.clone(), *binder.ty, binder.mode)
     }
 
     pub fn local_with_repr(&self, repr: String, ty: Term) -> Name {
@@ -270,6 +270,20 @@ impl TyCtxt {
             number: *self.local_counter.borrow(),
             ty: Box::new(ty),
             repr: repr.clone(),
+            binding_info: BindingMode::Explicit,
+        };
+
+        *self.local_counter.borrow_mut() += 1;
+
+        new_local
+    }
+
+    pub fn local_with_repr_and_mode(&self, repr: String, ty: Term, mode: BindingMode) -> Name {
+        let new_local = Name::Local {
+            number: *self.local_counter.borrow(),
+            ty: Box::new(ty),
+            repr: repr.clone(),
+            binding_info: mode,
         };
 
         *self.local_counter.borrow_mut() += 1;
@@ -311,8 +325,8 @@ impl TyCtxt {
     pub fn is_recursive_ctor(&self, ty_name: &Name, mut ctor_ty: &Term) -> bool {
         let mut is_rec = false;
 
-        while let &Term::Forall { ref ty, ref term, .. } = ctor_ty {
-            match ty.head() {
+        while let &Term::Forall { ref binder, ref term, .. } = ctor_ty {
+            match binder.ty.head() {
                 None => is_rec = is_rec || false,
                 Some(head) =>
                     if head == ty_name.to_term() {
@@ -352,13 +366,12 @@ impl TyCtxt {
                     })
                 }
             }
-            &Term::Forall { ref name, ref ty, ref term, span } => {
-                let ety = try!(self.eval(ty));
+            &Term::Forall { ref binder, ref term, span } => {
+                let ety = try!(self.eval(&*binder.ty));
                 let eterm = try!(self.eval(term));
 
                 Ok(Forall {
-                    name: name.clone(),
-                    ty: Box::new(ety),
+                    binder: Binder::with_mode(binder.name.clone(), ety, binder.mode.clone()),
                     term: Box::new(eterm),
                     span: span,
                 })
@@ -554,10 +567,11 @@ impl TyCtxt {
                 constraints.extend(ensure_cs.into_iter());
 
                 match pi_type {
-                    Term::Forall { term, ty, .. } => {
+                    Term::Forall { binder, term, .. } => {
                         let (arg_ty, arg_cs) =
                             try!(self.type_infer_term(arg));
                         let term = try!(self.eval(&term.instantiate(arg)));
+                        // TODO: add type checking obliation here
                         Ok(constrain(term, constraints))
                     }
                     t => Err(Error::ApplicationMismatch(
@@ -568,9 +582,12 @@ impl TyCtxt {
                         Term::Type))
                 }
             }
-            &Term::Forall { ref name, ref ty, ref term, .. } => {
+            &Term::Forall { ref binder, ref term, .. } => {
+                let name = &binder.name;
+                let ty = &binder.ty;
+
                 let mut constraints = vec![];
-                let local = self.local(name, *ty.clone());
+                let local = self.local(binder.clone());
                 let term = term.instantiate(&local.to_term());
 
                 let (sort, ty_cs) = try!(self.type_infer_term(&*ty));
@@ -585,7 +602,10 @@ impl TyCtxt {
 
                 Ok(constrain(Term::Type, constraints))
             }
-            &Term::Lambda { ref name, ref ty, ref body, span, } => {
+            &Term::Lambda { ref binder, ref body, span, } => {
+                let name = &binder.name;
+                let ty = &binder.ty;
+
                 let mut constraints = vec![];
 
                 let (arg_ty, arg_cs) = try!(self.type_infer_term(&ty));
@@ -594,7 +614,7 @@ impl TyCtxt {
                 constraints.extend(arg_cs.into_iter());
                 constraints.extend(sort_cs.into_iter());
 
-                let local = self.local(name, *ty.clone());
+                let local = self.local(binder.clone());
                 let body = body.instantiate(&local.to_term());
 
                 let (pi_body, body_cs) =
@@ -604,8 +624,7 @@ impl TyCtxt {
 
                 let forall = Term::Forall {
                     span: span,
-                    name: name.clone(),
-                    ty: ty.clone(),
+                    binder: binder.clone(),
                     term: Box::new(pi_body.abstr(&local)),
                 };
 
@@ -636,14 +655,14 @@ fn def_eq_modulo(
             def_eq_modulo(fun1, fun2, constraints) &&
             def_eq_modulo(arg1, arg2, constraints)
         }
-        (&Forall { ty: ref ty1, term: ref term1, .. },
-         &Forall { ty: ref ty2, term: ref term2, .. }) => {
-            def_eq_modulo(ty1, ty2, constraints) &&
+        (&Forall { binder: ref binder1, term: ref term1, .. },
+         &Forall { binder: ref binder2, term: ref term2, .. }) => {
+            def_eq_modulo(&*binder1.ty, &*binder2.ty, constraints) &&
             def_eq_modulo(term1, term2, constraints)
         }
-        (&Lambda { ty: ref ty1, body: ref body1, .. },
-         &Lambda { ty: ref ty2, body: ref body2, ..}) => {
-            def_eq_modulo(ty1, ty2, constraints) &&
+        (&Lambda { binder: ref binder1, body: ref body1, .. },
+         &Lambda { binder: ref binder2, body: ref body2, ..}) => {
+            def_eq_modulo(&*binder1.ty, &*binder2.ty, constraints) &&
             def_eq_modulo(body1, body2, constraints)
         }
         (&Var { name: ref name1 }, &Var { name: ref name2 }) => {
@@ -727,18 +746,16 @@ pub fn subst_meta(t: Term, subst_map: &HashMap<Name, (Term, Justification)>) -> 
                 span: span,
             }
         }
-        Forall { name, ty, term, span } => {
+        Forall { binder, term, span } => {
             Forall {
-                name: name,
-                ty: Box::new(subst_meta(*ty, subst_map)),
+                binder: subst_meta_binder(binder, subst_map),
                 term: Box::new(subst_meta(*term, subst_map)),
                 span: span,
             }
         }
-        Lambda { name, ty, body, span } => {
+        Lambda { binder, body, span } => {
             Lambda {
-                name: name,
-                ty: Box::new(subst_meta(*ty, subst_map)),
+                binder: subst_meta_binder(binder, subst_map),
                 body: Box::new(subst_meta(*body, subst_map)),
                 span: span,
             }
@@ -752,4 +769,11 @@ pub fn subst_meta(t: Term, subst_map: &HashMap<Name, (Term, Justification)>) -> 
         Recursor(..) => panic!(),
         _ => panic!(),
     }
+}
+
+pub fn subst_meta_binder(
+        mut b: Binder,
+        subst_map: &HashMap<Name, (Term, Justification)>) -> Binder {
+    b.ty = Box::new(subst_meta(*b.ty, subst_map));
+    b
 }

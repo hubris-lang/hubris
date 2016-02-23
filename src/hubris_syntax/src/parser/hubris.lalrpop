@@ -74,18 +74,27 @@ Parameters: Vec<Binder> = {
 };
 
 Binder: Binder = {
-    "(" <n : Name> ":" <ty : Term1> ")" => Binder {
-        span: Span::new(n.span.lo - 1, ty.get_span().hi + 1),
-        name: n,
+    "(" <lo: @L> <ns : NameSeq> ":" <ty : Term> <hi: @R> ")" => Binder {
+        span: Span::new(lo, hi),
+        names: ns,
         ty: ty,
         mode: BindingMode::Explicit,
     },
-    "{" <n : Name> ":" <ty: Term1> "}" => Binder {
-        span: Span::new(n.span.lo - 1, ty.get_span().hi + 1),
-        name: n,
+    "{" <lo: @L> <ns : NameSeq> ":" <ty: Term> <hi: @R> "}" => Binder {
+        span: Span::new(lo, hi),
+        names: ns,
         ty: ty,
         mode: BindingMode::Implicit,
     },
+};
+
+NameSeq: Vec<Name> = {
+    <n: Name> <ns: NameSeq> => {
+        let mut ns = ns;
+        ns.push(n); ns
+    },
+    <n : Name> => vec![n],
+
 };
 
 pub Term: Term = {
@@ -97,6 +106,29 @@ pub Term: Term = {
 };
 
 TermUS: Term = {
+  <t1: Term1> "->" <t2: Term> => {
+  let span = Span::new(
+      t1.get_span().lo,
+      t2.get_span().hi);
+
+    let mut name =
+      Name::from_str("");
+
+    name.set_span(t1.get_span());
+
+    let binder = Binder {
+      span: t1.get_span(),
+      names: vec![name],
+      ty: t1,
+      mode: BindingMode::Explicit,
+    };
+
+    Term::Forall {
+      span: span,
+      binders: vec![binder],
+      term: Box::new(t2)
+    }
+},
    "forall" <args: (Binder+)> "," <body: Term> => {
       Term::Forall {
           span: Span::dummy(),
@@ -117,47 +149,20 @@ TermUS: Term = {
           span: Span::dummy(),
       }
    },
-  <t: TermFnType> => t
+  <t: Term1> => t
 };
 
 Binding : (Binder, Term) = {
     <n: Name> ":" <ty: Term> ":=" <rhs: Term> => {
         let binder = Binder {
             span: n.span,
-            name: n,
+            names: vec![n],
             ty: ty,
             mode: BindingMode::Explicit,
         };
 
         (binder, rhs)
     }
-};
-
-TermFnType : Term = {
-  <t1: Term1> "->" <t2: TermFnType> => {
-      let span = Span::new(
-        t1.get_span().lo,
-        t2.get_span().hi);
-
-      let mut name =
-        Name::from_str("");
-
-      name.set_span(t1.get_span());
-
-      let binder = Binder {
-        span: t1.get_span(),
-        name: name,
-        ty: t1,
-        mode: BindingMode::Explicit,
-      };
-
-      Term::Forall {
-        span: span,
-        binders: vec![binder],
-        term: Box::new(t2)
-      }
-  },
-  <t: Term1> => t
 };
 
 Term1: Term = {

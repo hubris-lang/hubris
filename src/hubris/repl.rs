@@ -16,6 +16,7 @@ Commands:
     :help        Show this message
     :type <term> Infer the type of <term>
     :reload      Reload the session
+    :debug       Print a debug representation of a term
     :quit        Exit
 "#;
 
@@ -219,6 +220,7 @@ impl Repl {
                     }
                 }
                 Command::Help => println!("{}", HELP_MESSAGE),
+                // Command::Debug =>
             }
         } else {
             try!(self.handle_input(input.to_string()));

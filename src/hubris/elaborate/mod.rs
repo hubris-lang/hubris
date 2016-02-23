@@ -103,7 +103,7 @@ impl ElabCx {
         let mut defs = vec![];
         let mut imports = vec![];
 
-        for def in self.module.items.clone() {
+        for def in self.module.items.clone().into_iter() {
             match &def {
                 &ast::Item::Inductive(ref d) => {
                     for ctor in &d.ctors {
@@ -161,8 +161,9 @@ impl ElabCx {
 
         match def {
             ast::Item::Inductive(d) => {
-                let edata = core::Item::Data(try!(self.elaborate_data(d)));
-                Ok(Some(edata))
+                let edata = try!(self.elaborate_data(d));
+                self.ty_cx.declare_datatype(&edata);
+                Ok(Some(core::Item::Data(edata)))
             }
             ast::Item::Def(f) => {
                 let efn = core::Item::Fn(try!(self.elaborate_fn(f)));
@@ -193,16 +194,21 @@ impl ElabCx {
         let data_ty = data.ty;
 
         let (ctors, ty, params) = try!(lcx.enter_scope(data.parameters.clone(),
-        move |lcx, params| {
+        |lcx, params| {
+            let ty = core::Term::abstract_pi(
+                params.clone(),
+                try!(lcx.elaborate_term(data_ty)));
+
+            // TODO: Fix this shouldn't expose so many details,
+            // but the elaborator has to interleave with the type
+            // checker better.
+            lcx.cx.ty_cx.axioms.insert(ty_name.clone(), ty.clone());
+
             let mut ctors = Vec::new();
             for ctor in data_ctors.into_iter() {
                 let ector = try!(lcx.elaborate_ctor(&params, ctor));
                 ctors.push(ector);
             }
-
-            let ty = core::Term::abstract_pi(
-                params.clone(),
-                try!(lcx.elaborate_term(data_ty)));
 
             Ok((ctors, ty, params))
         }));
@@ -310,26 +316,38 @@ impl<'ecx> LocalElabCx<'ecx> {
         let old_context = self.locals.clone();
         let old_locals_in_order = self.locals_in_order.clone();
 
+        // A binder can contain multiple names like so:
+        // (A B C : T) will result in a binder with
+        // 3 names to bind, so we then do an inner
+        // loop.
+
         for binder in binders {
-            let name = binder.name;
-            let t = binder.ty;
+            let binder_ty = binder.ty;
+            for name in binder.names {
+                let repr = match name.clone().repr {
+                    ast::NameKind::Qualified(..) => panic!(),
+                    ast::NameKind::Unqualified(s) => s,
+                    ast::NameKind::Placeholder => "_".to_string(),
+                };
 
-            let repr = match name.clone().repr {
-                ast::NameKind::Qualified(..) => panic!(),
-                ast::NameKind::Unqualified(s) => s,
-                ast::NameKind::Placeholder => "_".to_string(),
-            };
+                let eterm = try!(self.elaborate_term(binder_ty.clone()));
 
-            let eterm = try!(self.elaborate_term(t));
-            let local = self.cx.ty_cx.local_with_repr(repr, eterm.clone());
+                let binding_info = match binder.mode {
+                    ast::BindingMode::Implicit => core::BindingMode::Implicit,
+                    ast::BindingMode::Explicit => core::BindingMode::Explicit,
+                };
+                // TODO: Fix this
+                let local = self.cx.ty_cx.local_with_repr_and_mode(repr, eterm, binding_info);
 
-            self.locals.insert(name, local.clone());
-            self.locals_in_order.push(local.clone());
-            locals.push(local);
+                self.locals.insert(name, local.clone());
+                self.locals_in_order.push(local.clone());
+                locals.push(local);
+            }
         }
 
         let result = try!(body(self, locals));
 
+        // Restore the previous context.
         self.locals = old_context;
         self.locals_in_order = old_locals_in_order;
 
@@ -347,6 +365,25 @@ impl<'ecx> LocalElabCx<'ecx> {
         let ety = core::Term::abstract_pi(parameters.clone(), ety);
 
         Ok((ename, ety))
+    }
+
+    pub fn apply_implicit_args(&mut self, term: core::Term) -> Result<core::Term, Error> {
+        let mut fun_ty =
+            try!(self.cx.ty_cx.type_infer_term(&term)).0;
+
+        let mut result = term;
+
+        while let core::Term::Forall { binder, term, .. } = fun_ty {
+            if binder.is_implicit() {
+                let implicit_arg =
+                    try!(self.implicit_argument(*binder.ty));
+                result = core::Term::apply(result, implicit_arg);
+                fun_ty = *term;
+            }
+            break;
+        }
+
+        Ok(result)
     }
 
     pub fn elaborate_term(&mut self, term: ast::Term) -> Result<core::Term, Error> {
@@ -368,6 +405,9 @@ impl<'ecx> LocalElabCx<'ecx> {
             ast::Term::App { fun, arg, span } => {
                 let efun = try!(self.elaborate_term(*fun));
                 let earg = try!(self.elaborate_term(*arg));
+
+                let efun = try!(self.apply_implicit_args(efun));
+                let earg = try!(self.apply_implicit_args(earg));
 
                 Ok(core::Term::App {
                     span: span,
@@ -458,6 +498,13 @@ impl<'ecx> LocalElabCx<'ecx> {
         core_name.set_span(name.span);
 
         Ok(core_name)
+    }
+
+    fn implicit_argument(&mut self, ty: core::Term) -> Result<core::Term, Error> {
+        let argument_type =
+            core::Term::abstract_pi(self.locals_in_order.clone(), ty);
+
+        self.meta_in_context(argument_type)
     }
 
     fn meta_in_context(&mut self, ty: core::Term) -> Result<core::Term, Error> {

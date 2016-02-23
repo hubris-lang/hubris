@@ -11,7 +11,7 @@ pub type ConstraintSeq = Vec<Constraint>;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Constraint {
     Unification(Term, Term, Justification),
-    Choice,
+    Choice(Term),
 }
 
 impl Constraint {
@@ -25,7 +25,7 @@ impl Constraint {
                 println!("u: {}", u);
                 Pattern
             }
-            &Choice => panic!(),
+            &Choice(..)=> panic!(),
         };
 
         CategorizedConstraint {

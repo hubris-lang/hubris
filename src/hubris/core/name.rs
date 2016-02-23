@@ -4,6 +4,7 @@ use std::fmt::{self, Display, Formatter};
 use std::hash::{Hash, Hasher};
 
 use super::Term;
+use super::BindingMode;
 
 #[derive(Clone, Debug, Eq)]
 pub enum Name {
@@ -16,6 +17,7 @@ pub enum Name {
         number: usize,
         repr: String,
         ty: Box<Term>,
+        binding_info: BindingMode,
     },
     Qual {
         span: Span,
