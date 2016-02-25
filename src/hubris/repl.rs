@@ -196,7 +196,7 @@ impl Repl {
                 Command::Unknown(u) => return Err(Error::UnknownCommand(u)),
                 Command::TypeOf(t) => {
                     let term = try!(self.preprocess_term(t));
-                    println!("{}", try!(self.type_check_term(&term)));
+                    println!("{}", try!(self.type_check_term(&term)).1);
                 }
                 Command::Def(name) => {
                     let parser = parser::from_string(name, ast::ModuleId(0)).unwrap();
@@ -239,21 +239,17 @@ impl Repl {
         Ok(term)
     }
 
-    fn type_check_term(&mut self, term: &core::Term) -> Result<core::Term, Error> {
-        let (term, cs) = try!(self.elab_cx.ty_cx.type_infer_term(&term));
+    fn type_check_term(&mut self, term: &core::Term) -> Result<(core::Term, core::Term), Error> {
+        let (term, ty) = try!(self.elab_cx.ty_cx.type_check_term(&term, None));
+        let ty = try!(self.elab_cx.ty_cx.eval(&ty));
 
-        if cs.len() > 0 {
-            panic!("found constraints");
-        }
-
-        let ty = try!(self.elab_cx.ty_cx.eval(&term));
-        Ok(ty)
+        Ok((term, ty))
     }
 
     fn handle_input(&mut self, source: String) -> Result<(), Error> {
         let term = try!(self.preprocess_term(source));
-        let ty = try!(self.type_check_term(&term));
-        println!("{} : {}", term, ty);
+        let (term, ty) = try!(self.type_check_term(&term));
+        // println!("{} : {}", term, ty);
         println!("{}", try!(self.elab_cx.ty_cx.eval(&term)));
         Ok(())
     }

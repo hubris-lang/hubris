@@ -15,7 +15,7 @@ pub struct Choice {
 pub struct Solver<'tcx> {
     ty_cx: &'tcx mut TyCtxt,
     constraints: BinaryHeap<CategorizedConstraint>,
-    constraint_mapping: HashMap<Name, Vec<Constraint>>,
+    constraint_mapping: HashMap<Name, Vec<CategorizedConstraint>>,
     pub solution_mapping: HashMap<Name, (Term, Justification)>,
     choice_stack: Vec<Choice>,
 }
@@ -75,13 +75,26 @@ impl<'tcx> Solver<'tcx> {
     }
 
     pub fn visit_unification(&mut self, r: Term, s: Term, j: Justification, category: ConstraintCategory) {
-        // Find if either term is stuck, if so store the meta-variable
-        let meta = match r.is_stuck() {
-            Some(m) => m,
-            None => match s.is_stuck() {
-                None => panic!("one of these should be stuck otherwise the constraint should be gone already I think?"),
-                Some(m) => m,
+        println!("visit_unification: r={} s={}", r, s);
+
+        for (m, sol) in &self.solution_mapping {
+            println!("solution: {}={}", m, sol.0);
+        }
+
+        // Find the correct meta-variable to solve for,
+        // either.
+        let meta = match (r.is_stuck(), s.is_stuck()) {
+            (Some(m1), Some(m2)) => {
+                if self.solution_for(&m1).is_some() {
+                    m1
+                } else {
+                    m2
+                }
             }
+            (Some(m), None) | (None, Some(m)) => {
+                m
+            }
+            _ => panic!("one of these should be stuck otherwise the constraint should be gone already I think?"),
         };
 
         // See if we have a solution in the solution map,
@@ -100,16 +113,16 @@ impl<'tcx> Solver<'tcx> {
             for sc in simp_c {
                 self.visit(sc);
             }
-        // If the constraint is a pattern constraint
-        //
         } else if category == ConstraintCategory::Pattern {
+            println!("r: {} u: {}", r, s);
             // left or right?
-            let meta = match r.head().unwrap() {
+            let meta = match r.head().unwrap_or_else(|| s.head().unwrap()) {
                 Term::Var { name } => name,
                 _ => panic!("mis-idetnfied pattern constraint")
             };
 
-            let locals = r.args().unwrap();
+            let locals = r.args().unwrap_or(vec![]);
+
             println!("meta {}", meta);
 
             let locals: Vec<_> =
@@ -121,14 +134,33 @@ impl<'tcx> Solver<'tcx> {
 
             let solution = Term::abstract_lambda(locals, s);
 
-            self.solution_mapping.insert(meta, (solution, j));
-            // else if the constraint is a pattern h?m ℓ ≈ t, ji then
-            // add the assignment ?m 7→ h(abstractλ ℓ t), ji to S
-            // for each c in U[?m], visit (c)
+            self.solution_mapping.insert(meta.clone(), (solution, j));
+
+            let cs = match self.constraint_mapping.get(&meta) {
+                None => vec![],
+                Some(cs) => cs.clone(),
+            };
+
+            for c in cs {
+                self.visit(c.clone());
+            }
         } else {
-            panic!()
-            // self.add_constraint_for(meta, )
-            // else update U, and insert constraint into Q
+            println!("category: {:?}", category);
+
+            let cat_constraint = CategorizedConstraint {
+                category: category,
+                constraint: Constraint::Unification(r, s, j),
+            };
+
+            let mut cs = match self.constraint_mapping.remove(&meta) {
+                None => vec![],
+                Some(cs) => cs,
+            };
+
+            cs.push(cat_constraint.clone());
+
+            self.constraint_mapping.insert(meta, cs);
+            self.constraints.push(cat_constraint);
         }
     }
 
@@ -155,15 +187,39 @@ impl<'tcx> Solver<'tcx> {
                 panic!()
         }
 
-        else if t.head_is_global() &&
+        else if t.is_app() &&
+                u.is_app() &&
+                t.head_is_global() &&
                 u.head_is_global() &&
                 t.head() == u.head() {
-                    // if t.args.meta_free() && u.args.meta_free() {
+
+            let f = t.head().unwrap();
+
+            let t_args_meta_free =
+                t.args().map(|args|
+                    args.iter().all(|a| !a.is_meta())).unwrap_or(false);
+
+            let u_args_meta_free =
+                u.args().map(|args|
+                    args.iter().all(|a| !a.is_meta())).unwrap_or(false);
+
+            if f.is_bi_reducible() &&
+               t_args_meta_free &&
+               u_args_meta_free {
+                panic!("var are free")
                     //      self.simplify(t.unfold(f) = u.unfold(f))
                     // } else if !f.reducible() {
                     //     t.args = u.args
                     // } else { panic!() }
-            panic!()
+            } else if !f.is_bi_reducible() {
+                t.args().unwrap()
+                 .into_iter()
+                 .zip(u.args().unwrap().into_iter())
+                 .map(|(t_i, s_i)| Constraint::Unification(t_i, s_i, j.clone()).categorize())
+                 .collect()
+            } else {
+                panic!("f is reducible but metavars are ")
+            }
         }
 
         // This should be the case dealing with depth, haven't implemented it
@@ -209,7 +265,7 @@ impl<'tcx> Solver<'tcx> {
         }
     }
 
-    // The set of constraints should probably just be a lazy list.
+    // The set of constraints should probably be a lazy list.
     fn process(&self, cs: Vec<CategorizedConstraint>, j: Justification) {
         // for c in &self.constraints {
         //     println!("{:?}", c);
@@ -231,8 +287,31 @@ impl<'tcx> Solver<'tcx> {
             println!("{:?}", c);
             match c.constraint {
                 Constraint::Choice(..) => panic!("can't process choice constraints"),
-                Constraint::Unification(..) => {
-                    panic!("{:?}", c)
+                Constraint::Unification(t, u, j) => {
+                    for (m, s) in &self.solution_mapping {
+                        println!("{} {}", m, s.0)
+                    }
+                    match c.category {
+                        ConstraintCategory::FlexFlex => {
+                            // Need to clean this code up
+                            let t_head = match t.head().unwrap() {
+                                Term::Var { name , .. } => name,
+                                _ => panic!()
+                            };
+
+                            let u_head = match t.head().unwrap() {
+                                Term::Var { name , .. } => name,
+                                _ => panic!()
+                            };
+
+                            if self.solution_for(&t_head) == self.solution_for(&u_head) {
+                                println!("t {} u {}", t_head, u_head);
+                            } else {
+                                panic!("flex-flex solution is not eq")
+                            }
+                        }
+                        cat => panic!("solver can't handle {:?} {} = {} by {:?}", cat, t, u, j)
+                    }
                 }
             }
         }

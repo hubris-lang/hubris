@@ -370,6 +370,13 @@ impl Term {
         }
     }
 
+    pub fn is_app(&self) -> bool {
+        match self {
+            &Term::App { .. } => true,
+            _ => false,
+        }
+    }
+
     pub fn head_is_local(&self) -> bool {
         self.head().map(|h| match &h {
             &Term::Var { ref name, .. } => match name {
@@ -399,7 +406,9 @@ impl Term {
     }
 
     pub fn instantiate_meta(&self, meta: &Name, term: &Term) -> Term {
-        panic!()
+        let mut result = self.clone();
+        result.replace_term(term, &|tm| tm == &meta.to_term());
+        result
     }
 
     pub fn binders(&self) -> Option<Vec<&Term>> {

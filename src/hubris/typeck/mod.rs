@@ -212,7 +212,7 @@ impl TyCtxt {
 
     pub fn declare_def(&mut self, f: &Function) -> Result<(), Error> {
         self.functions.insert(f.name.clone(), f.clone());
-        let (term, ty) = try!(self.type_check_term(&f.body, &f.ret_ty));
+        let (term, ty) = try!(self.type_check_term(&f.body, Some(f.ret_ty.clone())));
         let def = Definition::new(ty, term);
         self.definitions.insert(f.name.clone(), def);
 
@@ -237,7 +237,7 @@ impl TyCtxt {
                     ref body, ..
                 } = fun;
 
-                try!(self.type_check_term(&body, &ret_ty));
+                try!(self.type_check_term(&body, Some(ret_ty.clone())));
                 Ok(())
             }
             _ => Ok(()),
@@ -478,37 +478,40 @@ impl TyCtxt {
         }
     }
 
-    pub fn type_check_term(&mut self, term: &Term, ty: &Term) -> Result<(Term, Term), Error> {
-        debug!("type_check_term: infering the type of {}", term);
+    pub fn type_check_term(
+            &mut self,
+            term: &Term,
+            expected_ty: Option<Term>) -> Result<(Term, Term), Error> {
+        debug!("type_check_term: term={}", term);
+
         let (infer_ty, mut infer_cs) = try!(self.type_infer_term(term));
 
-        infer_cs.push(
-            Constraint::Unification(
-                infer_ty,
-                ty.clone(),
-                Justification::Asserted));
-
-        if infer_cs.len() > 0 {
-            for c in &infer_cs {
-                println!("{}", c);
+        match &expected_ty {
+            &None => {}
+            &Some(ref ty) => {
+                infer_cs.push(
+                    Constraint::Unification(
+                        infer_ty.clone(),
+                        ty.clone(),
+                        Justification::Asserted));
             }
-            {
-                let mut solver =
-                    try!(solver::Solver::new(self,  infer_cs));
-
-                let solutions = try!(solver.solve());
-
-                for sol in &solutions {
-                    println!("{}", (sol.1).0);
-                }
-
-                let new_term = subst_meta(term.clone(), &solutions);
-
-                Ok((new_term, ty.clone()))
-            }
-        } else {
-            Ok((term.clone(), ty.clone()))
         }
+
+        let mut solver =
+            try!(solver::Solver::new(self, infer_cs));
+
+        let solutions = try!(solver.solve());
+
+        for sol in &solutions {
+            println!("{}", (sol.1).0);
+        }
+
+        // Finally use the solutions given to us by the solver or
+        // throw an error if there is not a solution for a meta-var
+        // occurring in them
+        let new_term = try!(replace_metavars(term.clone(), &solutions));
+
+        Ok((new_term, expected_ty.unwrap_or(infer_ty)))
     }
 
     pub fn ensure_sort(&self, term: Term) -> CkResult {
@@ -571,6 +574,12 @@ impl TyCtxt {
                         let (arg_ty, arg_cs) =
                             try!(self.type_infer_term(arg));
                         let term = try!(self.eval(&term.instantiate(arg)));
+                        constraints.extend(arg_cs.into_iter());
+                        constraints.push(
+                            Constraint::Unification(
+                                arg_ty,
+                                *binder.ty,
+                                Justification::Asserted));
                         // TODO: add type checking obliation here
                         Ok(constrain(term, constraints))
                     }
@@ -735,45 +744,48 @@ fn name_to_path(name: &Name) -> Option<PathBuf> {
     }
 }
 
-pub fn subst_meta(t: Term, subst_map: &HashMap<Name, (Term, Justification)>) -> Term {
+pub fn replace_metavars(t: Term, subst_map: &HashMap<Name, (Term, Justification)>) -> Result<Term, Error> {
     use core::Term::*;
 
     match t {
         App { fun, arg, span } => {
-            App {
-                fun: Box::new(subst_meta(*fun, subst_map)),
-                arg: Box::new(subst_meta(*arg, subst_map)),
+            Ok(App {
+                fun: Box::new(try!(replace_metavars(*fun, subst_map))),
+                arg: Box::new(try!(replace_metavars(*arg, subst_map))),
                 span: span,
-            }
+            })
         }
         Forall { binder, term, span } => {
-            Forall {
-                binder: subst_meta_binder(binder, subst_map),
-                term: Box::new(subst_meta(*term, subst_map)),
+            Ok(Forall {
+                binder: try!(subst_meta_binder(binder, subst_map)),
+                term: Box::new(try!(replace_metavars(*term, subst_map))),
                 span: span,
-            }
+            })
         }
         Lambda { binder, body, span } => {
-            Lambda {
-                binder: subst_meta_binder(binder, subst_map),
-                body: Box::new(subst_meta(*body, subst_map)),
+            Ok(Lambda {
+                binder: try!(subst_meta_binder(binder, subst_map)),
+                body: Box::new(try!(replace_metavars(*body, subst_map))),
                 span: span,
+            })
+        }
+        Var { ref name } if name.is_meta() => {
+            match subst_map.get(&name) {
+                None => panic!("no solution found for {}", name),
+                Some(x) => Ok(x.clone().0)
             }
+
         }
-        Var { name } => {
-            subst_map.get(&name)
-                     .map(|x| x.clone().0)
-                     .unwrap_or(name.to_term())
-        }
-        Type => Type,
+        v @ Var { .. } => Ok(v),
+        l @ Literal { .. } => Ok(l),
+        Type => Ok(Type),
         Recursor(..) => panic!(),
-        _ => panic!(),
     }
 }
 
 pub fn subst_meta_binder(
         mut b: Binder,
-        subst_map: &HashMap<Name, (Term, Justification)>) -> Binder {
-    b.ty = Box::new(subst_meta(*b.ty, subst_map));
-    b
+        subst_map: &HashMap<Name, (Term, Justification)>) -> Result<Binder, Error> {
+    b.ty = Box::new(try!(replace_metavars(*b.ty, subst_map)));
+    Ok(b)
 }

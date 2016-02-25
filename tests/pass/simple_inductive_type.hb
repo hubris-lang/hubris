@@ -1,6 +1,6 @@
 module SIT
 
-inductive Nat : Type
+inductive Nat
   | Z : Nat
   | S : Nat -> Nat
 end

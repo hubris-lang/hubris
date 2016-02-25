@@ -1,8 +1,9 @@
 // This style of elaboration is heavily inspired by the elaboration procedure used in
 // lean (http://arxiv.org/pdf/1505.04324v2.pdf).
 
-use std::fmt::{self, Formatter, Display};
 use std::cmp::{PartialOrd, Ordering};
+use std::fmt::{self, Formatter, Display};
+use std::rc::Rc;
 
 use core::Term;
 
@@ -15,22 +16,69 @@ pub enum Constraint {
 }
 
 impl Constraint {
+    /// Categorizes a constraint into one of constraint categories,
+    /// this will also cannonicalize the constraints so that that
+    /// the solver does not have to deal with some symmetric cases.
     pub fn categorize(self) -> CategorizedConstraint {
         use self::Constraint::*;
         use self::ConstraintCategory::*;
 
-        let category = match &self {
-            &Unification(ref t, ref u, ref j) => {
+        match self {
+            Unification(t, u, j) => {
                 println!("t: {}", t);
                 println!("u: {}", u);
-                Pattern
+                match (&t, &u) {
+                    // We match to "assert" in this branch that terms
+                    // should both be applications.
+                    (&Term::App { .. }, &Term::App { .. })
+                    => {
+                        let t_head = t.head().unwrap();
+                        let u_head = u.head().unwrap();
+                        let t_args = t.args().unwrap();
+                        let u_args = u.args().unwrap();
+                        println!("t_head: {}", t_head);
+                        println!("u_head: {}", u_head);
+                        CategorizedConstraint {
+                            constraint: Unification(t.clone(), u.clone(), j),
+                            category: Pattern,
+                        }
+                    }
+                    // The only other case should be two terms that are just names like,
+                    // ?m = Unit or ?m1 = ?m2.
+                    (&Term::Var { ref name }, other_side) |
+                    (other_side, &Term::Var { ref name })=> {
+                        if name.is_meta() && other_side.is_meta() {
+                            CategorizedConstraint {
+                                constraint: Unification(
+                                    Term::Var { name: name.clone() },
+                                    other_side.clone(),
+                                    j),
+                                category: FlexFlex,
+                            }
+                        } else if name.is_meta() && !other_side.is_meta() {
+                            CategorizedConstraint {
+                                constraint: Unification(
+                                    Term::Var { name: name.clone() },
+                                    other_side.clone(),
+                                    j),
+                                category: Pattern,
+                            }
+                        } else if !name.is_meta() && other_side.is_meta() {
+                            CategorizedConstraint {
+                                constraint: Unification(
+                                    other_side.clone(),
+                                    Term::Var { name: name.clone() },
+                                    j),
+                                category: Pattern,
+                            }
+                        } else {
+                            panic!("not sure how to categorize this constraint");
+                        }
+                    }
+                    p => panic!("ICE {} = {}, {:?} {:?}", p.0, p.1, p.0.head(), p.1.head())
+                }
             }
-            &Choice(..)=> panic!(),
-        };
-
-        CategorizedConstraint {
-            constraint: self,
-            category: category
+            Choice(..)=> panic!(),
         }
     }
 }
@@ -50,7 +98,7 @@ impl Display for Constraint {
 pub enum Justification {
     Asserted,
     Assumption,
-    Join(Box<Justification>, Box<Justification>)
+    Join(Rc<Justification>, Rc<Justification>)
 }
 
 pub trait Join {
@@ -59,7 +107,8 @@ pub trait Join {
 
 impl Join for Justification {
     fn join(self, j: Justification) -> Self {
-        panic!()
+        // TODO: Check this out
+        Justification::Join(Rc::new(self.clone()), Rc::new(j))
     }
 }
 
