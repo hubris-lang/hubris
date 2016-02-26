@@ -29,6 +29,7 @@ fn error<T>(c: ErrorCode, l: usize) -> Result<T,Error> {
 pub enum Tok<'input> {
     // Keywords;
     Def,
+    Axiom,
     End,
     Extern,
     Forall,
@@ -103,6 +104,7 @@ pub type Spanned<T> = (usize, T, usize);
 
 const KEYWORDS: &'static [(&'static str, Tok<'static>)] = &[
     ("def", Def),
+    ("axiom", Axiom),
     ("end", End),
     ("extern", Extern),
     ("forall", Forall),

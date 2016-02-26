@@ -21,6 +21,10 @@ pub trait VisitorMut<'v> : Sized {
         walk_mut_def(self, def)
     }
 
+    fn visi_mut_axiom(&mut self, a: &'v mut Axiom) {
+        walk_mut_axiom(self, a)
+    }
+
     fn visit_mut_term(&mut self, term: &'v mut Term) {
         walk_mut_term(self, term)
     }
@@ -63,6 +67,7 @@ pub fn walk_mut_item<'v, V: VisitorMut<'v>>(visitor: &mut V, item: &'v mut Item)
     match item {
         &mut Item::Inductive(ref mut d) => visitor.visit_mut_data(d),
         &mut Item::Def(ref mut def) => visitor.visit_mut_def(def),
+        &mut Item::Axiom(ref mut a) => visitor.visi_mut_axiom(a),
         &mut Item::Extern(ref mut ext) => panic!(),
         &mut Item::Comment(ref mut s) => panic!(),
         &mut Item::Import(ref mut n) => visitor.visit_mut_name(n),
@@ -95,6 +100,12 @@ pub fn walk_mut_def<'v, V: VisitorMut<'v>>(visitor: &mut V, def: &'v mut Def) {
 
     visitor.visit_mut_term(&mut def.ty);
     visitor.visit_mut_term(&mut def.body);
+}
+
+pub fn walk_mut_axiom<'v, V: VisitorMut<'v>>(visitor: &mut V, a: &'v mut Axiom) {
+    visitor.visit_mut_span(&mut a.span);
+    visitor.visit_mut_name(&mut a.name);
+    visitor.visit_mut_term(&mut a.ty);
 }
 
 pub fn walk_mut_term<'v, V: VisitorMut<'v>>(visitor: &mut V, term: &'v mut Term) {

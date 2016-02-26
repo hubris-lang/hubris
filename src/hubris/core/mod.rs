@@ -39,6 +39,12 @@ pub struct Data {
 
 pub type Constructor = (Name, Term);
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Axiom {
+    pub span: Span,
+    pub name: Name,
+    pub ty: Term,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Extern {
@@ -51,6 +57,7 @@ pub struct Extern {
 pub enum Item {
     Data(Data),
     Fn(Function),
+    Axiom(Axiom),
     Extern(Extern),
 }
 

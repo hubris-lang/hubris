@@ -25,6 +25,7 @@ Item: Item = {
 ItemNoSpan: Item = {
   <d: Inductive> => Item::Inductive(d),
   <f: Def> => Item::Def(f),
+  <a: Axiom> => Item::Axiom(a),
   <e: Extern> => Item::Extern(e),
   <i: Import> => Item::Import(i),
   <dc: "DocComment"> => Item::Comment(dc.to_owned()),
@@ -53,6 +54,15 @@ Def: Def = {
           args: args,
           ty: t,
           body: body,
+      }
+};
+
+Axiom: Axiom = {
+    "axiom" <n: Name> ":" <t: Term> =>
+      Axiom {
+        span: Span::dummy(),
+        name: n,
+        ty: t,
       }
 };
 
@@ -246,6 +256,7 @@ extern {
     type Error = tok::Error;
     enum Tok<'input> {
         "def" => Tok::Def,
+        "axiom" => Tok::Axiom,
         "end" => Tok::End,
         "extern" => Tok::Extern,
         "forall" => Tok::Forall,

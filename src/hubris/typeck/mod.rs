@@ -92,6 +92,7 @@ impl TyCtxt {
                 &Item::Data(ref d) => try!(self.declare_datatype(d)),
                 &Item::Fn(ref f) => try!(self.declare_def(f)),
                 &Item::Extern(ref e) => self.declare_extern(e),
+                &Item::Axiom(ref ax) => self.declare_axiom(ax),
             }
 
             try!(self.type_check_def(def));
@@ -226,6 +227,10 @@ impl TyCtxt {
     /// function.
     pub fn declare_extern(&mut self, e: &Extern) {
         self.axioms.insert(e.name.clone(), e.term.clone());
+    }
+
+    pub fn declare_axiom(&mut self, e: &Axiom) {
+        self.axioms.insert(e.name.clone(), e.ty.clone());
     }
 
     pub fn type_check_def(&mut self, def: &Item) -> Result<(), Error> {

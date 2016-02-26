@@ -1,8 +1,5 @@
 module Logic
 
-import Nat
-import Eq
-
 inductive True : Type
   | I : True
 end

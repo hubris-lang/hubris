@@ -124,6 +124,7 @@ impl ElabCx {
                             &core::Item::Data(ref d) => try!(self.ty_cx.declare_datatype(d)),
                             &core::Item::Fn(ref f) => try!(self.ty_cx.declare_def(f)),
                             &core::Item::Extern(ref e) => self.ty_cx.declare_extern(e),
+                            &core::Item::Axiom(ref ax) => self.ty_cx.declare_axiom(ax),
                         }
 
                         defs.push(edef);
@@ -169,6 +170,10 @@ impl ElabCx {
                 let efn = core::Item::Fn(try!(self.elaborate_fn(f)));
                 debug!("elaborate_def: fn={}", efn);
                 Ok(Some(efn))
+            }
+            ast::Item::Axiom(ax) => {
+                let ax = core::Item::Axiom(try!(self.elaborate_axiom(ax)));
+                Ok(Some(ax))
             }
             ast::Item::Extern(e) => {
                 let ext = core::Item::Extern(try!(self.elaborate_extern(e)));
@@ -243,6 +248,15 @@ impl ElabCx {
                 // with all of the function's parameters abstracted.
                 body: core::Term::abstract_lambda(args, ebody),
             })
+        })
+    }
+
+    fn elaborate_axiom(&mut self, ax: ast::Axiom) -> Result<core::Axiom, Error> {
+        let ast::Axiom { span, name, ty } = ax;
+        Ok(core::Axiom {
+            span: span,
+            name: try!(self.elaborate_global_name(name)),
+            ty: try!(LocalElabCx::from_elab_cx(self).elaborate_term(ty)),
         })
     }
 

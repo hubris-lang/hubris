@@ -146,6 +146,7 @@ impl Module {
 pub enum Item {
     Inductive(Inductive),
     Def(Def),
+    Axiom(Axiom),
     Extern(Extern),
     Comment(String),
     Import(Name),
@@ -158,6 +159,7 @@ impl HasSpan for Item {
         match self {
             &Inductive(ref data) => data.span,
             &Def(ref fun) => fun.span,
+            &Axiom(ref a) => a.span,
             &Extern(ref ext) => ext.span,
             &Comment(_) => Span::dummy(),
             &Import(_) => Span::dummy(),
@@ -172,6 +174,8 @@ impl HasSpan for Item {
                 inductive.span = sp,
             &mut Def(ref mut def) =>
                 def.span = sp,
+            &mut Axiom(ref mut a) =>
+                a.span = sp,
             &mut Extern(ref mut ext) =>
                 ext.span = sp,
             &mut Comment(_) => {},
@@ -219,6 +223,13 @@ pub struct Def {
     pub args: Vec<Binder>,
     pub ty: Term,
     pub body: Term,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Axiom {
+    pub span: Span,
+    pub name: Name,
+    pub ty: Term,
 }
 
 #[derive(Debug, PartialEq, Clone)]

@@ -21,6 +21,10 @@ pub trait Visitor<'v> : Sized {
         walk_def(self, def)
     }
 
+    fn visit_axiom(&mut self, a: &'v Axiom) {
+        walk_axiom(self, a)
+    }
+
     fn visit_term(&mut self, term: &'v Term) {
         walk_term(self, term)
     }
@@ -63,6 +67,7 @@ pub fn walk_item<'v, V: Visitor<'v>>(visitor: &mut V, item: &'v Item) {
     match item {
         &Item::Inductive(ref d) => visitor.visit_data(d),
         &Item::Def(ref def) => visitor.visit_def(def),
+        &Item::Axiom(ref a) => visitor.visit_axiom(a),
         &Item::Extern(ref ext) => panic!(),
         &Item::Comment(ref s) => panic!(),
         &Item::Import(ref n) => visitor.visit_name(n),
@@ -95,6 +100,12 @@ pub fn walk_def<'v, V: Visitor<'v>>(visitor: &mut V, def: &'v Def) {
 
     visitor.visit_term(&def.ty);
     visitor.visit_term(&def.body);
+}
+
+pub fn walk_axiom<'v, V: Visitor<'v>>(visitor: &mut V, a: &'v Axiom) {
+    visitor.visit_span(&a.span);
+    visitor.visit_name(&a.name);
+    visitor.visit_term(&a.ty);
 }
 
 pub fn walk_term<'v, V: Visitor<'v>>(visitor: &mut V, term: &'v Term) {
