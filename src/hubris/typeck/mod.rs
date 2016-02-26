@@ -494,11 +494,17 @@ impl TyCtxt {
         match &expected_ty {
             &None => {}
             &Some(ref ty) => {
+                let just =
+                    Justification::Asserted(
+                        AssertedBy::ExpectedFound(
+                            infer_ty.clone(),
+                            ty.clone()));
+
                 infer_cs.push(
                     Constraint::Unification(
                         infer_ty.clone(),
                         ty.clone(),
-                        Justification::Asserted));
+                        just));
             }
         }
 
@@ -580,11 +586,17 @@ impl TyCtxt {
                             try!(self.type_infer_term(arg));
                         let term = try!(self.eval(&term.instantiate(arg)));
                         constraints.extend(arg_cs.into_iter());
+
+                        let just =
+                            Justification::Asserted(
+                                AssertedBy::Application(*fun.clone(), *arg.clone()));
+
                         constraints.push(
                             Constraint::Unification(
                                 arg_ty,
                                 *binder.ty,
-                                Justification::Asserted));
+                                just));
+
                         // TODO: add type checking obliation here
                         Ok(constrain(term, constraints))
                     }

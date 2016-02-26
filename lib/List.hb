@@ -8,25 +8,15 @@ inductive List (A : Type) : Type
   | Cons : A -> List A -> List A
 end
 
-def nil {A : Type} : List A :=
-  Nil A
-end
-
-def cons {A : Type} (x : A) (xs : List A) : List A :=
-  Cons A x xs
-end
-
 def append {A : Type} (xs ys : List A) : List A :=
-  List.rec A
-    _
-    ys
+  List.rec _ ys
     (fun (x : A) (zz : List A) (recCase : List A) : List A => Cons A x recCase)
     xs
 end
 
-def main : List Unit :=
-  append (Nil Unit) nil
-end
+-- def main : List Unit :=
+--  append (Nil Unit) nil
+-- end
 
 --def range (upto : Nat) : List Nat :=
 --  Nat.rec _

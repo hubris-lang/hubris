@@ -81,6 +81,13 @@ impl Name {
             _ => None,
         }
     }
+
+    pub fn is_implicit(&self) -> bool {
+        match self {
+            &Name::Local { binding_info: BindingMode::Implicit, .. } => true,
+            _ => false,
+        }
+    }
 }
 
 impl PartialEq for Name {

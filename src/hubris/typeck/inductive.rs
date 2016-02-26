@@ -214,7 +214,7 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
                 .clone();
 
         let recursor_ty =
-            Term::abstract_pi(
+            Term::abstract_pi_implicit(
                 params.clone(),
                 Term::abstract_pi(vec![ind_hyp.clone()],
                     Term::abstract_pi(minor_premises.clone(),

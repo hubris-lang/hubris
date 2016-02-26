@@ -96,9 +96,41 @@ impl Display for Constraint {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Justification {
-    Asserted,
+    Asserted(AssertedBy),
     Assumption,
     Join(Rc<Justification>, Rc<Justification>)
+}
+
+impl Display for Justification {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        use self::Justification::*;
+
+        match self {
+            &Asserted(ref by) => by.fmt(formatter),
+            &Assumption => write!(formatter, "assumption"),
+            &Join(ref r1, ref sr2) => write!(formatter, "assumption"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum AssertedBy {
+    Application(Term, Term),
+    ExpectedFound(Term, Term),
+}
+
+impl Display for AssertedBy {
+
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        use self::AssertedBy::*;
+
+        match self {
+            &Application(ref u, ref t) =>
+                write!(formatter, "applied {} to {}", u, t),
+            &ExpectedFound(ref infer_ty, ref ty) =>
+                write!(formatter, "expected {} found {}", ty, infer_ty),
+        }
+    }
 }
 
 pub trait Join {

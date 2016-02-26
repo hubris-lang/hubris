@@ -13,7 +13,7 @@ pub trait Visitor<'v> : Sized {
         walk_inductive(self, inductive)
     }
 
-    fn visit_extern(&mut self, ext: &'v Extern) {
+    fn visit_extern(&mut self, _ext: &'v Extern) {
         panic!();
     }
 
@@ -26,7 +26,6 @@ pub trait Visitor<'v> : Sized {
     }
 
     fn visit_span(&mut self, _span: Span) {
-        panic!();
     }
 
     fn visit_case(&mut self, case: &'v Case) {

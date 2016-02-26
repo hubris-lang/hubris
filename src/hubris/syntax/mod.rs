@@ -1,7 +1,7 @@
 use super::parser::{Error};
 use session::{Session, Reportable};
 use term::{Result as TResult, Error as TError};
-use std::io::{self, Write};
+use std::io::{self};
 
 impl Reportable for Error {
     fn report(self, session: &Session) -> io::Result<()> {
@@ -12,11 +12,9 @@ impl Reportable for Error {
                 session.span_error(location,
                     format!("unrecognized token {}; expected {:?}", token, expected)),
             Error::UnexpectedEOF { expected } =>
-                // session.error("unexpected EOF; expected {:?}", expected),
-                panic!(),
+                session.error(format!("unexpected end of file expected {:?}", expected)),
             Error::UserError { error } =>
-                // writeln!(session.get_terminal(), "user error: {:?}", error).map_err(TError::Io),
-                panic!(),
+                session.error(format!("user error: {:?}", error)),
             Error::ExtraTokens { location, token } =>
                 session.span_error(location, format!("extra tokens {:?}", token)),
             Error::TokenizerError { location, message } =>

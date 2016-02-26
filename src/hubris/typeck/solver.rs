@@ -165,6 +165,7 @@ impl<'tcx> Solver<'tcx> {
     }
 
     pub fn simplify(&self, t: Term, u: Term, j: Justification) -> Vec<CategorizedConstraint> {
+        println!("t: {} u: {}", t, u);
         // Case 1: t and u are precisely the same term
         // unification constraints of this form incur
         // no constraints since this is discharge-able here.
@@ -260,7 +261,7 @@ impl<'tcx> Solver<'tcx> {
                u.is_stuck().is_some() {
                 vec![Constraint::Unification(t, u, j).categorize()]
             } else {
-                panic!("use judgement to report error {:?}", j)
+                panic!("use judgement to report error {}", j)
             }
         }
     }

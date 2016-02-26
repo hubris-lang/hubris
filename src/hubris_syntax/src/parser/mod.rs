@@ -54,7 +54,7 @@ impl Parser {
         let tokenizer = tok::Tokenizer::new(&self.source_map.source[..], 0);
         let module = try!(hubris::parse_Module(&self.source_map.source[..], tokenizer)
                               .map_err(Parser::translate_error));
-        ensure_no_dummy_spans(&module);
+        // ensure_no_dummy_spans(&module);
         Ok(module)
     }
 

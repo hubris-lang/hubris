@@ -180,6 +180,20 @@ impl Session   {
 
         Ok(())
     }
+
+    pub fn error(&self, message: String) -> io::Result<()> {
+        let mut session_data = self.data.borrow_mut();
+        let &mut SessionData {
+            ref mut terminal,
+            ref mut source_maps,
+            .. } = &mut *session_data;
+            
+        try!(terminal.fg(color::RED));
+        try!(writeln!(terminal, "{}", message));
+        try!(terminal.reset());
+        try!(terminal.flush());
+        Ok(())
+    }
 }
 
 impl HasSession for Session {

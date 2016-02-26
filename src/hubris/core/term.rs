@@ -4,7 +4,7 @@ use std::fmt::{self, Display, Formatter};
 use std::hash::{Hash, Hasher};
 
 use super::Name;
-use super::Binder;
+use super::{Binder, BindingMode};
 
 #[derive(Debug, Clone, Eq)]
 pub enum Term {
@@ -61,13 +61,29 @@ impl Term {
     }
 
     pub fn abstract_pi(locals: Vec<Name>, t: Term) -> Term {
+        Term::abstract_pi_internal(locals, t, None)
+    }
+
+    pub fn abstract_pi_implicit(locals: Vec<Name>, t: Term) -> Term {
+        Term::abstract_pi_internal(locals, t, Some(BindingMode::Implicit))
+    }
+
+    fn abstract_pi_internal(
+        locals: Vec<Name>,
+        t: Term,
+        binding_override: Option<BindingMode>) -> Term {
+
         let mut result = t;
         for local in locals.into_iter().rev() {
             let body = result.abstr(&local);
 
             let (repr, ty, mode) = match local {
-                Name::Local { repr, ty, binding_info, .. } => (repr, ty, binding_info),
-                _ => panic!(),
+                Name::Local { repr, ty, binding_info, .. } => match binding_override {
+                    None => (repr, ty, binding_info),
+                    Some(bi_override) => (repr, ty, bi_override),
+                },
+                _ => panic!("internal invariant violated: tried to abstract a name that is \
+                             not a local constant"),
             };
 
             let name = Name::DeBruijn {

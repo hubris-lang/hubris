@@ -32,6 +32,8 @@ impl Module {
 pub struct Data {
     pub span: Span,
     pub name: Name,
+    // Not sure if this is the best choice, should it be a binder?
+    // we try to strip as much high level structure as possible.
     pub parameters: Vec<Name>,
     pub ty: Term,
     pub ctors: Vec<Constructor>,
