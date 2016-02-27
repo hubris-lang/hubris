@@ -230,7 +230,11 @@ impl Repl {
     }
 
     fn preprocess_term(&mut self, source: String) -> Result<core::Term, Error> {
-        let parser = parser::from_string(source, ModuleId(0)).unwrap();
+        let source_copy = source.clone();
+
+        self.session.add_source_map_for(ModuleId(0), SourceMap::from_source(source));
+
+        let parser = parser::from_string(source_copy, ModuleId(0)).unwrap();
         let term = try!(parser.parse_term());
 
         let mut lcx = LocalElabCx::from_elab_cx(&mut self.elab_cx);
