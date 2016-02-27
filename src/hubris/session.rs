@@ -135,7 +135,8 @@ impl Session   {
             .. } = &mut *session_data;
 
         let module_id = span.module_id;
-        let source_map = source_maps.get(&module_id).unwrap();
+        let emp = SourceMap::empty();
+        let source_map = source_maps.get(&module_id).unwrap_or(&emp);
 
         // TODO: We need to know if we wrap around to more then one line.
         let (line_no, col_no) = source_map.position(span)
