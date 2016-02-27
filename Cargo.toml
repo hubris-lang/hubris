@@ -24,6 +24,9 @@ git = "https://github.com/hubris-lang/rust-readline"
 [dependencies.llvm-sys]
 git = "https://github.com/hubris-lang/llvm-sys.rs"
 
+[dependencies.pretty]
+git = "https://github.com/hubris-lang/pretty"
+
 [dependencies]
 log = "*"
 env_logger = "*"
