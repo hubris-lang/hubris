@@ -728,14 +728,15 @@ fn def_eq_name_modulo(
     debug!("equal_name_modulo: {} == {}", n1, n2);
 
     match (n1, n2) {
-        (&Name::Meta { .. }, &Name::Meta { .. }) => {
-            panic!()
+        (&Name::Meta { number: number1, .. },
+         &Name::Meta { number: number2, .. }) => {
+            number1 == number2
         }
-        (&Name::Meta { .. }, n) => {
-            panic!()
+        (&Name::Meta { .. }, _) => {
+            false
         }
-        (n, &Name::Meta { .. }) => {
-            panic!()
+        (_, &Name::Meta { .. }) => {
+            false
         }
         _ => n1 == n2
     }

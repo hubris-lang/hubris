@@ -1,7 +1,6 @@
 use super::parser::{Error};
 use session::{Session, Reportable};
-use term::{Result as TResult, Error as TError};
-use std::io::{self};
+use std::io;
 
 impl Reportable for Error {
     fn report(self, session: &Session) -> io::Result<()> {

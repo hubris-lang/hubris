@@ -1,8 +1,11 @@
+use hubris_syntax::ast::HasSpan;
 use super::TyCtxt;
 use super::constraint::*;
+use super::super::session::{HasSession, Session, Reportable};
 use core::{Term, Name};
 
 use std::collections::{BinaryHeap, HashMap};
+use std::io;
 
 pub struct Choice {
     constraints: BinaryHeap<CategorizedConstraint>,
@@ -22,7 +25,25 @@ pub struct Solver<'tcx> {
 
 #[derive(Debug, Clone)]
 pub enum Error {
-    SolverErr
+    Justification(Justification),
+}
+
+impl Reportable for Error {
+    fn report(self, cx: &Session) -> io::Result<()> {
+        match self {
+            Error::Justification(j) => match j {
+                Justification::Asserted(by) => match by {
+                    AssertedBy::Application(u, t) =>
+                        cx.span_error(u.get_span(), format!("applied {} to {}", u, t)),
+                    AssertedBy::ExpectedFound(infer_ty, ty) =>
+                        cx.span_error(ty.get_span(),
+                            format!("expected type `{}` found `{}`", ty, infer_ty)),
+                },
+                Justification::Assumption => cx.error("assumption".to_string()),
+                Justification::Join(r1, sr2) => cx.error("assumption".to_string()),
+            },
+        }
+    }
 }
 
 impl<'tcx> Solver<'tcx> {
@@ -43,20 +64,21 @@ impl<'tcx> Solver<'tcx> {
         for c in cs {
             match &c {
                 &Constraint::Unification(ref t, ref u, ref j) => {
-                    let simple_cs = solver.simplify(t.clone(), u.clone(), j.clone());
+                    let simple_cs =
+                        try!(solver.simplify(t.clone(), u.clone(), j.clone()));
                     for sc in simple_cs {
                         solver.visit(sc);
                     }
                 },
                 &Constraint::Choice(..) => {
-                    solver.visit(c.clone().categorize())
+                    try!(solver.visit(c.clone().categorize()))
                 }
             }
         }
         Ok(solver)
     }
 
-    pub fn visit(&mut self, c: CategorizedConstraint) {
+    pub fn visit(&mut self, c: CategorizedConstraint) -> Result<(), Error> {
         let CategorizedConstraint {
             category,
             constraint,
@@ -74,7 +96,7 @@ impl<'tcx> Solver<'tcx> {
         self.solution_mapping.get(name).map(|x| x.clone())
     }
 
-    pub fn visit_unification(&mut self, r: Term, s: Term, j: Justification, category: ConstraintCategory) {
+    pub fn visit_unification(&mut self, r: Term, s: Term, j: Justification, category: ConstraintCategory) -> Result<(), Error> {
         println!("visit_unification: r={} s={}", r, s);
 
         for (m, sol) in &self.solution_mapping {
@@ -105,14 +127,16 @@ impl<'tcx> Solver<'tcx> {
         // Finally we need to visit every constraint that
         // results.
         if let Some((t, j_m)) = self.solution_for(&meta) {
-            let simp_c = self.simplify(
+            let simp_c = try!(self.simplify(
                 r.instantiate_meta(&meta, &t),
                 s.instantiate_meta(&meta, &t),
-                j.join(j_m));
+                j.join(j_m)));
 
             for sc in simp_c {
-                self.visit(sc);
+                try!(self.visit(sc));
             }
+
+            Ok(())
         } else if category == ConstraintCategory::Pattern {
             println!("r: {} u: {}", r, s);
             // left or right?
@@ -142,8 +166,10 @@ impl<'tcx> Solver<'tcx> {
             };
 
             for c in cs {
-                self.visit(c.clone());
+                try!(self.visit(c.clone()));
             }
+
+            Ok(())
         } else {
             println!("category: {:?}", category);
 
@@ -161,16 +187,18 @@ impl<'tcx> Solver<'tcx> {
 
             self.constraint_mapping.insert(meta, cs);
             self.constraints.push(cat_constraint);
+
+            Ok(())
         }
     }
 
-    pub fn simplify(&self, t: Term, u: Term, j: Justification) -> Vec<CategorizedConstraint> {
+    pub fn simplify(&self, t: Term, u: Term, j: Justification) -> Result<Vec<CategorizedConstraint>, Error> {
         println!("t: {} u: {}", t, u);
         // Case 1: t and u are precisely the same term
         // unification constraints of this form incur
         // no constraints since this is discharge-able here.
         if t == u {
-            return vec![];
+            return Ok(vec![]);
         }
 
         // Case 2: if t can beta/iota reduce to then
@@ -213,11 +241,11 @@ impl<'tcx> Solver<'tcx> {
                     //     t.args = u.args
                     // } else { panic!() }
             } else if !f.is_bi_reducible() {
-                t.args().unwrap()
+                Ok(t.args().unwrap()
                  .into_iter()
                  .zip(u.args().unwrap().into_iter())
                  .map(|(t_i, s_i)| Constraint::Unification(t_i, s_i, j.clone()).categorize())
-                 .collect()
+                 .collect())
             } else {
                 panic!("f is reducible but metavars are ")
             }
@@ -244,24 +272,24 @@ impl<'tcx> Solver<'tcx> {
                      let ty2 = binder2.ty;
 
                      let local = self.ty_cx.local(binder1).to_term();
-                     let mut arg_cs = self.simplify(*ty1, *ty2, j.clone());
+                     let mut arg_cs = try!(self.simplify(*ty1, *ty2, j.clone()));
 
                      let t_sub = term1.instantiate(&local);
                      let u_sub = term2.instantiate(&local);
 
-                     let body_cs = self.simplify(t_sub, u_sub, j.clone());
+                     let body_cs = try!(self.simplify(t_sub, u_sub, j.clone()));
                      arg_cs.extend(body_cs.into_iter());
 
-                     arg_cs
+                     Ok(arg_cs)
                  }
                  _ => panic!("this should be impossible")
             }
         } else {
             if t.is_stuck().is_some() ||
                u.is_stuck().is_some() {
-                vec![Constraint::Unification(t, u, j).categorize()]
+                Ok(vec![Constraint::Unification(t, u, j).categorize()])
             } else {
-                panic!("use judgement to report error {}", j)
+                Err(Error::Justification(j))
             }
         }
     }

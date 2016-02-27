@@ -1,6 +1,6 @@
 use super::super::ast::{Span, HasSpan};
 use super::super::core::{Term, Name};
-use super::super::session::{Reportable, Session};
+use super::super::session::{Reportable, HasSession, Session};
 use parser;
 use super::solver;
 
@@ -13,8 +13,6 @@ pub enum Error {
     ApplicationMismatch(Span, Term, Term, Term, Term),
     DefUnequal(Span, Term, Term, Vec<(Term, Term)>),
     UnknownVariable(Name),
-    ElaborationError,
-    MkErr,
     NameExists(Name),
     NoMain,
     Many(Vec<Error>),
@@ -87,12 +85,18 @@ impl Reportable for Error {
 
                 cx.span_error(span, msg)
             }
-            e => panic!("error with printing support: {:?}", e),
-            // Error::Many(errs) => {
-            //     for err in errs {
-            //         try!(report_type_error(ty_cx, &mut out, err));
-            //     }
-            // }
+            Error::Many(errs) => {
+                for err in errs {
+                    try!(cx.report(err));
+                }
+                Ok(())
+            }
+            Error::NameExists(_) => panic!(),
+            Error::NoMain => panic!(),
+            Error::Parser(e) => cx.report(e),
+            Error::Term(t) => Err(From::from(t)),
+            Error::Solver(s) => cx.report(s),
+            Error::Io(e) => Err(e),
         }
     }
 }
