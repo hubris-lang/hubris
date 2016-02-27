@@ -14,7 +14,7 @@ pub trait VisitorMut<'v> : Sized {
     }
 
     fn visit_mut_extern(&mut self, ext: &'v mut Extern) {
-        panic!();
+        walk_mut_extern(self, ext)
     }
 
     fn visit_mut_def(&mut self, def: &'v mut Def) {
@@ -36,16 +36,14 @@ pub trait VisitorMut<'v> : Sized {
     fn visit_mut_span(&mut self, _span: &'v mut Span) {}
 
     fn visit_mut_case(&mut self, case: &'v mut Case) {
-        panic!();
+        walk_mut_case(self, case);
     }
 
     fn visit_mut_pattern(&mut self, pattern: &'v mut Pattern) {
-        panic!();
+        walk_mut_pattern(self, pattern)
     }
 
-    fn visit_mut_literal(&mut self, lit: &'v mut Literal) {
-        panic!();
-    }
+    fn visit_mut_literal(&mut self, _lit: &'v mut Literal) {}
 
     fn visit_mut_name(&mut self, name: &'v mut Name) {
         walk_mut_name(self, name)
@@ -62,8 +60,6 @@ pub fn walk_mut_module<'v, V: VisitorMut<'v>>(visitor: &mut V, module: &'v mut M
 }
 
 pub fn walk_mut_item<'v, V: VisitorMut<'v>>(visitor: &mut V, item: &'v mut Item) {
-    use ast::Item::*;
-
     match item {
         &mut Item::Inductive(ref mut d) => visitor.visit_mut_data(d),
         &mut Item::Def(ref mut def) => visitor.visit_mut_def(def),
@@ -108,16 +104,30 @@ pub fn walk_mut_axiom<'v, V: VisitorMut<'v>>(visitor: &mut V, a: &'v mut Axiom) 
     visitor.visit_mut_term(&mut a.ty);
 }
 
+pub fn walk_mut_extern<'v, V: VisitorMut<'v>>(visitor: &mut V, ext: &'v mut Extern) {
+    visitor.visit_mut_span(&mut ext.span);
+    visitor.visit_mut_name(&mut ext.name);
+    visitor.visit_mut_term(&mut ext.term);
+}
+
 pub fn walk_mut_term<'v, V: VisitorMut<'v>>(visitor: &mut V, term: &'v mut Term) {
     use ast::Term::*;
 
     match term {
-        &mut Literal { ref mut span, ref mut lit } =>
-            panic!(),
+        &mut Literal { ref mut span, ref mut lit } => {
+            visitor.visit_mut_span(span);
+            visitor.visit_mut_literal(lit);
+        }
         &mut Var { ref mut name } =>
             visitor.visit_mut_name(name),
-        &mut Match { ref mut span, ref mut scrutinee, ref mut cases } =>
-            panic!(),
+        &mut Match { ref mut span, ref mut scrutinee, ref mut cases } => {
+            visitor.visit_mut_span(span);
+            visitor.visit_mut_term(scrutinee);
+            for case in cases {
+                visitor.visit_mut_case(case);
+            }
+        }
+
         &mut App { ref mut span, ref mut fun, ref mut arg } => {
             visitor.visit_mut_span(span);
             visitor.visit_mut_term(fun);
@@ -150,6 +160,33 @@ pub fn walk_mut_term<'v, V: VisitorMut<'v>>(visitor: &mut V, term: &'v mut Term)
             panic!()
         }
         &mut Type => {}
+    }
+}
+
+pub fn walk_mut_case<'v, V: VisitorMut<'v>>(visitor: &mut V, case: &'v mut Case) {
+    let &mut Case {
+        ref mut span,
+        ref mut pattern,
+        ref mut rhs,
+    } = case;
+
+    visitor.visit_mut_span(span);
+    visitor.visit_mut_pattern(pattern);
+    visitor.visit_mut_term(rhs);
+}
+
+pub fn walk_mut_pattern<'v, V: VisitorMut<'v>>(visitor: &mut V, pattern: &'v mut Pattern) {
+    use ast::Pattern::*;
+
+    match pattern {
+        &mut Name(ref mut name) => visitor.visit_mut_name(name),
+        &mut Constructor(ref mut name, ref mut pats) => {
+            visitor.visit_mut_name(name);
+            for pat in pats {
+                visitor.visit_mut_pattern(pat);
+            }
+        }
+        &mut Placeholder => {}
     }
 }
 

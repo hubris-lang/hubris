@@ -120,7 +120,6 @@ pub enum AssertedBy {
 }
 
 impl Display for AssertedBy {
-
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
         use self::AssertedBy::*;
 

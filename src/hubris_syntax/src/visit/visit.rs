@@ -14,7 +14,7 @@ pub trait Visitor<'v> : Sized {
     }
 
     fn visit_extern(&mut self, ext: &'v Extern) {
-        panic!();
+        walk_extern(self, ext)
     }
 
     fn visit_def(&mut self, def: &'v Def) {
@@ -36,15 +36,14 @@ pub trait Visitor<'v> : Sized {
     fn visit_span(&mut self, _span: &'v Span) {}
 
     fn visit_case(&mut self, case: &'v Case) {
-        panic!();
+        walk_case(self, case)
     }
 
     fn visit_pattern(&mut self, pattern: &'v Pattern) {
-        panic!();
+        walk_pattern(self, pattern)
     }
 
-    fn visit_literal(&mut self, lit: &'v Literal) {
-        panic!();
+    fn visit_literal(&mut self, _lit: &'v Literal) {
     }
 
     fn visit_name(&mut self, name: &'v Name) {
@@ -62,14 +61,12 @@ pub fn walk_module<'v, V: Visitor<'v>>(visitor: &mut V, module: &'v Module) {
 }
 
 pub fn walk_item<'v, V: Visitor<'v>>(visitor: &mut V, item: &'v Item) {
-    use ast::Item::*;
-
     match item {
         &Item::Inductive(ref d) => visitor.visit_data(d),
         &Item::Def(ref def) => visitor.visit_def(def),
         &Item::Axiom(ref a) => visitor.visit_axiom(a),
-        &Item::Extern(ref ext) => panic!(),
-        &Item::Comment(ref s) => panic!(),
+        &Item::Extern(ref ext) => visitor.visit_extern(ext),
+        &Item::Comment(ref _s) => panic!(),
         &Item::Import(ref n) => visitor.visit_name(n),
     }
 }
@@ -108,16 +105,29 @@ pub fn walk_axiom<'v, V: Visitor<'v>>(visitor: &mut V, a: &'v Axiom) {
     visitor.visit_term(&a.ty);
 }
 
+pub fn walk_extern<'v, V: Visitor<'v>>(visitor: &mut V, ext: &'v Extern) {
+    visitor.visit_span(&ext.span);
+    visitor.visit_name(&ext.name);
+    visitor.visit_term(&ext.term);
+}
+
 pub fn walk_term<'v, V: Visitor<'v>>(visitor: &mut V, term: &'v Term) {
     use ast::Term::*;
 
     match term {
-        &Literal { ref span, ref lit } =>
-            panic!(),
+        &Literal { ref span, ref lit } => {
+            visitor.visit_span(span);
+            visitor.visit_literal(lit);
+        }
         &Var { ref name } =>
             visitor.visit_name(name),
-        &Match { ref span, ref scrutinee, ref cases } =>
-            panic!(),
+        &Match { ref span, ref scrutinee, ref cases } => {
+            visitor.visit_span(span);
+            visitor.visit_term(scrutinee);
+            for case in cases {
+                visitor.visit_case(case);
+            }
+        },
         &App { ref span, ref fun, ref arg } => {
             visitor.visit_span(span);
             visitor.visit_term(fun);
@@ -152,6 +162,34 @@ pub fn walk_term<'v, V: Visitor<'v>>(visitor: &mut V, term: &'v Term) {
         &Type => {}
     }
 }
+
+pub fn walk_case<'v, V: Visitor<'v>>(visitor: &mut V, case: &'v Case) {
+    let &Case {
+        ref span,
+        ref pattern,
+        ref rhs,
+    } = case;
+
+    visitor.visit_span(span);
+    visitor.visit_pattern(pattern);
+    visitor.visit_term(rhs);
+}
+
+pub fn walk_pattern<'v, V: Visitor<'v>>(visitor: &mut V, pattern: &'v Pattern) {
+    use ast::Pattern::*;
+
+    match pattern {
+        &Name(ref name) => visitor.visit_name(name),
+        &Constructor(ref name, ref pats) => {
+            visitor.visit_name(name);
+            for pat in pats {
+                visitor.visit_pattern(pat);
+            }
+        }
+        &Placeholder => {}
+    }
+}
+
 
 pub fn walk_name<'v, V: Visitor<'v>>(visitor: &mut V, name: &'v Name) {
     visitor.visit_span(&name.span);

@@ -17,6 +17,7 @@ use lalrpop_util::ParseError;
 pub use self::source_map::SourceMap;
 pub use super::tok;
 use self::dummy_span_debug::*;
+use self::annotate_module_id::*;
 
 pub struct Parser {
     pub source_map: SourceMap,
@@ -52,9 +53,12 @@ pub enum Error {
 impl Parser {
     pub fn parse(&self) -> Result<super::ast::Module, Error> {
         let tokenizer = tok::Tokenizer::new(&self.source_map.source[..], 0);
-        let module = try!(hubris::parse_Module(&self.source_map.source[..], tokenizer)
+        let mut module = try!(hubris::parse_Module(&self.source_map.source[..], tokenizer)
                               .map_err(Parser::translate_error));
-        // ensure_no_dummy_spans(&module);
+        if cfg!(debug_assertions) {
+            ensure_no_dummy_spans(&module);
+        }
+        annotate_module_id(&mut module, self.id);
         Ok(module)
     }
 

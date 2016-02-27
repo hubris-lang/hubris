@@ -1,7 +1,7 @@
 [package]
 name = "hubris"
 version = "0.1.0"
-authors = ["Jared Roesch <roeschinc@gmail.com>"]
+authors = ["Jared Roesch <jroesch@cs.washington.edu>"]
 
 [lib]
 name = "hubris"
