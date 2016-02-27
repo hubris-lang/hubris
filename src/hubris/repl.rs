@@ -16,7 +16,7 @@ Commands:
     :help        Show this message
     :type <term> Infer the type of <term>
     :reload      Reload the session
-    :debug       Print a debug representation of a term
+    :def         Print a debug representation of a term
     :quit        Exit
 "#;
 
@@ -296,6 +296,10 @@ impl Reportable for Error {
             }
             Error::Parser(parser_err) => {
                 parser_err.report(session)
+            }
+            Error::UnknownCommand(cmd) => {
+                println!("Unknown command \"{}\"", cmd);
+                Ok(())
             }
             e => panic!("need to support better error printing for this {:?}", e),
         }
