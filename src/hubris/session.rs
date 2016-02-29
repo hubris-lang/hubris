@@ -188,12 +188,16 @@ impl Session   {
             ref mut terminal,
             ref mut source_maps,
             .. } = &mut *session_data;
-            
+
         try!(terminal.fg(color::RED));
         try!(writeln!(terminal, "{}", message));
         try!(terminal.reset());
         try!(terminal.flush());
         Ok(())
+    }
+
+    pub fn is_loaded(&self, path: &Path) -> bool {
+        false
     }
 }
 

@@ -87,13 +87,13 @@ Binder: Binder = {
     "(" <lo: @L> <ns : NameSeq> ":" <ty : Term> <hi: @R> ")" => Binder {
         span: Span::new(lo, hi),
         names: ns,
-        ty: ty,
+        ty: Some(ty),
         mode: BindingMode::Explicit,
     },
     "{" <lo: @L> <ns : NameSeq> ":" <ty: Term> <hi: @R> "}" => Binder {
         span: Span::new(lo, hi),
         names: ns,
-        ty: ty,
+        ty: Some(ty),
         mode: BindingMode::Implicit,
     },
 };
@@ -104,7 +104,6 @@ NameSeq: Vec<Name> = {
         ns.push(n); ns
     },
     <n : Name> => vec![n],
-
 };
 
 pub Term: Term = {
@@ -129,7 +128,7 @@ TermUS: Term = {
     let binder = Binder {
       span: t1.get_span(),
       names: vec![name],
-      ty: t1,
+      ty: Some(t1),
       mode: BindingMode::Explicit,
     };
 
@@ -167,7 +166,7 @@ Binding : (Binder, Term) = {
         let binder = Binder {
             span: n.span,
             names: vec![n],
-            ty: ty,
+            ty: Some(ty),
             mode: BindingMode::Explicit,
         };
 

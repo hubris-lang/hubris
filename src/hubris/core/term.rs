@@ -343,6 +343,7 @@ impl Term {
             f @ &Forall { .. } => Some(f.clone()),
             l @ &Lambda { .. } => Some(l.clone()),
             v @ &Var { .. } => Some(v.clone()),
+            &Type => Some(Type),
             &Recursor(..) => panic!(),
             _ => None,
         }
@@ -360,6 +361,7 @@ impl Term {
                 }
                 Some(result.into_iter().rev().collect())
             }
+            &Var { .. } | &Type => Some(vec![]),
             _ => None,
         }
     }
@@ -605,6 +607,15 @@ impl Display for Term {
         }
     }
 }
+
+// impl Display for Option<Term> {
+//     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+//         match self {
+//             &None => write!(formatter, "None"),
+//             &Some(v) => write!(formatter, "Some({})", v),
+//         }
+//     }
+// }
 
 impl HasSpan for Term {
     fn get_span(&self) -> Span {

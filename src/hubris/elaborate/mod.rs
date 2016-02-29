@@ -285,21 +285,6 @@ impl ElabCx {
             ast::NameKind::Placeholder => Err(Error::UnexpectedQualifiedName),
         }
     }
-
-    fn meta(&mut self, ty: core::Term) -> Result<core::Name, Error> {
-        let meta_no = self.metavar_counter;
-        let meta = core::Name::Meta {
-            number: meta_no,
-            ty: Box::new(ty),
-        };
-        self.metavar_counter += 1;
-        Ok(meta)
-    }
-
-    fn make_placeholder(&mut self) -> Result<core::Name, Error> {
-        let ty = try!(self.meta(core::Term::Type));
-        self.meta(ty.to_term())
-    }
 }
 
 pub struct LocalElabCx<'ecx> {
@@ -344,7 +329,7 @@ impl<'ecx> LocalElabCx<'ecx> {
                     ast::NameKind::Placeholder => "_".to_string(),
                 };
 
-                let eterm = try!(self.elaborate_term(binder_ty.clone()));
+                let eterm = try!(self.elaborate_term(binder_ty.clone().unwrap()));
 
                 let binding_info = match binder.mode {
                     ast::BindingMode::Implicit => core::BindingMode::Implicit,
@@ -376,7 +361,8 @@ impl<'ecx> LocalElabCx<'ecx> {
         let ename = try!(self.cx.elaborate_global_name(ctor.0));
 
         let ety = try!(self.elaborate_term(ctor.1));
-        let ety = core::Term::abstract_pi(parameters.clone(), ety);
+        // TODO: Need to figure out if params are implicit for this ctor or not
+        let ety = core::Term::abstract_pi_implicit(parameters.clone(), ety);
 
         Ok((ename, ety))
     }
@@ -393,8 +379,9 @@ impl<'ecx> LocalElabCx<'ecx> {
                     try!(self.implicit_argument(*binder.ty));
                 result = core::Term::apply(result, implicit_arg);
                 fun_ty = *term;
+            } else {
+                break;
             }
-            break;
         }
 
         Ok(result)
@@ -411,7 +398,7 @@ impl<'ecx> LocalElabCx<'ecx> {
                 })
             }
             ast::Term::Var { name, .. } => {
-                Ok(core::Term::Var { name: try!(self.elaborate_name(name)) })
+                self.elaborate_name(name)
             }
             ast::Term::Match { scrutinee, cases, span } => {
                 elaborate_pattern_match(self, *scrutinee, cases)
@@ -472,12 +459,12 @@ impl<'ecx> LocalElabCx<'ecx> {
         }
     }
 
-    fn elaborate_name(&mut self, name: ast::Name) -> Result<core::Name, Error> {
+    fn elaborate_name(&mut self, name: ast::Name) -> Result<core::Term, Error> {
         debug!("elaborate_name: name={}", name);
 
         // Wish we had seme regions
         let placeholder = match name.repr {
-            ast::NameKind::Placeholder => Some(try!(self.cx.make_placeholder())),
+            ast::NameKind::Placeholder => Some(try!(self.make_placeholder())),
             _ => None,
         };
 
@@ -489,21 +476,20 @@ impl<'ecx> LocalElabCx<'ecx> {
                     // If it isn't a global we are going to see if the name has already been
                     // loading into the type context, if not this is an error.
                     None => {
-                        let core_name = match to_qualified_name(name.clone()) {
+                        match to_qualified_name(name.clone()) {
                             None => placeholder.unwrap(),
-                            Some(cn) => cn,
-                        };
-
-                        if self.cx.ty_cx.in_scope(&core_name) || core_name.is_meta() {
-                            core_name
-                        } else {
-                            return Err(Error::UnknownVariable(name.clone()))
+                            Some(ref core_name) if self.cx.ty_cx.in_scope(core_name) => {
+                                core_name.to_term()
+                            }
+                            Some(_) => {
+                                return Err(Error::UnknownVariable(name.clone()))
+                            }
                         }
                     }
-                    Some(nn) => nn.clone(),
+                    Some(nn) => nn.to_term(),
                 }
             }
-            Some(local) => local.clone(),
+            Some(local) => local.to_term(),
         };
 
         // IMPORTANT!: Make sure we update the span here for the precise name being elaborated
@@ -515,10 +501,12 @@ impl<'ecx> LocalElabCx<'ecx> {
     }
 
     fn implicit_argument(&mut self, ty: core::Term) -> Result<core::Term, Error> {
-        let argument_type =
-            core::Term::abstract_pi(self.locals_in_order.clone(), ty);
+        self.meta_in_context(ty)
+    }
 
-        self.meta_in_context(argument_type)
+    fn make_placeholder(&mut self) -> Result<core::Term, Error> {
+        let ty = try!(self.meta_in_context(core::Term::Type));
+        self.meta_in_context(ty)
     }
 
     fn meta_in_context(&mut self, ty: core::Term) -> Result<core::Term, Error> {
@@ -527,18 +515,18 @@ impl<'ecx> LocalElabCx<'ecx> {
         let ty =
             core::Term::abstract_pi(self.locals_in_order.clone(), ty);
 
+        let args: Vec<_> =
+            self.locals_in_order
+                .iter()
+                .map(core::Name::to_term)
+                .collect();
+
         let meta = core::Name::Meta {
             number: meta_no,
             ty: Box::new(ty),
         };
 
         self.cx.metavar_counter += 1;
-
-        let args =
-            self.locals_in_order
-                .iter()
-                .map(core::Name::to_term)
-                .collect();
 
         Ok(core::Term::apply_all(meta.to_term(), args))
     }

@@ -30,7 +30,11 @@ impl Constraint {
                 match (&t, &u) {
                     // We match to "assert" in this branch that terms
                     // should both be applications.
-                    (&Term::App { .. }, &Term::App { .. })
+                    (&Term::App { .. }, &Term::App { .. }) |
+                    (&Term::App { .. }, &Term::Var { .. }) |
+                    (&Term::Var { .. }, &Term::App { .. }) |
+                    (&Term::Type, &Term::App { .. }) |
+                    (&Term::App { .. }, &Term::Type)
                     => {
                         let t_head = t.head().unwrap();
                         let u_head = u.head().unwrap();
@@ -38,9 +42,17 @@ impl Constraint {
                         let u_args = u.args().unwrap();
                         println!("t_head: {}", t_head);
                         println!("u_head: {}", u_head);
-                        CategorizedConstraint {
-                            constraint: Unification(t.clone(), u.clone(), j),
-                            category: Pattern,
+
+                        if t_head.is_meta() {
+                            CategorizedConstraint {
+                                constraint: Unification(t.clone(), u.clone(), j),
+                                category: Pattern,
+                            }
+                        } else {
+                            CategorizedConstraint {
+                                constraint: Unification(u.clone(), t.clone(), j),
+                                category: Pattern,
+                            }
                         }
                     }
                     // The only other case should be two terms that are just names like,
@@ -72,10 +84,11 @@ impl Constraint {
                                 category: Pattern,
                             }
                         } else {
-                            panic!("not sure how to categorize this constraint");
+                            panic!("not sure how to categorize this constraint \
+                              {} = {} by {}", t, u, j);
                         }
                     }
-                    p => panic!("ICE {} = {}, {:?} {:?}", p.0, p.1, p.0.head(), p.1.head())
+                    p => panic!("ICE {} = {} | {} {}", p.0, p.1, p.0.head().unwrap(), p.1.head().unwrap())
                 }
             }
             Choice(..)=> panic!(),
@@ -92,7 +105,6 @@ impl Display for Constraint {
         }
     }
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Justification {

@@ -200,5 +200,5 @@ pub fn walk_binder<'v, V: Visitor<'v>>(visitor: &mut V, binder: &'v Binder) {
     for name in &binder.names {
         visitor.visit_name(name);
     }
-    visitor.visit_term(&binder.ty);
+    binder.ty.as_ref().map(|ty| visitor.visit_term(ty));
 }

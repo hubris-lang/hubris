@@ -158,6 +158,8 @@ impl<'tcx> Solver<'tcx> {
 
             let solution = Term::abstract_lambda(locals, s);
 
+            assert!(meta.is_meta());
+
             self.solution_mapping.insert(meta.clone(), (solution, j));
 
             let cs = match self.constraint_mapping.get(&meta) {
@@ -212,8 +214,18 @@ impl<'tcx> Solver<'tcx> {
         // we should generate constraints between each of their
         // arguments for example l s_1 .. s_n = l t_1 .. t_n
         // creates (s_1 = t_1, j) ... (s_n = t_n, j).
-        else if t.head_is_local() && u.head_is_local() {
-                panic!()
+        else if t.head_is_local() && u.head_is_local() && t.head() == u.head() {
+            println!("t={} u={}", t, u);
+            let t_args = t.args().unwrap().into_iter();
+            let u_args = u.args().unwrap().into_iter();
+
+            let mut cs = vec![];
+            for (s, r) in t_args.zip(u_args) {
+                let arg_cs = try!(self.simplify(s, r, j.clone()));
+                cs.extend(arg_cs.into_iter())
+            }
+
+            Ok(cs)
         }
 
         else if t.is_app() &&

@@ -15,7 +15,7 @@ end
 -- end
 
 def main : Unit :=
-  Nil Unit
+  Star
 end
 
 -- def main : List Unit :=

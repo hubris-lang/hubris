@@ -199,5 +199,5 @@ pub fn walk_mut_binder<'v, V: VisitorMut<'v>>(visitor: &mut V, binder: &'v mut B
     for name in &mut binder.names {
         visitor.visit_mut_name(name);
     }
-    visitor.visit_mut_term(&mut binder.ty);
+    binder.ty.as_mut().map(|ty| visitor.visit_mut_term(ty));
 }

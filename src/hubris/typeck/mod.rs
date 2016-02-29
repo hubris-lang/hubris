@@ -10,11 +10,10 @@ use super::session::{HasSession, Session, Reportable};
 use super::elaborate::{self};
 pub use self::error::Error;
 use self::constraint::*;
-use term::{Terminal, stdout, StdoutTerminal};
+use term::{stdout, StdoutTerminal};
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::io::{self};
 use std::path::{PathBuf, Path};
 
 pub enum DeltaReduction {
@@ -116,30 +115,34 @@ impl TyCtxt {
         let file_to_load = path.join(file_suffix);
         debug!("load_import: file_to_load={}", file_to_load.display());
 
-        let id = self.session.next_module_id();
-        let parser = try!(parser::from_file(&file_to_load, id));
-        let module = try!(parser.parse());
+        if !self.session.is_loaded(&file_to_load) {
+            let id = self.session.next_module_id();
+            let parser = try!(parser::from_file(&file_to_load, id));
+            let module = try!(parser.parse());
 
-        self.session.add_source_map_for(id, parser.source_map);
+            self.session.add_source_map_for(id, parser.source_map);
 
-        let mut ecx = elaborate::ElabCx::from_module(
-            module,
-            self.session.clone());
+            let mut ecx = elaborate::ElabCx::from_module(
+                module,
+                self.session.clone());
 
-        let emodule =
-            ecx.elaborate_module();
+            let emodule =
+                ecx.elaborate_module();
 
-        // Should find a way to gracefully exit, or report error and continue function
-        match emodule {
-            Err(e) => {
-                try!(ecx.report(e));
-                // We should return an import error here
-                Ok(())
-            },
-            Ok(emodule) => {
-                let ty_cx = try!(TyCtxt::from_module(&emodule, self.session.clone()));
-                self.merge(ty_cx)
+            // Should find a way to gracefully exit, or report error and continue function
+            match emodule {
+                Err(e) => {
+                    try!(ecx.report(e));
+                    // We should return an import error here
+                    Ok(())
+                },
+                Ok(emodule) => {
+                    let ty_cx = try!(TyCtxt::from_module(&emodule, self.session.clone()));
+                    self.merge(ty_cx)
+                }
             }
+        } else {
+            Ok(())
         }
     }
 
@@ -345,8 +348,26 @@ impl TyCtxt {
     }
 
     pub fn whnf(&self, term: &Term) -> CkResult {
-        debug!("whnf: {}", term);
-        Ok((term.clone(), vec![]))
+        println!("whnf: {}", term);
+        match term {
+            &Term::App { ref fun, ref arg, span } => {
+                let efun = try!(self.whnf(fun)).0;
+                // This is call by value
+                let earg = try!(self.whnf(arg)).0;
+
+                match efun {
+                    Term::Lambda { ref body, .. } => {
+                        self.whnf(&body.instantiate(&earg))
+                    }
+                    f => Ok((Term::App {
+                        fun: Box::new(f),
+                        arg: Box::new(earg),
+                        span: span,
+                    }, vec![]))
+                }
+            }
+            _ => Ok((term.clone(), vec![]))
+        }
     }
 
     pub fn eval(&self, term: &Term) -> Result<Term, Error> {
@@ -403,7 +424,18 @@ impl TyCtxt {
                                             self.is_recursive_ctor(ty_name, ctor_ty);
 
                                         if !is_recursive {
-                                            return Ok(premise);
+                                            let args: Vec<_> =
+                                                scrutinee.args()
+                                                         .unwrap();
+
+                                            // Need to skip the parameters
+                                            let args =
+                                                args.iter()
+                                                    .skip(dt.parameters.len())
+                                                    .cloned()
+                                                    .collect();
+
+                                            return self.eval(&Term::apply_all(premise, args));
                                         } else {
                                             let args: Vec<_> =
                                                 scrutinee.args()
@@ -418,15 +450,15 @@ impl TyCtxt {
                                                 premise.binders()
                                                        .unwrap();
 
-                                            // debug!("premise: {}", premise);
-                                            // debug!("scurtinee: {}", scrutinee);
+                                            println!("premise: {}", premise);
+                                            println!("scurtinee: {}", scrutinee);
 
                                             let mut term_args = vec![];
                                             let mut recursor_args = vec![];
 
                                             for (arg, ty) in args.zip(tys.into_iter()) {
-                                                // debug!("arg : {}", arg);
-                                                // println!("ty : {}", ty);
+                                                println!("arg : {}", arg);
+                                                println!("ty : {}", ty);
                                                 if ty.head().unwrap() == ty_name.to_term() {
                                                     let rec =
                                                     Recursor(
@@ -499,6 +531,8 @@ impl TyCtxt {
                         AssertedBy::ExpectedFound(
                             infer_ty.clone(),
                             ty.clone()));
+
+                println!("inferred {} expected {}", infer_ty, ty);
 
                 infer_cs.push(
                     Constraint::Unification(
@@ -590,6 +624,8 @@ impl TyCtxt {
                         let just =
                             Justification::Asserted(
                                 AssertedBy::Application(*fun.clone(), *arg.clone()));
+
+                        println!("{} {}", arg_ty, binder.ty);
 
                         constraints.push(
                             Constraint::Unification(

@@ -194,7 +194,7 @@ pub enum BindingMode {
 pub struct Binder {
     pub span: Span,
     pub names: Vec<Name>,
-    pub ty: Term,
+    pub ty: Option<Term>,
     pub mode: BindingMode,
 }
 
