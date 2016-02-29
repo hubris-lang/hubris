@@ -1,5 +1,5 @@
 # The Hubris Programming Language
-
+[![Build Status](https://travis-ci.org/hubris-lang/hubris.svg?branch=master)](https://travis-ci.org/hubris-lang/hubris)
 Hubris is a brand new dependently typed programming language designed for
 experimentation and research.
 
