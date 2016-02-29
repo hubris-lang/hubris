@@ -4,6 +4,9 @@ use std::hash::Hasher;
 
 use super::ast::Span;
 
+extern crate pretty;
+use self::pretty::*;
+
 pub mod binder;
 pub mod name;
 pub mod term;
@@ -82,18 +85,20 @@ pub struct Function {
     pub body: Term,
 }
 
-impl Display for Function {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+impl Pretty for Function {
+    fn pretty(&self) -> Doc {
         let &Function {
             ref name,
             ref ret_ty,
             ref body,
             ..
         } = self;
+        Pretty::pretty("fn ") + Pretty::pretty(name) + parens(Pretty::pretty(name) + Pretty::pretty(" :") + Pretty::pretty(ret_ty)) + Pretty::pretty(":=") + Pretty::pretty(body) + Pretty::pretty("end")
+    }
+}
 
-        try!(write!(formatter, "fn {}(", name));
-        try!(write!(formatter, "{} : {}) :=", name, ret_ty));
-        try!(writeln!(formatter, "{}", body));
-        writeln!(formatter, "end")
+impl Display for Function {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        format(self, formatter)
     }
 }

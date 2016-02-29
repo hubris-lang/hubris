@@ -6,6 +6,9 @@ use std::hash::{Hash, Hasher};
 use super::Name;
 use super::{Binder, BindingMode};
 
+extern crate pretty;
+use self::pretty::*;
+
 #[derive(Debug, Clone, Eq)]
 pub enum Term {
     Literal {
@@ -548,62 +551,45 @@ impl Hash for Term {
     }
 }
 
-impl Display for Term {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+impl Pretty for Term {
+    fn pretty(&self) -> Doc {
         use self::Term::*;
 
         match self {
-            &Literal { ref lit, .. } => write!(formatter, "{:?}", lit),
-            &Var { ref name, .. } => write!(formatter, "{}", name),
+            &Literal { ref lit, .. } => lit.pretty(),
+            &Var { ref name, .. } => name.pretty(),
             &App { ref fun, ref arg, .. } => {
                 match &**arg {
-                    &Term::App { .. } => write!(formatter, "{} ({})", fun, arg),
-                    _ => write!(formatter, "{} {}", fun, arg),
+                    &Term::App { .. } => fun.pretty() + " ".pretty() + parens(arg.pretty()),
+                    _ => fun.pretty() + " ".pretty() + arg.pretty(),
                 }
             }
             &Forall { ref binder, ref term, .. } => {
                 if binder.name.is_placeholder() {
-                    match &*binder.ty {
-                        &Forall {..} => try!(write!(formatter, "({}) -> ", binder.ty)),
-                        _ => try!(write!(formatter, "{} -> ", binder.ty)),
-                    }
-                    try!(write!(formatter, "{}", term));
+                    let p = match &*binder.ty {
+                        &Forall {..} => parens(binder.ty.pretty()) + " -> ".pretty(),
+                        _ => binder.ty.pretty() + " -> ".pretty(),
+                    };
+                    p + term.pretty()
                 } else {
-                    if binder.is_implicit() {
-                        try!(write!(formatter, "forall {{{} : {}}}", binder.name, binder.ty));
-                    } else {
-                        try!(write!(formatter, "forall ({} : {})", binder.name, binder.ty));
-                    }
                     let mut cursor = &**term;
+                    let mut doc = "forall ".pretty() + binder.pretty();
                     while let &Term::Forall { ref binder, ref term, .. } = cursor {
                         if binder.name.is_placeholder() { break; }
-                        if binder.is_implicit() {
-                            try!(write!(formatter, " {{{} : {}}}", binder.name, binder.ty));
-                        } else {
-                            try!(write!(formatter, " ({} : {})", binder.name, binder.ty));
-                        }
+                        doc = doc + " ".pretty() + binder.pretty();
                         cursor = term;
                     }
-                    try!(write!(formatter, ", {}", cursor));
+                    doc + ", ".pretty() + cursor.pretty()
                 }
-                Ok(())
             }
             &Lambda { ref binder, ref body, .. } => {
-                write!(formatter, "fun ({} : {}) => {}",
-                    binder.name,
-                    binder.ty,
-                    body)
+                "fun".pretty() + binder.pretty() + " => ".pretty() + body.pretty()
             }
             &Recursor(ref name, ref ts, ref s) => {
-                try!(writeln!(formatter, "recursor({}): {{", name));
-                for t in ts {
-                    try!(writeln!(formatter, "{}", t));
-                }
-                try!(writeln!(formatter, "{}", s));
-                try!(writeln!(formatter, "}}"));
-                Ok(())
+                "recursor".pretty() + parens(name.pretty()) + ":".pretty() +
+                    braces(braces( Doc::concat(ts.iter().map(|x| x.pretty()).collect::<Vec<Doc>>().as_slice()) + s.pretty() ))
             }
-            &Type => write!(formatter, "Type"),
+            &Type => Doc::text("Type"),
         }
     }
 }
@@ -616,6 +602,13 @@ impl Display for Term {
 //         }
 //     }
 // }
+
+impl Display for Term {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+
+        format(self, formatter)
+    }
+}
 
 impl HasSpan for Term {
     fn get_span(&self) -> Span {
@@ -651,4 +644,13 @@ impl HasSpan for Term {
 pub enum Literal {
     Int(i64), // will need to revisit this decision
     Unit,
+}
+
+impl Pretty for Literal {
+    fn pretty(&self) -> Doc {
+        match self {
+            &Literal::Int(i) => "FIXME".pretty(), // TODO FIXME XXX
+            &Literal::Unit => "Unit".pretty(),
+        }
+    }
 }

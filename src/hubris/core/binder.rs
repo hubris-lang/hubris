@@ -1,6 +1,9 @@
 use super::name::Name;
 use super::term::Term;
 
+extern crate pretty;
+use self::pretty::*;
+
 #[derive(Debug, Copy, Clone, PartialEq, Hash, Eq)]
 pub enum BindingMode {
     Implicit,
@@ -61,6 +64,16 @@ impl Binder {
         match self.mode {
             BindingMode::Implicit => true,
             _ => false
+        }
+    }
+}
+
+impl Pretty for Binder {
+    fn pretty(&self) -> Doc {
+        if self.is_implicit() {
+            braces(braces(self.name.pretty() + " : ".pretty() + self.ty.pretty()))
+        } else {
+            parens(self.name.pretty() + " : ".pretty() + self.ty.pretty())
         }
     }
 }

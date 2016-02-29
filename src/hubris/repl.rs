@@ -5,9 +5,12 @@ use super::session::{Session, Reportable, HasSession};
 use super::ast::{self, ModuleId, SourceMap};
 use super::typeck;
 
-use std::io::{self, Write};
+use std::io::{self, Write, stdout};
 use std::path::{PathBuf};
 use readline;
+
+extern crate pretty;
+use self::pretty::*;
 
 use term::{self, Terminal, StdoutTerminal, Result as TResult};
 
@@ -196,7 +199,8 @@ impl Repl {
                 Command::Unknown(u) => return Err(Error::UnknownCommand(u)),
                 Command::TypeOf(t) => {
                     let term = try!(self.preprocess_term(t));
-                    println!("{}", try!(self.type_check_term(&term)).1);
+                    let typed = try!(self.type_check_term(&term)).1;
+                    println!("{}", typed)
                 }
                 Command::Def(name) => {
                     let parser = parser::from_string(name, ast::ModuleId(0)).unwrap();
@@ -215,7 +219,7 @@ impl Repl {
                     match self.elab_cx.ty_cx.unfold_name(&name).ok() {
                         None => println!("could not find a definition for {}", name),
                         Some(t) => {
-                            println!("{}", t);
+                            Doc::render(&t.pretty(), 80, &mut stdout());
                         }
                     }
                 }

@@ -2,6 +2,9 @@ use std::fmt::{self, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
+extern crate pretty;
+use self::pretty::*;
+
 pub use parser::SourceMap;
 
 pub trait HasSpan {
@@ -97,15 +100,22 @@ impl Hash for Name {
     }
 }
 
-impl Display for Name {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+impl Pretty for Name {
+    fn pretty(&self) -> Doc {
         use self::NameKind::*;
 
-        match &self.repr {
-            &Unqualified(ref s) => write!(formatter, "{}", s),
-            &Qualified(ref qn) => write!(formatter, "{:?}", qn),
-            &Placeholder => write!(formatter, "_"),
-        }
+        let s = match &self.repr {
+            &Unqualified(ref s) => s.clone(),
+            &Qualified(ref qn) => format!("{:?}", qn),
+            &Placeholder => String::from("_"),
+        };
+        Doc::text(s)
+    }
+}
+
+impl Display for Name {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        format(self, formatter)
     }
 }
 

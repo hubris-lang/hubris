@@ -6,6 +6,9 @@ use std::hash::{Hash, Hasher};
 use super::Term;
 use super::BindingMode;
 
+extern crate pretty;
+use self::pretty::*;
+
 #[derive(Clone, Debug, Eq)]
 pub enum Name {
     DeBruijn {
@@ -133,6 +136,34 @@ impl Hash for Name {
                 number.hash(state);
             }
         }
+    }
+}
+
+impl Pretty for Name {
+    fn pretty(&self) -> Doc {
+        use self::Name::*;
+
+        let s = match self {
+            &DeBruijn { ref repr, .. } => repr.clone(),
+            &Qual { ref components, .. } => {
+                if components.len() == 1 {
+                    components[0].clone()
+                } else {
+                    let mut s = String::new();
+                    for c in components {
+                        s.push_str(c);
+                        s.push('.');
+                    }
+                    s
+                }
+            }
+            &Meta { number, .. } => format!("?{}", number),
+            &Local { ref repr, .. } => {
+                // try!(write!(formatter, "{}(local {} : {})", repr, number, ty))
+                repr.clone()
+            }
+        };
+        Doc::text(s)
     }
 }
 

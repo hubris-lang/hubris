@@ -13,6 +13,9 @@ version = "0.9.0"
 [build-dependencies.lalrpop]
 version = "0.9.0"
 
+[dependencies.pretty]
+git = "https://github.com/hubris-lang/pretty"
+
 [dependencies]
 log = "*"
 gcc = "*"
