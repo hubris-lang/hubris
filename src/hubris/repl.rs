@@ -9,8 +9,7 @@ use std::io::{self, Write, stdout};
 use std::path::{PathBuf};
 use readline;
 
-extern crate pretty;
-use self::pretty::*;
+use super::pretty::*;
 
 use term::{self, Terminal, StdoutTerminal, Result as TResult};
 

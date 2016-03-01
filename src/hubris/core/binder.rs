@@ -1,8 +1,7 @@
 use super::name::Name;
 use super::term::Term;
 
-extern crate pretty;
-use self::pretty::*;
+use super::super::pretty::*;
 
 #[derive(Debug, Copy, Clone, PartialEq, Hash, Eq)]
 pub enum BindingMode {

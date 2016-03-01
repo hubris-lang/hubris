@@ -13,6 +13,7 @@ extern crate router;
 extern crate serde;
 extern crate term;
 extern crate urlencoded;
+extern crate pretty;
 
 pub mod ast {
     pub use hubris_syntax::ast::*;

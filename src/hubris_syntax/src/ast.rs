@@ -2,8 +2,7 @@ use std::fmt::{self, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
-extern crate pretty;
-use self::pretty::*;
+use super::pretty::*;
 
 pub use parser::SourceMap;
 

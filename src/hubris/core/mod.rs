@@ -4,8 +4,7 @@ use std::hash::Hasher;
 
 use super::ast::Span;
 
-extern crate pretty;
-use self::pretty::*;
+use super::pretty::*;
 
 pub mod binder;
 pub mod name;

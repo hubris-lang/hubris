@@ -6,8 +6,7 @@ use std::hash::{Hash, Hasher};
 use super::Term;
 use super::BindingMode;
 
-extern crate pretty;
-use self::pretty::*;
+use super::super::pretty::*;
 
 #[derive(Clone, Debug, Eq)]
 pub enum Name {
