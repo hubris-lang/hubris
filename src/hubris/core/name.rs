@@ -142,53 +142,29 @@ impl Pretty for Name {
     fn pretty(&self) -> Doc {
         use self::Name::*;
 
-        let s = match self {
-            &DeBruijn { ref repr, .. } => repr.clone(),
+        match self {
+            &DeBruijn { ref repr, .. } => repr.pretty(),
             &Qual { ref components, .. } => {
                 if components.len() == 1 {
-                    components[0].clone()
+                    components[0].pretty()
                 } else {
-                    let mut s = String::new();
-                    for c in components {
-                        s.push_str(c);
-                        s.push('.');
-                    }
-                    s
+                    seperate(components.iter().map(|x| x.pretty())
+                                 .collect::<Vec<Doc>>().as_slice(),
+                             &Doc::text("."))
                 }
             }
-            &Meta { number, .. } => format!("?{}", number),
+            &Meta { number, .. } => Doc::text(format!("?{}", number)),
             &Local { ref repr, .. } => {
                 // try!(write!(formatter, "{}(local {} : {})", repr, number, ty))
-                repr.clone()
+                repr.pretty()
             }
-        };
-        Doc::text(s)
+        }
     }
 }
 
 impl Display for Name {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        use self::Name::*;
-
-        match self {
-            &DeBruijn { ref repr, .. } => try!(write!(formatter, "{}", repr)),
-            &Qual { ref components, .. } => {
-                if components.len() == 1 {
-                    try!(write!(formatter, "{}", components[0]))
-                } else {
-                    for c in components {
-                        try!(write!(formatter, "{}.", c))
-                    }
-                }
-            }
-            &Meta { number, .. } => try!(write!(formatter, "?{}", number)),
-            &Local { ref repr, .. } => {
-                // try!(write!(formatter, "{}(local {} : {})", repr, number, ty))
-                try!(write!(formatter, "{}", repr))
-            }
-        }
-
-        Ok(())
+        format(self, formatter)
     }
 }
 
