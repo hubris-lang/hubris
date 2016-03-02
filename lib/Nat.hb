@@ -20,7 +20,12 @@ def below {C : Nat -> Type} (n : Nat) : Type :=
     n
  end
 
--- def below_rec_on
+def below_rec_on {C : Nat -> Type} (n : Nat) (BelowP : forall (n : Nat), C n) : C n :=
+  first (Nat.rec
+    (MkProd (Nat.rec _ (BelowP Z Star) Star))
+    (fun (a : Nat) (bp : Prod (C a) (below a)) => MkProd (BelowP (S a) bp) bp)
+    n)
+end
 
 -- def main : Nat :=
 --  (fun (A : Type) => A) Z

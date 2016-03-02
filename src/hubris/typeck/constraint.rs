@@ -6,6 +6,7 @@ use std::fmt::{self, Formatter, Display};
 use std::rc::Rc;
 
 use core::Term;
+use hubris_syntax::ast::Span;
 
 pub type ConstraintSeq = Vec<Constraint>;
 
@@ -127,7 +128,7 @@ impl Display for Justification {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AssertedBy {
-    Application(Term, Term),
+    Application(Span, Term, Term),
     ExpectedFound(Term, Term),
 }
 
@@ -136,8 +137,9 @@ impl Display for AssertedBy {
         use self::AssertedBy::*;
 
         match self {
-            &Application(ref u, ref t) =>
-                write!(formatter, "applied {} to {}", u, t),
+            &Application(span, ref u, ref t) =>
+                panic!(),
+                // write!(formatter, "applied {} to {}", u, t),
             &ExpectedFound(ref infer_ty, ref ty) =>
                 write!(formatter, "expected {} found {}", ty, infer_ty),
         }

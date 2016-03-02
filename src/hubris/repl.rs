@@ -101,11 +101,9 @@ fn split_command(command_text: &str) -> (&str, &str) {
 }
 
 impl Repl {
-    pub fn from_path(file: &Option<PathBuf>) -> Result<Repl, Error> {
+    pub fn from_path(session: Session, file: &Option<PathBuf>) -> Result<Repl, Error> {
         match file {
             &None => {
-                let session = Session::empty();
-
                 let ecx = ElabCx::from_module(
                     ast::Module::empty(),
                     session.clone());
@@ -116,7 +114,6 @@ impl Repl {
                 })
             }
             &Some(ref file_path) => {
-                let session = Session::from_root(file_path);
                 let id = session.next_module_id();
 
                 let parser =
@@ -192,7 +189,7 @@ impl Repl {
                 Command::Reload => {
                     let path = self.session.root_file().to_owned();
                     let new_repl =
-                        try!(Repl::from_path(&Some(path)));
+                        try!(Repl::from_path(self.session.clone(), &Some(path)));
                     *self = new_repl;
                 }
                 Command::Unknown(u) => return Err(Error::UnknownCommand(u)),

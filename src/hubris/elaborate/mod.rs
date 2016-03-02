@@ -505,8 +505,16 @@ impl<'ecx> LocalElabCx<'ecx> {
     }
 
     fn make_placeholder(&mut self) -> Result<core::Term, Error> {
-        let ty = try!(self.meta_in_context(core::Term::Type));
-        self.meta_in_context(ty)
+        let meta_no = self.cx.metavar_counter;
+
+        let meta_ty = core::Name::Meta {
+            number: meta_no,
+            ty: Box::new(core::Term::Type),
+        };
+
+        self.cx.metavar_counter += 1;
+
+        self.meta_in_context(meta_ty.to_term())
     }
 
     fn meta_in_context(&mut self, ty: core::Term) -> Result<core::Term, Error> {

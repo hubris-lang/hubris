@@ -2,10 +2,11 @@ use hubris_syntax::ast::HasSpan;
 use super::TyCtxt;
 use super::constraint::*;
 use super::super::session::{HasSession, Session, Reportable};
-use core::{Term, Name};
+use core::{Term, Binder, Name};
 
 use std::collections::{BinaryHeap, HashMap};
 use std::io;
+use std::rc::Rc;
 
 pub struct Choice {
     constraints: BinaryHeap<CategorizedConstraint>,
@@ -23,9 +24,16 @@ pub struct Solver<'tcx> {
     choice_stack: Vec<Choice>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Error {
     Justification(Justification),
+    TypeCk(Box<super::Error>),
+}
+
+impl From<super::Error> for Error {
+    fn from(err: super::Error) -> Error {
+        Error::TypeCk(Box::new(err))
+    }
 }
 
 impl Reportable for Error {
@@ -33,8 +41,10 @@ impl Reportable for Error {
         match self {
             Error::Justification(j) => match j {
                 Justification::Asserted(by) => match by {
-                    AssertedBy::Application(u, t) =>
-                        cx.span_error(u.get_span(), format!("applied {} to {}", u, t)),
+                    AssertedBy::Application(span, u, t) =>
+                        cx.span_error(span,
+                            format!("a term with type `{}` can not be applied to an argument with \
+                                     type `{}`", u, t)),
                     AssertedBy::ExpectedFound(infer_ty, ty) =>
                         cx.span_error(ty.get_span(),
                             format!("expected type `{}` found `{}`", ty, infer_ty)),
@@ -42,6 +52,7 @@ impl Reportable for Error {
                 Justification::Assumption => cx.error("assumption".to_string()),
                 Justification::Join(r1, sr2) => cx.error("assumption".to_string()),
             },
+            _ => panic!()
         }
     }
 }
@@ -148,11 +159,17 @@ impl<'tcx> Solver<'tcx> {
             let locals = r.args().unwrap_or(vec![]);
 
             println!("meta {}", meta);
+            // There is a case here I'm not sure about
+            // what if the meta variable we solve has been
+            // also applied to non-local constants?
 
+            // Currently we just filter map, and don't
+            // abstract over those.
             let locals: Vec<_> =
-                locals.into_iter().map(|l|
+                locals.into_iter().filter_map(|l|
                 match l {
-                    Term::Var { ref name } => name.clone(),
+                    Term::Var { ref name } if name.is_local() => Some(name.clone()),
+                    Term::Var { .. } => None,
                     _ => panic!("mis-idetnfied pattern constraint")
                 }).collect();
 
@@ -301,9 +318,40 @@ impl<'tcx> Solver<'tcx> {
                u.is_stuck().is_some() {
                 Ok(vec![Constraint::Unification(t, u, j).categorize()])
             } else {
+                let j = try!(self.eval_justification(j));
                 Err(Error::Justification(j))
             }
         }
+    }
+
+    /// Will take the justification that was created at constraint generation time, and substitute
+    /// all known meta-variable solutions and then simplify it. This is particularly useful in
+    /// error reporting where we want to show the simplest term possible.
+    fn eval_justification(&self, j: Justification) -> Result<Justification, Error> {
+        use super::constraint::Justification::*;
+        let j = match j {
+            Asserted(by) => Asserted(match by {
+                AssertedBy::Application(span, t, u) => {
+                    let t = try!(self.ty_cx.eval(&try!(replace_metavars(t, &self.solution_mapping))));
+                    let u = try!(self.ty_cx.eval(&try!(replace_metavars(u, &self.solution_mapping))));
+
+                    AssertedBy::Application(span, t, u)
+                }
+                AssertedBy::ExpectedFound(t, u) => {
+                    let t = try!(self.ty_cx.eval(&try!(replace_metavars(t, &self.solution_mapping))));
+                    let u = try!(self.ty_cx.eval(&try!(replace_metavars(u, &self.solution_mapping))));
+
+                    AssertedBy::ExpectedFound(t, u)
+                }
+            }),
+            Assumption => Assumption,
+            Join(j1, j2) => {
+                let j1 = try!(self.eval_justification((&*j1).clone()));
+                let j2 = try!(self.eval_justification((&*j2).clone()));
+                Join(Rc::new(j1), Rc::new(j2))
+            }
+        };
+        Ok(j)
     }
 
     // The set of constraints should probably be a lazy list.
@@ -364,4 +412,50 @@ impl<'tcx> Solver<'tcx> {
     pub fn resolve(&self, just: Justification) -> Result<(), Error> {
         panic!("{:?}", just);
     }
+}
+
+pub fn replace_metavars(t: Term, subst_map: &HashMap<Name, (Term, Justification)>) -> Result<Term, Error> {
+    use core::Term::*;
+
+    match t {
+        App { fun, arg, span } => {
+            Ok(App {
+                fun: Box::new(try!(replace_metavars(*fun, subst_map))),
+                arg: Box::new(try!(replace_metavars(*arg, subst_map))),
+                span: span,
+            })
+        }
+        Forall { binder, term, span } => {
+            Ok(Forall {
+                binder: try!(subst_meta_binder(binder, subst_map)),
+                term: Box::new(try!(replace_metavars(*term, subst_map))),
+                span: span,
+            })
+        }
+        Lambda { binder, body, span } => {
+            Ok(Lambda {
+                binder: try!(subst_meta_binder(binder, subst_map)),
+                body: Box::new(try!(replace_metavars(*body, subst_map))),
+                span: span,
+            })
+        }
+        Var { ref name } if name.is_meta() => {
+            match subst_map.get(&name) {
+                None => panic!("no solution found for {}", name),
+                Some(x) => Ok(x.clone().0)
+            }
+
+        }
+        v @ Var { .. } => Ok(v),
+        l @ Literal { .. } => Ok(l),
+        Type => Ok(Type),
+        Recursor(..) => panic!(),
+    }
+}
+
+pub fn subst_meta_binder(
+        mut b: Binder,
+        subst_map: &HashMap<Name, (Term, Justification)>) -> Result<Binder, Error> {
+    b.ty = Box::new(try!(replace_metavars(*b.ty, subst_map)));
+    Ok(b)
 }

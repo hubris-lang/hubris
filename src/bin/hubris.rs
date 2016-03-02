@@ -7,6 +7,9 @@ extern crate docopt;
 
 use docopt::Docopt;
 use std::path::PathBuf;
+use std::io;
+
+use hubris::session::{Session, HasSession, Reportable};
 
 const USAGE: &'static str = r#"
 Hubris, version 0.0.1.
@@ -47,28 +50,45 @@ fn main() {
                          .and_then(|d| d.decode())
                          .unwrap_or_else(|e| e.exit());
 
+    driver(args).unwrap();
+}
+
+fn driver(args: Args) -> io::Result<()> {
     if args.flag_version {
-        println!("hubris 0.0.1.0 (we are trying)");
+        println!("hubris 0.1.0");
     } else if args.cmd_server {
         println!("Starting Server...");
         hubris::server::run();
     } else if args.cmd_repl {
-        // verify file exists
-        let pb = args.arg_file.map(|f| {
-            let pb = PathBuf::from(f);
-            if !pb.is_file() {
-                panic!("Hubris: file {} does not exist", pb.to_str().unwrap());
+        match args.arg_file {
+            None => { panic!() }
+            Some(file_path) => {
+                let file_path = PathBuf::from(file_path);
+                if !file_path.is_file() {
+                    println!("hubris: file {} does not exist", file_path.display())
+                } else {
+                    // Clean this up, repl should only take a session as an arguument,
+                    // and we should use try or something here to deal with errors
+                    // then match and report them once at the top.
+                    let session = Session::from_root(&file_path);
+                    match hubris::repl::Repl::from_path(session.clone(), &Some(file_path)) {
+                        Err(e) => session.report(e).unwrap(),
+                        Ok(repl) => match repl.start() {
+                            Err(e) => session.report(e).unwrap(),
+                            Ok(_) => {}
+                        }
+                    }
+                }
             }
-            pb
-        });
-
-        match hubris::repl::Repl::from_path(&pb) {
-            Err(e) => panic!("{:?}", e),
-            Ok(repl) =>
-               repl.start().expect("Starting repl failed")
         }
     } else {
-        let input = args.arg_file.expect("No input files");
+        let input = match args.arg_file {
+            None => {
+                println!("hubris: no input files");
+                return Ok(());
+            }
+            Some(file) => file,
+        };
 
         debug!("main: compiling {} output to {:?}",
                &input[..],
@@ -82,4 +102,6 @@ fn main() {
             Ok(_) => {}
         }
     }
+
+    Ok(())
 }

@@ -288,7 +288,63 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
         (arguments, premise)
     }
 
-    pub fn make_below(&self) {
+    pub fn make_below(&mut self) -> Result<(), Error> {
+        let name = self.inductive_ty
+                       .name
+                       .in_scope("below".to_string())
+                       .unwrap();
+
+        let params : Vec<_> = self.inductive_ty
+                         .parameters
+                         .clone();
+
+        let params_as_terms : Vec<_> =
+            params.clone()
+                  .iter()
+                  .map(|p| p.to_term())
+                  .collect();
+
+        let ty =
+            Term::abstract_pi_implicit(
+                params.clone(),
+                Term::apply_all(
+                    self.inductive_ty.name.to_term(),
+                    params_as_terms.clone()));
+
+        let rec =
+            self.inductive_ty
+                .name
+                .in_scope("rec".to_string())
+                .unwrap();
+
+        let body =
+            Term::abstract_lambda(
+                params.clone(),
+                Term::apply_all(
+                    rec.to_term(),
+                    params_as_terms));
+
+        let def = Function {
+            name: name,
+            args: vec![],
+            ret_ty: ty,
+            body: body,
+        };
+
+        println!("{}", def);
+
+        // try!(self.ty_cx.declare_def(&def));
+
+        Ok(())
+        // def below {C : Nat -> Type} (n : Nat) : Type :=
+        //     Nat.rec
+        //     _
+        //     Star
+        //     (fun (m : Nat) (proof : Type) => MkProd (C m) proof)
+        //     n
+        //  end
+
+
         // nat.below [reducible] [unfold 1] : Π {C : ℕ → Type}, ℕ → Type
         // λ {C : ℕ → Type} (n : ℕ), nat.rec poly_unit (λ (a : ℕ) (v_0 : Type), C a × v_0) n
     }
@@ -324,9 +380,13 @@ pub fn make_recursor(ty_cx: &mut TyCtxt, data_type: &Data) -> Result<(), Error> 
 
     let def = Definition::new(recursor_ty, recursor_body);
 
+    // Construct the recursor.
     rcx.ty_cx
        .definitions
        .insert(recursor_name, def);
+
+    // Now setup all the automatically generated constructs.
+    try!(rcx.make_below());
 
     Ok(())
 }

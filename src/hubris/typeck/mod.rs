@@ -10,6 +10,7 @@ use super::session::{HasSession, Session, Reportable};
 use super::elaborate::{self};
 pub use self::error::Error;
 use self::constraint::*;
+use self::solver::replace_metavars;
 use term::{stdout, StdoutTerminal};
 
 use std::cell::RefCell;
@@ -402,6 +403,16 @@ impl TyCtxt {
                     span: span,
                 })
             }
+            &Term::Lambda { ref binder, ref body, span } => {
+                let ety = try!(self.eval(&*binder.ty));
+                let eterm = try!(self.eval(body));
+
+                Ok(Lambda {
+                    binder: Binder::with_mode(binder.name.clone(), ety, binder.mode.clone()),
+                    body: Box::new(eterm),
+                    span: span,
+                })
+            }
             &Term::Var { ref name } => self.unfold_name(name),
             &Term::Recursor(ref ty_name, ref premises, ref scrutinee) => {
 
@@ -484,7 +495,8 @@ impl TyCtxt {
                     }
                 }
             }
-            t => Ok(t.clone()),
+            l @ &Literal { .. } => Ok(l.clone()),
+            &Term::Type => Ok(Term::Type)
         };
 
         debug!("eval result {:?}", result);
@@ -614,7 +626,7 @@ impl TyCtxt {
                 constraints.extend(pi_cs.into_iter());
                 constraints.extend(ensure_cs.into_iter());
 
-                match pi_type {
+                match pi_type.clone() {
                     Term::Forall { binder, term, .. } => {
                         let (arg_ty, arg_cs) =
                             try!(self.type_infer_term(arg));
@@ -623,7 +635,11 @@ impl TyCtxt {
 
                         let just =
                             Justification::Asserted(
-                                AssertedBy::Application(*fun.clone(), *arg.clone()));
+                                AssertedBy::Application(
+                                    fun.get_span(),
+                                    pi_type,
+                                    arg_ty.clone()));
+
 
                         println!("{} {}", arg_ty, binder.ty);
 
@@ -796,50 +812,4 @@ fn name_to_path(name: &Name) -> Option<PathBuf> {
         }
         _ => None,
     }
-}
-
-pub fn replace_metavars(t: Term, subst_map: &HashMap<Name, (Term, Justification)>) -> Result<Term, Error> {
-    use core::Term::*;
-
-    match t {
-        App { fun, arg, span } => {
-            Ok(App {
-                fun: Box::new(try!(replace_metavars(*fun, subst_map))),
-                arg: Box::new(try!(replace_metavars(*arg, subst_map))),
-                span: span,
-            })
-        }
-        Forall { binder, term, span } => {
-            Ok(Forall {
-                binder: try!(subst_meta_binder(binder, subst_map)),
-                term: Box::new(try!(replace_metavars(*term, subst_map))),
-                span: span,
-            })
-        }
-        Lambda { binder, body, span } => {
-            Ok(Lambda {
-                binder: try!(subst_meta_binder(binder, subst_map)),
-                body: Box::new(try!(replace_metavars(*body, subst_map))),
-                span: span,
-            })
-        }
-        Var { ref name } if name.is_meta() => {
-            match subst_map.get(&name) {
-                None => panic!("no solution found for {}", name),
-                Some(x) => Ok(x.clone().0)
-            }
-
-        }
-        v @ Var { .. } => Ok(v),
-        l @ Literal { .. } => Ok(l),
-        Type => Ok(Type),
-        Recursor(..) => panic!(),
-    }
-}
-
-pub fn subst_meta_binder(
-        mut b: Binder,
-        subst_map: &HashMap<Name, (Term, Justification)>) -> Result<Binder, Error> {
-    b.ty = Box::new(try!(replace_metavars(*b.ty, subst_map)));
-    Ok(b)
 }
