@@ -14,6 +14,8 @@ extern crate serde;
 extern crate term;
 extern crate urlencoded;
 extern crate pretty;
+#[macro_use]
+extern crate itertools;
 
 pub mod ast {
     pub use hubris_syntax::ast::*;

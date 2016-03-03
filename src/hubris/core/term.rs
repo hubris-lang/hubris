@@ -4,7 +4,7 @@ use std::fmt::{self, Display, Formatter};
 use std::hash::{Hash, Hasher};
 
 use super::Name;
-use super::{Binder, BindingMode};
+use super::{Binder, BindingMode, pretty_binders};
 
 use super::super::pretty::*;
 
@@ -572,13 +572,15 @@ impl Pretty for Term {
                     p + term.pretty()
                 } else {
                     let mut cursor = &**term;
-                    let mut doc = "forall ".pretty() + binder.pretty();
+                    let mut binders = Vec::new();
+                    binders.push(binder);
                     while let &Term::Forall { ref binder, ref term, .. } = cursor {
                         if binder.name.is_placeholder() { break; }
-                        doc = doc + " ".pretty() + binder.pretty();
+                        binders.push(binder);
                         cursor = term;
                     }
-                    doc + ", ".pretty() + cursor.pretty()
+                    "forall ".pretty() + pretty_binders(binders.as_slice()) +
+                        ", ".pretty() + cursor.pretty()
                 }
             }
             &Lambda { ref binder, ref body, .. } => {
