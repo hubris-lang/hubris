@@ -2,6 +2,7 @@ use super::name::Name;
 use super::term::Term;
 
 use super::super::pretty::*;
+use super::super::itertools::Itertools;
 
 #[derive(Debug, Copy, Clone, PartialEq, Hash, Eq)]
 pub enum BindingMode {
@@ -75,4 +76,25 @@ impl Pretty for Binder {
             parens(self.name.pretty() + " : ".pretty() + self.ty.pretty())
         }
     }
+}
+
+// Pretty print a list of binders. Groups binders of the same type
+pub fn pretty_binders<'a>(binders: &[&'a Binder]) -> Doc<'a> {
+    let mut ds = Vec::new();
+    for (k, g) in binders.iter().group_by(|elt| (&elt.ty, &elt.mode)) {
+        if g.len() == 1{
+            ds.push(g[0].pretty());
+        } else {
+            let d = seperate(g.iter().map(|x| x.name.pretty())
+                                 .collect::<Vec<Doc<'a>>>().as_slice()
+                             , &Doc::text(" "))
+                        + " : ".pretty() + g[0].ty.pretty();
+            if g[0].is_implicit() {
+                ds.push(braces(braces(d)));
+            } else {
+                ds.push(parens(d));
+            }
+        }
+    };
+    seperate(ds.as_slice(), &Doc::text(" "))
 }
