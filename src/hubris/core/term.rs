@@ -603,6 +603,12 @@ impl Pretty for Term {
                         binders = vec![];
                     }
                 }
+
+                // This code is ugly, loops suck
+                if cbinders.len() == 0 {
+                    cbinders.push((binders, binder_ty));
+                }
+
                 // I think this code could probably be cleaner.
                 let mut coalesced_binder = "".pretty();
                 for (binders, ty) in cbinders {

@@ -297,16 +297,25 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
             println!("scrutinee: {}", scrutinee);
             let (scrut_ctor, scrut_args) = scrutinee.uncurry();
 
+
             match cx.types.get(&ty_name) {
                 None => panic!("type checking bug: can not find inductive type {}", ty_name),
                 Some(dt) => {
+                    let params = &dt.parameters;
+
+                    let premises : Vec<_> =
+                        args.iter()
+                            .skip(params.len())
+                            .cloned()
+                            .collect();
+
                     for (i, ctor) in dt.ctors.iter().enumerate() {
                         let name = &ctor.0;
                         let ctor_ty = &ctor.1;
 
                         if scrut_ctor == name.to_term() {
-                            panic!("found {}", scrut_ctor);
-                            // let premise = premises[i].clone();
+                            let premise = premises[i].clone();
+                            panic!("{}", premise);
                             //
                             // let is_recursive =
                             //     self.is_recursive_ctor(ty_name, ctor_ty);
