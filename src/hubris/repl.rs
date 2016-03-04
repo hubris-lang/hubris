@@ -5,13 +5,13 @@ use super::session::{Session, Reportable, HasSession};
 use super::ast::{self, ModuleId, SourceMap};
 use super::typeck;
 
-use std::io::{self, Write, stdout};
+use std::io::{self, stdout};
 use std::path::{PathBuf};
 use readline;
 
 use super::pretty::*;
 
-use term::{self, Terminal, StdoutTerminal, Result as TResult};
+use term;
 
 const HELP_MESSAGE: &'static str = r#"
 Commands:

@@ -3,8 +3,11 @@ mod error;
 mod inductive;
 mod solver;
 
-use core::*;
-use super::ast::{SourceMap, ModuleId, Span, HasSpan};
+use core::{
+    self, Name,
+    Term, Binder, Item, Function, Data,
+    Module, Extern, BindingMode};
+use super::ast::{Span, HasSpan};
 use super::parser;
 use super::session::{HasSession, Session, Reportable};
 use super::elaborate::{self};
@@ -22,11 +25,30 @@ pub enum DeltaReduction {
     Semireducible,
     Irreducible,
 }
+
 /// A definition
 pub struct Definition {
     ty: Term,
     term: Term,
     reduction: DeltaReduction,
+}
+
+pub type ComputationRule = Box<Fn(&TyCtxt, Term) -> Result<Term, Error>>;
+
+/// An axiom
+pub struct Axiom {
+    pub ty: Term,
+    /// Adds a computation rule to the axiom
+    pub computation_rule: Option<ComputationRule>,
+}
+
+impl Axiom {
+    pub fn new(ty: Term) -> Axiom {
+        Axiom {
+            ty: ty,
+            computation_rule: None,
+        }
+    }
 }
 
 impl Definition {
@@ -45,7 +67,7 @@ pub struct TyCtxt {
     types: HashMap<Name, Data>,
     functions: HashMap<Name, Function>,
 
-    pub axioms: HashMap<Name, Term>,
+    pub axioms: HashMap<Name, Axiom>,
     definitions: HashMap<Name, Definition>,
 
     pub session: Session,
@@ -202,14 +224,15 @@ impl TyCtxt {
         self.types.insert(data_type.name.clone(), data_type.clone());
 
         // The type is just a constant with the type `ty`
-        self.axioms.insert(data_type.name.clone(), data_type.ty.clone());
+        self.axioms.insert(data_type.name.clone(), Axiom::new(data_type.ty.clone()));
 
         // Each constructor also becomes a constant with type ascribed
         // in its definition.
         for ctor in &data_type.ctors {
             let name = ctor.0.clone();
             let ty = ctor.1.clone();
-            self.axioms.insert(name, ty);
+            let axiom = Axiom::new(ty);
+            self.axioms.insert(name, axiom);
         }
 
         inductive::make_recursor(self, data_type)
@@ -230,11 +253,13 @@ impl TyCtxt {
     /// During code generation we will deal with creating a symbol for this
     /// function.
     pub fn declare_extern(&mut self, e: &Extern) {
-        self.axioms.insert(e.name.clone(), e.term.clone());
+        let axiom = Axiom::new(e.term.clone());
+        self.axioms.insert(e.name.clone(), axiom);
     }
 
-    pub fn declare_axiom(&mut self, e: &Axiom) {
-        self.axioms.insert(e.name.clone(), e.ty.clone());
+    pub fn declare_axiom(&mut self, e: &core::Axiom) {
+        let axiom = Axiom::new(e.ty.clone());
+        self.axioms.insert(e.name.clone(), axiom);
     }
 
     pub fn type_check_def(&mut self, def: &Item) -> Result<(), Error> {
@@ -258,7 +283,7 @@ impl TyCtxt {
             None => {
                 match self.axioms.get(name) {
                     None => Err(Error::UnknownVariable(name.clone())),
-                    Some(t) => Ok(t),
+                    Some(t) => Ok(&t.ty),
                 }
             }
             Some(t) => Ok(&t.ty),
@@ -377,20 +402,42 @@ impl TyCtxt {
         debug!("eval: {}", term);
 
         let result = match term {
-            &App { ref fun, ref arg, span } => {
-                let efun = try!(self.eval(fun));
-                // This is call by value
-                let earg = try!(self.eval(arg));
+            app @ &App { .. } => {
+                println!("eval (apply): app={}", app);
+                let span = app.get_span();
+                let (head, args) = app.uncurry();
+
+                let efun = try!(self.eval(&head));
+
+                let mut eargs = vec![];
+                for arg in args {
+                    eargs.push(try!(self.eval(&arg)));
+                }
 
                 match efun {
-                    Term::Lambda { ref body, .. } => {
-                        self.eval(&body.instantiate(&earg))
+                    lambda @ Term::Lambda { .. } => {
+                        let mut lambda = lambda;
+                        for earg in eargs {
+                            match lambda {
+                                Term::Lambda { body, .. } => {
+                                    lambda = body.instantiate(&earg);
+                                }
+                                _ => panic!("evaluation error")
+                            }
+                        }
+                        Ok(try!(self.eval(&lambda)))
                     }
-                    f => Ok(App {
-                        fun: Box::new(f),
-                        arg: Box::new(earg),
-                        span: span,
-                    })
+                    Term::Var { ref name } => {
+                        if let Some(comp_rule) = self.computation_rule(name) {
+                            let t = Term::apply_all(Term::Var { name: name.clone() }, eargs);
+                            comp_rule(self, t)
+                        } else {
+                            let mut t = Term::apply_all(Term::Var { name: name.clone() }, eargs);
+                            t.set_span(span);
+                            Ok(t)
+                        }
+                    },
+                    t => panic!("type checker bug")
                 }
             }
             &Term::Forall { ref binder, ref term, span } => {
@@ -414,94 +461,16 @@ impl TyCtxt {
                 })
             }
             &Term::Var { ref name } => self.unfold_name(name),
-            &Term::Recursor(ref ty_name, ref premises, ref scrutinee) => {
-
-                debug!("ty_name: {}", ty_name);
-                let scrutinee = try!(self.eval(scrutinee));
-                debug!("scrutinee: {}", scrutinee);
-                match self.types.get(&ty_name) {
-                    None => panic!("type checking bug: can not find inductive type {}", ty_name),
-                    Some(dt) => {
-                        for (i, ctor) in dt.ctors.iter().enumerate() {
-                            let name = &ctor.0;
-                            let ctor_ty = &ctor.1;
-                            match scrutinee.head() {
-                                None => panic!("arg to recursor must be in (w)hnf"),
-                                Some(head) => {
-                                    if name.to_term() == head {
-                                        let premise = premises[i].clone();
-
-                                        let is_recursive =
-                                            self.is_recursive_ctor(ty_name, ctor_ty);
-
-                                        if !is_recursive {
-                                            let args: Vec<_> =
-                                                scrutinee.args()
-                                                         .unwrap();
-
-                                            // Need to skip the parameters
-                                            let args =
-                                                args.iter()
-                                                    .skip(dt.parameters.len())
-                                                    .cloned()
-                                                    .collect();
-
-                                            return self.eval(&Term::apply_all(premise, args));
-                                        } else {
-                                            let args: Vec<_> =
-                                                scrutinee.args()
-                                                         .unwrap();
-
-                                            // Need to skip the parameters
-                                            let args =
-                                                args.iter()
-                                                    .skip(dt.parameters.len());
-
-                                            let tys =
-                                                premise.binders()
-                                                       .unwrap();
-
-                                            println!("premise: {}", premise);
-                                            println!("scurtinee: {}", scrutinee);
-
-                                            let mut term_args = vec![];
-                                            let mut recursor_args = vec![];
-
-                                            for (arg, ty) in args.zip(tys.into_iter()) {
-                                                println!("arg : {}", arg);
-                                                println!("ty : {}", ty);
-                                                if ty.head().unwrap() == ty_name.to_term() {
-                                                    let rec =
-                                                    Recursor(
-                                                        ty_name.clone(),
-                                                        premises.clone(),
-                                                        Box::new(arg.clone()));
-                                                    recursor_args.push(rec);
-                                                }
-
-                                                term_args.push(arg.clone());
-                                            }
-
-                                            let mut args = term_args;
-                                            args.extend(recursor_args.into_iter());
-
-                                            return self.eval(&Term::apply_all(premise.clone(), args));
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        panic!("this shouldn't happen")
-                    }
-                }
-            }
-            l @ &Literal { .. } => Ok(l.clone()),
             &Term::Type => Ok(Term::Type)
         };
 
         debug!("eval result {:?}", result);
 
         result
+    }
+
+    pub fn computation_rule(&self, name: &Name) -> Option<&ComputationRule> {
+        self.axioms.get(name).and_then(|x| x.computation_rule.as_ref())
     }
 
     // TODO: currently this reports that two terms are not equal, we should probably
@@ -661,7 +630,6 @@ impl TyCtxt {
                 }
             }
             &Term::Forall { ref binder, ref term, .. } => {
-                let name = &binder.name;
                 let ty = &binder.ty;
 
                 let mut constraints = vec![];
@@ -681,7 +649,6 @@ impl TyCtxt {
                 Ok(constrain(Term::Type, constraints))
             }
             &Term::Lambda { ref binder, ref body, span, } => {
-                let name = &binder.name;
                 let ty = &binder.ty;
 
                 let mut constraints = vec![];
@@ -710,7 +677,6 @@ impl TyCtxt {
             }
             &Term::Type =>
                 Ok(constrain(Term::Type, vec![])),
-            _ => panic!(),
         }
     }
 
@@ -744,20 +710,8 @@ fn def_eq_modulo(
             def_eq_modulo(body1, body2, constraints)
         }
         (&Var { name: ref name1 }, &Var { name: ref name2 }) => {
-            def_eq_name_modulo(name1, name2, constraints)
+            def_eq_name_modulo(name1, name2)
         }
-        (&Recursor(ref name1, ref premises1, ref scrut1),
-         &Recursor(ref name2, ref premises2, ref scrut2)) => {
-            if def_eq_name_modulo(name1, name2, constraints) {
-                // Should we check premises1.len() == premises2.len()?
-                premises1.iter().zip(premises2.iter()).all(|(p1, p2)|
-                    def_eq_modulo(p1, p2, constraints));
-
-                def_eq_modulo(scrut1, scrut2, constraints)
-            } else {
-                false
-            }
-         }
         (t, u) => {
             if t.is_stuck().is_some() || u.is_stuck().is_some() {
                 // let constraint = Constraint::Unification(
@@ -772,11 +726,7 @@ fn def_eq_modulo(
     }
 }
 
-fn def_eq_name_modulo(
-    n1: &Name,
-    n2: &Name,
-    constraints: &mut ConstraintSeq) -> bool {
-
+fn def_eq_name_modulo(n1: &Name, n2: &Name) -> bool {
     debug!("equal_name_modulo: {} == {}", n1, n2);
 
     match (n1, n2) {

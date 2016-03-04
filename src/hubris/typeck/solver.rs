@@ -26,6 +26,7 @@ pub struct Solver<'tcx> {
 
 #[derive(Debug)]
 pub enum Error {
+    Simplification(Justification),
     Justification(Justification),
     TypeCk(Box<super::Error>),
 }
@@ -50,7 +51,7 @@ impl Reportable for Error {
                             format!("expected type `{}` found `{}`", ty, infer_ty)),
                 },
                 Justification::Assumption => cx.error("assumption".to_string()),
-                Justification::Join(r1, sr2) => cx.error("assumption".to_string()),
+                j @ Justification::Join(_, _) => cx.error(format!("{}", j)),
             },
             _ => panic!()
         }
@@ -78,7 +79,7 @@ impl<'tcx> Solver<'tcx> {
                     let simple_cs =
                         try!(solver.simplify(t.clone(), u.clone(), j.clone()));
                     for sc in simple_cs {
-                        solver.visit(sc);
+                        try!(solver.visit(sc));
                     }
                 },
                 &Constraint::Choice(..) => {
@@ -130,6 +131,7 @@ impl<'tcx> Solver<'tcx> {
             _ => panic!("one of these should be stuck otherwise the constraint should be gone already I think?"),
         };
 
+        println!("meta {}", meta);
         // See if we have a solution in the solution map,
         // if we have a solution for ?m we should substitute
         // it in both terms and reconstruct the equality
@@ -212,11 +214,12 @@ impl<'tcx> Solver<'tcx> {
     }
 
     pub fn simplify(&self, t: Term, u: Term, j: Justification) -> Result<Vec<CategorizedConstraint>, Error> {
-        println!("t: {} u: {}", t, u);
+        println!("simplify: t={} u={}", t, u);
         // Case 1: t and u are precisely the same term
         // unification constraints of this form incur
         // no constraints since this is discharge-able here.
         if t == u {
+            println!("equal");
             return Ok(vec![]);
         }
 
@@ -224,7 +227,11 @@ impl<'tcx> Solver<'tcx> {
         // we reduce t ==> t' and create a constraint
         // between t' and u (t' = u).
         else if t.is_bi_reducible() {
-            panic!();
+            println!("reduce");
+            self.simplify(try!(self.ty_cx.eval(&t)), u, j)
+        } else if u.is_bi_reducible() {
+            println!("reduce");
+            self.simplify(t, try!(self.ty_cx.eval(&u)), j)
         }
 
         // Case 3: if the head of t and u are constants
@@ -232,7 +239,7 @@ impl<'tcx> Solver<'tcx> {
         // arguments for example l s_1 .. s_n = l t_1 .. t_n
         // creates (s_1 = t_1, j) ... (s_n = t_n, j).
         else if t.head_is_local() && u.head_is_local() && t.head() == u.head() {
-            println!("t={} u={}", t, u);
+            println!("inside local head t={} u={}", t, u);
             let t_args = t.args().unwrap().into_iter();
             let u_args = u.args().unwrap().into_iter();
 
@@ -245,11 +252,10 @@ impl<'tcx> Solver<'tcx> {
             Ok(cs)
         }
 
-        else if t.is_app() &&
-                u.is_app() &&
-                t.head_is_global() &&
+        else if t.head_is_global() &&
                 u.head_is_global() &&
                 t.head() == u.head() {
+            println!("head is global");
 
             let f = t.head().unwrap();
 
@@ -291,6 +297,7 @@ impl<'tcx> Solver<'tcx> {
         // }
 
         else if t.is_forall() && u.is_forall() {
+            println!("forall");
             match (t, u) {
                 (Term::Forall { binder: binder1, term: term1, .. },
                  Term::Forall { binder: binder2, term: term2, .. }) => {
@@ -329,6 +336,7 @@ impl<'tcx> Solver<'tcx> {
     /// error reporting where we want to show the simplest term possible.
     fn eval_justification(&self, j: Justification) -> Result<Justification, Error> {
         use super::constraint::Justification::*;
+        // panic!("{:?}", j);
         let j = match j {
             Asserted(by) => Asserted(match by {
                 AssertedBy::Application(span, t, u) => {
@@ -447,9 +455,7 @@ pub fn replace_metavars(t: Term, subst_map: &HashMap<Name, (Term, Justification)
 
         }
         v @ Var { .. } => Ok(v),
-        l @ Literal { .. } => Ok(l),
         Type => Ok(Type),
-        Recursor(..) => panic!(),
     }
 }
 

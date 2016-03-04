@@ -1,4 +1,4 @@
-use super::{TyCtxt, Definition, Error};
+use super::{TyCtxt, ComputationRule, Error};
 use super::super::core::*;
 //use super::name_generator::*;
 
@@ -206,7 +206,7 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
     pub fn construct_recursor(&self,
                               minor_premises: Vec<Name>,
                               major_premise_args: Vec<Name>,
-                              major_premise: Term) -> (Term, Term) {
+                              major_premise: Term) -> Term {
         let ind_hyp = self.ind_hyp.clone();
         let params =
             self.inductive_ty
@@ -234,21 +234,7 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
                               .unwrap()
                               .to_term();
 
-        let recursor_body =
-            Term::abstract_lambda(
-                params.clone(),
-                Term::abstract_lambda(
-                    vec![ind_hyp.clone()],
-                    Term::abstract_lambda(
-                        minor_premises,
-                        Term::abstract_lambda(
-                            major_premise_args,
-                            Term::Recursor(
-                                self.inductive_ty.name.clone(),
-                                recursor_terms,
-                                Box::new(scrutinee))))));
-
-        (recursor_ty, recursor_body)
+        recursor_ty
     }
 
     pub fn major_premise(&self) -> (Vec<Name>, Term) {
@@ -286,6 +272,104 @@ impl<'i, 'tcx> RecursorCx<'i, 'tcx> {
             collect());
 
         (arguments, premise)
+    }
+
+
+    pub fn construct_computation_rule(&self) -> Result<ComputationRule, Error> {
+        Ok(Box::new(|cx: &TyCtxt, term: Term| {
+            // BUG WARNING: this code IS NOT general enough
+            println!("term {}", term);
+            let (head, args) = term.uncurry();
+            let ty_name = match &head {
+                &Term::Var { ref name } => match name {
+                    &Name::Qual { ref components, span } => Name::Qual {
+                        components: vec![components[0].clone()],
+                        span: span,
+                    },
+                    _ => panic!()
+                },
+                _ => panic!()
+            };
+
+            println!("ty_name: {}", ty_name);
+            let scrutinee = &args[args.len() - 1];
+            let scrutinee = try!(cx.eval(scrutinee));
+            println!("scrutinee: {}", scrutinee);
+            let (scrut_ctor, scrut_args) = scrutinee.uncurry();
+
+            match cx.types.get(&ty_name) {
+                None => panic!("type checking bug: can not find inductive type {}", ty_name),
+                Some(dt) => {
+                    for (i, ctor) in dt.ctors.iter().enumerate() {
+                        let name = &ctor.0;
+                        let ctor_ty = &ctor.1;
+
+                        if scrut_ctor == name.to_term() {
+                            panic!("found {}", scrut_ctor);
+                            // let premise = premises[i].clone();
+                            //
+                            // let is_recursive =
+                            //     self.is_recursive_ctor(ty_name, ctor_ty);
+                            //
+                            // if !is_recursive {
+                            //     let args: Vec<_> =
+                            //         scrutinee.args()
+                            //                  .unwrap();
+                            //
+                            // // Need to skip the parameters
+                            // let args =
+                            //     args.iter()
+                            //         .skip(dt.parameters.len())
+                            //         .cloned()
+                            //         .collect();
+                            //
+                            // return self.eval(&Term::apply_all(premise, args));
+                        } else {
+                            panic!()
+                            // let args: Vec<_> =
+                            //     scrutinee.args()
+                            //              .unwrap();
+                            //
+                            // // Need to skip the parameters
+                            // let args =
+                            //     args.iter()
+                            //         .skip(dt.parameters.len());
+                            //
+                            // let tys =
+                            //     premise.binders()
+                            //            .unwrap();
+                            //
+                            // println!("premise: {}", premise);
+                            // println!("scurtinee: {}", scrutinee);
+                            //
+                            // let mut term_args = vec![];
+                            // let mut recursor_args = vec![];
+                            //
+                            // for (arg, ty) in args.zip(tys.into_iter()) {
+                            //     println!("arg : {}", arg);
+                            //     println!("ty : {}", ty);
+                            //     if ty.head().unwrap() == ty_name.to_term() {
+                            //         let rec =
+                            //         Recursor(
+                            //             ty_name.clone(),
+                            //             premises.clone(),
+                            //             Box::new(arg.clone()));
+                            //             recursor_args.push(rec);
+                            //     }
+                            //
+                            //     term_args.push(arg.clone());
+                            // }
+                            //
+                            // let mut args = term_args;
+                            // args.extend(recursor_args.into_iter());
+                            //
+                            // return self.eval(&Term::apply_all(premise.clone(), args));
+                        }
+                    }
+                }
+            }
+            panic!("this shouldn't happen")
+        }))
     }
 
     pub fn make_below(&mut self) -> Result<(), Error> {
@@ -370,7 +454,7 @@ pub fn make_recursor(ty_cx: &mut TyCtxt, data_type: &Data) -> Result<(), Error> 
     let (tys, major_premise) =
         rcx.major_premise();
 
-    let (recursor_ty, recursor_body) =
+    let recursor_ty =
         rcx.construct_recursor(
             minor_premises,
             tys,
@@ -378,12 +462,15 @@ pub fn make_recursor(ty_cx: &mut TyCtxt, data_type: &Data) -> Result<(), Error> 
 
     let recursor_name = data_type.name.in_scope("rec".to_string()).unwrap();
 
-    let def = Definition::new(recursor_ty, recursor_body);
+    let computation_rule = try!(rcx.construct_computation_rule());
 
     // Construct the recursor.
     rcx.ty_cx
-       .definitions
-       .insert(recursor_name, def);
+       .axioms
+       .insert(recursor_name, super::Axiom {
+           ty: recursor_ty,
+           computation_rule: Some(computation_rule),
+       });
 
     // Now setup all the automatically generated constructs.
     try!(rcx.make_below());

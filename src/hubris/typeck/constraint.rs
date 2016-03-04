@@ -1,11 +1,13 @@
 // This style of elaboration is heavily inspired by the elaboration procedure used in
 // lean (http://arxiv.org/pdf/1505.04324v2.pdf).
 
+
 use std::cmp::{PartialOrd, Ordering};
+use std::collections::HashMap;
 use std::fmt::{self, Formatter, Display};
 use std::rc::Rc;
 
-use core::Term;
+use core::{Term, Name};
 use hubris_syntax::ast::Span;
 
 pub type ConstraintSeq = Vec<Constraint>;
@@ -13,8 +15,10 @@ pub type ConstraintSeq = Vec<Constraint>;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Constraint {
     Unification(Term, Term, Justification),
-    Choice(Term),
+    Choice(Term, Term),
 }
+
+struct ChoiceProcedure(Rc<Fn(Term, Term, HashMap<Name, (Term, Justification)>) -> ()>);
 
 impl Constraint {
     /// Categorizes a constraint into one of constraint categories,
@@ -121,7 +125,9 @@ impl Display for Justification {
         match self {
             &Asserted(ref by) => by.fmt(formatter),
             &Assumption => write!(formatter, "assumption"),
-            &Join(ref r1, ref sr2) => write!(formatter, "assumption"),
+            &Join(ref j1, ref j2) => {
+                write!(formatter, "{} <> {}", j1, j2)
+            }
         }
     }
 }
@@ -138,8 +144,7 @@ impl Display for AssertedBy {
 
         match self {
             &Application(span, ref u, ref t) =>
-                panic!(),
-                // write!(formatter, "applied {} to {}", u, t),
+                write!(formatter, "applied {} to {}", u, t),
             &ExpectedFound(ref infer_ty, ref ty) =>
                 write!(formatter, "expected {} found {}", ty, infer_ty),
         }

@@ -10,10 +10,6 @@ use super::super::pretty::*;
 
 #[derive(Debug, Clone, Eq)]
 pub enum Term {
-    Literal {
-        span: Span,
-        lit: Literal,
-    },
     Var {
         name: Name,
     },
@@ -32,7 +28,6 @@ pub enum Term {
         binder: Binder,
         body: Box<Term>,
     },
-    Recursor(Name, Vec<Term>, Box<Term>),
     Type,
 }
 
@@ -124,7 +119,6 @@ impl Term {
         // debug!("subst: {} with {}", index, replacement);
 
         match self {
-            &Literal { .. } => self.clone(),
             &Var { name: ref vname } => {
                 match vname {
                     &Local { number: number1, ref repr, .. } => {
@@ -164,11 +158,6 @@ impl Term {
                     span: span,
                 }
             }
-            &Recursor(ref name, ref ts, ref scrut) => {
-                Recursor(name.clone(),
-                         ts.iter().map(|t| t.abst(index, x)).collect(),
-                         Box::new(scrut.abst(index, x)))
-            }
             &Type => Type,
         }
     }
@@ -186,7 +175,6 @@ impl Term {
         debug!("replace: {} with {}", index, subst);
 
         match self {
-            &Literal { .. } => self.clone(),
             &Var { ref name } => {
                 match name {
                     &DeBruijn { index: i, .. } => {
@@ -219,11 +207,6 @@ impl Term {
                     body: Box::new(body.replace(index + 1, subst)),
                     span: span,
                 }
-            }
-            &Recursor(ref name, ref ts, ref scrut) => {
-                Recursor(name.clone(),
-                         ts.iter().map(|t| t.replace(index, subst)).collect(),
-                         Box::new(scrut.replace(index, subst)))
             }
             &Type => Type,
         }
@@ -320,7 +303,6 @@ impl Term {
     /// the head of the stuck term or recursor.
     pub fn is_stuck(&self) -> Option<Name> {
         match self {
-            &Term::Recursor(..) => panic!(),
             t => t.head().and_then(|h| match &h {
                 &Term::Var { ref name } => match name {
                     m @ &Name::Meta { .. } => Some(m.clone()),
@@ -346,8 +328,6 @@ impl Term {
             l @ &Lambda { .. } => Some(l.clone()),
             v @ &Var { .. } => Some(v.clone()),
             &Type => Some(Type),
-            &Recursor(..) => panic!(),
-            _ => None,
         }
     }
 
@@ -365,6 +345,23 @@ impl Term {
             }
             &Var { .. } | &Type => Some(vec![]),
             _ => None,
+        }
+    }
+
+    pub fn uncurry(&self) -> (Term, Vec<Term>) {
+        use self::Term::*;
+
+        match self {
+            &App { ref fun, ref arg, ..} => {
+                let mut f = &**fun;
+                let mut result = vec![*arg.clone()];
+                while let &App { ref fun, ref arg, .. } = f {
+                    f = &**fun;
+                    result.push(*arg.clone());
+                }
+                (f.clone(), result.into_iter().rev().collect())
+            }
+            t => (t.clone(), vec![])
         }
     }
 
@@ -417,12 +414,15 @@ impl Term {
         }).unwrap_or(false)
     }
 
-    ///
+    /// Check whether a term is beta/iota reducible.
     pub fn is_bi_reducible(&self) -> bool {
-        // self.head().map(|h| {
-        //     !h.is_meta()
-        // }).unwrap_or(false)
-        false
+        let (head, args) = self.uncurry();
+        if args.len() > 0 {
+            // I think this needs to be smarter
+            !head.is_meta() && !head.head_is_global()
+        } else {
+            false
+        }
     }
 
     pub fn instantiate_meta(&self, meta: &Name, term: &Term) -> Term {
@@ -477,7 +477,6 @@ impl Term {
                     binder.ty.replace_term(&replacement, pred);
                     body.replace_term(&replacement, pred);
                 }
-                &mut Recursor(..) => panic!(),
                 _ => {}
             }
         }
@@ -489,11 +488,12 @@ impl PartialEq for Term {
         use self::Term::*;
 
         match (self, other) {
-            (&Literal { lit: ref lit1, .. },
-             &Literal { lit: ref lit2, .. }) => lit1 == lit2,
-            (&Var { name: ref name1, .. }, &Var { name: ref name2, .. }) => name1 == name2,
+            (&Var { name: ref name1, .. },
+             &Var { name: ref name2, .. }) =>
+                name1 == name2,
             (&App { fun: ref fun1, arg: ref arg1, .. },
-             &App { fun: ref fun2, arg: ref arg2, .. }) => fun1 == fun2 && arg1 == arg2,
+             &App { fun: ref fun2, arg: ref arg2, .. }) =>
+                fun1 == fun2 && arg1 == arg2,
             (&Forall { binder: ref binder1, term: ref term1, .. },
              &Forall { binder: ref binder2, term: ref term2, .. }) => {
                 binder1 == binder2 && term1 == term2
@@ -502,7 +502,6 @@ impl PartialEq for Term {
              &Lambda { binder: ref binder2, body: ref body2, ..}) => {
                 binder1 == binder2 && body1 == body2
             }
-            // TODO: Deal with Intro/Recursor eq
             (&Type, &Type) => true,
             _ => false,
         }
@@ -517,34 +516,27 @@ impl Hash for Term {
         debug!("hash: {}", self);
 
         match self {
-            &Literal { ref lit, .. } => {
-                0.hash(state);
-                lit.hash(state)
-            }
             &Var { ref name, .. } => {
-                1.hash(state);
+                0.hash(state);
                 name.hash(state);
             }
             &App { ref fun, ref arg, .. } => {
-                2.hash(state);
+                1.hash(state);
                 fun.hash(state);
                 arg.hash(state);
             }
             &Forall { ref binder, ref term, .. } => {
-                3.hash(state);
+                2.hash(state);
                 binder.hash(state);
                 term.hash(state);
             }
             &Lambda { ref binder, ref body, .. } => {
-                4.hash(state);
+                3.hash(state);
                 binder.hash(state);
                 body.hash(state);
             }
-            &Recursor(..) => {
-                5.hash(state);
-            }
             &Type => {
-                6.hash(state);
+                4.hash(state);
             }
         }
     }
@@ -555,12 +547,17 @@ impl Pretty for Term {
         use self::Term::*;
 
         match self {
-            &Literal { ref lit, .. } => lit.pretty(),
             &Var { ref name, .. } => name.pretty(),
             &App { ref fun, ref arg, .. } => {
+                let pretty_fun = match &**fun {
+                    complex @ &Term::Lambda { .. } =>
+                        parens(complex.pretty()),
+                    t => t.pretty()
+                };
+
                 match &**arg {
-                    &Term::App { .. } => fun.pretty() + " ".pretty() + parens(arg.pretty()),
-                    _ => fun.pretty() + " ".pretty() + arg.pretty(),
+                    &Term::App { .. } => pretty_fun + " ".pretty() + parens(arg.pretty()),
+                    _ => pretty_fun + " ".pretty() + arg.pretty(),
                 }
             }
             &Forall { ref binder, ref term, .. } => {
@@ -584,11 +581,40 @@ impl Pretty for Term {
                 }
             }
             &Lambda { ref binder, ref body, .. } => {
-                "fun".pretty() + binder.pretty() + " => ".pretty() + body.pretty()
-            }
-            &Recursor(ref name, ref ts, ref s) => {
-                "recursor".pretty() + parens(name.pretty()) + ":".pretty() +
-                    braces(braces( Doc::concat(ts.iter().map(|x| x.pretty()).collect::<Vec<Doc>>().as_slice()) + s.pretty() ))
+                // This will be the term we will unroll binders from.
+                let mut term = &**body;
+
+                // A list of coalesced binders
+                let mut cbinders = vec![];
+
+                // Store the first binder's type
+                let mut binder_ty = &binder.ty;
+                let mut binders = vec![binder];
+                // If there is a sequence of binders then we want to coalesce
+                // them when printing like we can do in the syntax. The below
+                // loop will collect said binders.
+                while let &Term::Lambda { ref binder, ref body, .. } = term {
+                    if binder.ty == *binder_ty {
+                        binders.push(binder);
+                        term = &*body;
+                    } else {
+                        cbinders.push((binders, binder_ty));
+                        binder_ty = &binder.ty;
+                        binders = vec![];
+                    }
+                }
+                // I think this code could probably be cleaner.
+                let mut coalesced_binder = "".pretty();
+                for (binders, ty) in cbinders {
+                    coalesced_binder = coalesced_binder + "(".pretty();
+                    for binder in binders {
+                        coalesced_binder = coalesced_binder + binder.name.pretty() + " ".pretty();
+                    }
+                    coalesced_binder = coalesced_binder + ": ".pretty() + ty.pretty();
+                    coalesced_binder = coalesced_binder + ") ".pretty();
+                }
+                // Now we pretty print the function with the collesced binders.
+                "fun ".pretty() + coalesced_binder + "=> ".pretty() + term.pretty()
             }
             &Type => Doc::text("Type"),
         }
@@ -616,13 +642,11 @@ impl HasSpan for Term {
         use self::Term::*;
 
         match self {
-            &Literal { span, .. } => span,
             &Var { ref name } => name.get_span(),
             &App { span, .. } => span,
             &Forall { span, .. } => span,
             &Lambda { span, .. } => span,
             &Type => Span::dummy(),
-            _ => panic!(),
         }
     }
 
@@ -630,28 +654,11 @@ impl HasSpan for Term {
         use self::Term::*;
 
         match self {
-            &mut Literal { ref mut span, .. } => *span = sp,
             &mut Var { ref mut name } => name.set_span(sp),
             &mut App { ref mut span, .. } => *span = sp,
             &mut Forall { ref mut span, .. } => *span = sp,
             &mut Lambda { ref mut span, .. } => *span = sp,
             &mut Type => {}
-            _ => panic!(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Literal {
-    Int(i64), // will need to revisit this decision
-    Unit,
-}
-
-impl Pretty for Literal {
-    fn pretty(&self) -> Doc {
-        match self {
-            &Literal::Int(i) => "FIXME".pretty(), // TODO FIXME XXX
-            &Literal::Unit => "Unit".pretty(),
         }
     }
 }

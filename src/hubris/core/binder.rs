@@ -71,7 +71,7 @@ impl Binder {
 impl Pretty for Binder {
     fn pretty(&self) -> Doc {
         if self.is_implicit() {
-            braces(braces(self.name.pretty() + " : ".pretty() + self.ty.pretty()))
+            braces(self.name.pretty() + " : ".pretty() + self.ty.pretty())
         } else {
             parens(self.name.pretty() + " : ".pretty() + self.ty.pretty())
         }
@@ -90,7 +90,7 @@ pub fn pretty_binders<'a>(binders: &[&'a Binder]) -> Doc<'a> {
                              , &Doc::text(" "))
                         + " : ".pretty() + g[0].ty.pretty();
             if g[0].is_implicit() {
-                ds.push(braces(braces(d)));
+                ds.push(braces(d));
             } else {
                 ds.push(parens(d));
             }

@@ -9,7 +9,7 @@ use std::io;
 use std::rc::Rc;
 use std::io::prelude::*;
 
-use term::{self, Terminal, color, stdout, StdoutTerminal};
+use term::{self, Terminal, color, StdoutTerminal};
 
 /// A type that contains a session either directly or
 /// transitively.

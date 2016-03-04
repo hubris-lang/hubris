@@ -1,17 +1,15 @@
 mod pattern_matching;
 mod util;
 
-use ast::{self, SourceMap, ModuleId, HasSpan};
+use ast::{self, HasSpan};
 use core;
 use typeck::{self, TyCtxt};
 use session::{HasSession, Session, Reportable};
 use self::util::to_qualified_name;
 use self::pattern_matching::elaborate_pattern_match;
-use term::{Terminal, Result as TResult};
 
-use std::io::{self, Write};
+use std::io::{self};
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub enum Error {
@@ -207,7 +205,7 @@ impl ElabCx {
             // TODO: Fix this shouldn't expose so many details,
             // but the elaborator has to interleave with the type
             // checker better.
-            lcx.cx.ty_cx.axioms.insert(ty_name.clone(), ty.clone());
+            lcx.cx.ty_cx.axioms.insert(ty_name.clone(), typeck::Axiom::new(ty.clone()));
 
             let mut ctors = Vec::new();
             for ctor in data_ctors.into_iter() {
@@ -322,7 +320,7 @@ impl<'ecx> LocalElabCx<'ecx> {
 
         for binder in binders {
             let binder_ty = binder.ty;
-            for name in binder.names {
+            for name in binder.names.into_iter().rev() {
                 let repr = match name.clone().repr {
                     ast::NameKind::Qualified(..) => panic!(),
                     ast::NameKind::Unqualified(s) => s,
@@ -392,10 +390,7 @@ impl<'ecx> LocalElabCx<'ecx> {
 
         match term {
             ast::Term::Literal { span, lit } => {
-                Ok(core::Term::Literal {
-                    span: span,
-                    lit: self.elaborate_literal(lit),
-                })
+                panic!()
             }
             ast::Term::Var { name, .. } => {
                 self.elaborate_name(name)
@@ -452,11 +447,8 @@ impl<'ecx> LocalElabCx<'ecx> {
         }
     }
 
-    fn elaborate_literal(&self, lit: ast::Literal) -> core::Literal {
-        match lit {
-            ast::Literal::Unit => core::Literal::Unit,
-            ast::Literal::Int(i) => core::Literal::Int(i),
-        }
+    fn elaborate_literal(&self, lit: ast::Literal) -> core::Term {
+        panic!()
     }
 
     fn elaborate_name(&mut self, name: ast::Name) -> Result<core::Term, Error> {

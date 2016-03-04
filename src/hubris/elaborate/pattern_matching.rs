@@ -1,4 +1,4 @@
-use super::super::ast::{self, SourceMap, HasSpan};
+use super::super::ast::{self}; // SourceMap, HasSpan};
 use super::super::core;
 use super::{LocalElabCx, Error};
 
