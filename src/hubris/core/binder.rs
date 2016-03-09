@@ -81,7 +81,7 @@ impl Pretty for Binder {
 // Pretty print a list of binders. Groups binders of the same type
 pub fn pretty_binders<'a>(binders: &[&'a Binder]) -> Doc<'a> {
     let mut ds = Vec::new();
-    for (k, g) in binders.iter().group_by(|elt| (&elt.ty, &elt.mode)) {
+    for (_, g) in binders.iter().group_by(|elt| (&elt.ty, &elt.mode)) {
         if g.len() == 1{
             ds.push(g[0].pretty());
         } else {

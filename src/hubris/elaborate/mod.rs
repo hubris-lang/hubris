@@ -161,7 +161,7 @@ impl ElabCx {
         match def {
             ast::Item::Inductive(d) => {
                 let edata = try!(self.elaborate_data(d));
-                self.ty_cx.declare_datatype(&edata);
+                try!(self.ty_cx.declare_datatype(&edata));
                 Ok(Some(core::Item::Data(edata)))
             }
             ast::Item::Def(f) => {

@@ -92,7 +92,9 @@ impl Pretty for Function {
             ref body,
             ..
         } = self;
-        Pretty::pretty("fn ") + Pretty::pretty(name) + parens(Pretty::pretty(name) + Pretty::pretty(" :") + Pretty::pretty(ret_ty)) + Pretty::pretty(":=") + Pretty::pretty(body) + Pretty::pretty("end")
+        // TODO: Would you fix this TK?
+        Pretty::pretty("def ") + Pretty::pretty(name) + Pretty::pretty(" : ") + Pretty::pretty(ret_ty) +
+        Pretty::pretty(" := \n") + Pretty::pretty(body) + Pretty::pretty("\nend")
     }
 }
 
