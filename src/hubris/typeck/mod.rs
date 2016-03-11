@@ -64,7 +64,7 @@ impl Definition {
 /// needed across type checking all definitions.
 pub struct TyCtxt {
     // We keep these around right now, but I'm not sure if we should.
-    types: HashMap<Name, Data>,
+    pub types: HashMap<Name, Data>,
     functions: HashMap<Name, Function>,
 
     pub axioms: HashMap<Name, Axiom>,
@@ -756,7 +756,7 @@ fn name_to_path(name: &Name) -> Option<PathBuf> {
                 path = path.join(c);
             }
 
-            path.set_extension("hb");
+            path.set_extension("hbr");
 
             Some(path)
         }

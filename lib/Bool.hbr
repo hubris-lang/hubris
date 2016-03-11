@@ -1,0 +1,14 @@
+module Bool
+
+import A
+
+inductive Bool
+  | True : Bool
+  | False : Bool
+end
+
+def hello (n : Nat) (n: Nat) :=
+  begin
+    A; B; C
+  end
+end

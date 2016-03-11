@@ -81,20 +81,24 @@ impl Pretty for Binder {
 // Pretty print a list of binders. Groups binders of the same type
 pub fn pretty_binders<'a>(binders: &[&'a Binder]) -> Doc<'a> {
     let mut ds = Vec::new();
-    for (_, g) in binders.iter().group_by(|elt| (&elt.ty, &elt.mode)) {
-        if g.len() == 1{
-            ds.push(g[0].pretty());
-        } else {
-            let d = seperate(g.iter().map(|x| x.name.pretty())
-                                 .collect::<Vec<Doc<'a>>>().as_slice()
-                             , &Doc::text(" "))
-                        + " : ".pretty() + g[0].ty.pretty();
-            if g[0].is_implicit() {
-                ds.push(braces(d));
-            } else {
-                ds.push(parens(d));
-            }
-        }
-    };
+    for thing in binders.iter() {
+        ds.push(thing.pretty());
+    }
+    // for (ty, g) in binders.iter().group_by(|elt| (&elt.ty, &elt.mode)) {
+    //     println!("binder_ty={:?}", ty);
+    //     if g.len() == 1{
+    //         ds.push(g[0].pretty());
+    //     } else {
+    //         let d = seperate(g.iter().map(|x| x.name.pretty())
+    //                              .collect::<Vec<Doc<'a>>>().as_slice()
+    //                          , &Doc::text(" "))
+    //                     + " : ".pretty() + g[0].ty.pretty();
+    //         if g[0].is_implicit() {
+    //             ds.push(braces(d));
+    //         } else {
+    //             ds.push(parens(d));
+    //         }
+    //     }
+    // };
     seperate(ds.as_slice(), &Doc::text(" "))
 }

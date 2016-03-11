@@ -572,6 +572,8 @@ impl Pretty for Term {
                     let mut binders = Vec::new();
                     binders.push(binder);
                     while let &Term::Forall { ref binder, ref term, .. } = cursor {
+                        // This is because we only want to pretty print the chunk of
+                        // binders up to a placeholder name.
                         if binder.name.is_placeholder() { break; }
                         binders.push(binder);
                         cursor = term;
@@ -581,46 +583,57 @@ impl Pretty for Term {
                 }
             }
             &Lambda { ref binder, ref body, .. } => {
-                // This will be the term we will unroll binders from.
-                let mut term = &**body;
-
-                // A list of coalesced binders
-                let mut cbinders = vec![];
-
-                // Store the first binder's type
-                let mut binder_ty = &binder.ty;
-                let mut binders = vec![binder];
-                // If there is a sequence of binders then we want to coalesce
-                // them when printing like we can do in the syntax. The below
-                // loop will collect said binders.
-                while let &Term::Lambda { ref binder, ref body, .. } = term {
-                    if binder.ty == *binder_ty {
-                        binders.push(binder);
-                        term = &*body;
-                    } else {
-                        cbinders.push((binders, binder_ty));
-                        binder_ty = &binder.ty;
-                        binders = vec![];
-                    }
-                }
-
-                // This code is ugly, loops suck
-                if cbinders.len() == 0 {
-                    cbinders.push((binders, binder_ty));
-                }
-
-                // I think this code could probably be cleaner.
-                let mut coalesced_binder = "".pretty();
-                for (binders, ty) in cbinders {
-                    coalesced_binder = coalesced_binder + "(".pretty();
-                    for binder in binders {
-                        coalesced_binder = coalesced_binder + binder.name.pretty() + " ".pretty();
-                    }
-                    coalesced_binder = coalesced_binder + ": ".pretty() + ty.pretty();
-                    coalesced_binder = coalesced_binder + ") ".pretty();
-                }
+                // // This will be the term we will unroll binders from.
+                // let mut term = &**body;
+                //
+                // // A list of coalesced binders
+                // let mut cbinders = vec![];
+                //
+                // // Store the first binder's type
+                // let mut binder_ty = &binder.ty;
+                // let mut binders = vec![binder];
+                // // If there is a sequence of binders then we want to coalesce
+                // // them when printing like we can do in the syntax. The below
+                // // loop will collect said binders.
+                // while let &Term::Lambda { ref binder, ref body, .. } = term {
+                //     if binder.ty == *binder_ty {
+                //         binders.push(binder);
+                //         term = &*body;
+                //     } else {
+                //         cbinders.push((binders, binder_ty));
+                //         binder_ty = &binder.ty;
+                //         binders = vec![];
+                //     }
+                // }
+                //
+                // // This code is ugly, lo
+                // if cbinders.len() == 0 {
+                //     cbinders.push((binders, binder_ty));
+                // }
+                //
+                // // I think this code could probably be cleaner.
+                // let mut coalesced_binder = "".pretty();
+                // for (binders, ty) in cbinders {
+                //     coalesced_binder = coalesced_binder + "(".pretty();
+                //     for binder in binders {
+                //         coalesced_binder = coalesced_binder + binder.name.pretty() + " ".pretty();
+                //     }
+                //     coalesced_binder = coalesced_binder + ": ".pretty() + ty.pretty();
+                //     coalesced_binder = coalesced_binder + ") ".pretty();
+                // }
                 // Now we pretty print the function with the collesced binders.
-                "fun ".pretty() + coalesced_binder + "=> ".pretty() + term.pretty()
+                let mut cursor = &**body;
+                let mut binders = Vec::new();
+                binders.push(binder);
+                while let &Term::Lambda { ref binder, ref body, .. } = cursor {
+                    // This is because we only want to pretty print the chunk of
+                    // binders up to a placeholder name.
+                    if binder.name.is_placeholder() { break; }
+                    binders.push(binder);
+                    cursor = body;
+                }
+
+                "fun ".pretty() + pretty_binders(binders.as_slice()) + " => ".pretty() + cursor.pretty()
             }
             &Type => Doc::text("Type"),
         }

@@ -8,10 +8,10 @@ build = "build.rs"
 name = "hubris_syntax"
 
 [dependencies.lalrpop-util]
-version = "0.9.0"
+version = "0.11.0"
 
 [build-dependencies.lalrpop]
-version = "0.9.0"
+version = "0.11.0"
 
 [dependencies.pretty]
 git = "https://github.com/hubris-lang/pretty"

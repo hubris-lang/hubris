@@ -84,16 +84,16 @@ Parameters: Vec<Binder> = {
 };
 
 Binder: Binder = {
-    "(" <lo: @L> <ns : NameSeq> ":" <ty : Term> <hi: @R> ")" => Binder {
+    "(" <lo: @L> <ns : NameSeq> <ty : (":" Term)?> <hi: @R> ")" => Binder {
         span: Span::new(lo, hi),
         names: ns,
-        ty: Some(ty),
+        ty: ty.map(|ty| ty.1),
         mode: BindingMode::Explicit,
     },
-    "{" <lo: @L> <ns : NameSeq> ":" <ty: Term> <hi: @R> "}" => Binder {
+    "{" <lo: @L> <ns : NameSeq> <ty : (":" Term)?> <hi: @R> "}" => Binder {
         span: Span::new(lo, hi),
         names: ns,
-        ty: Some(ty),
+        ty: ty.map(|ty| ty.1),
         mode: BindingMode::Implicit,
     },
 };
