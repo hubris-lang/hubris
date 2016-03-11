@@ -1,6 +1,3 @@
-#![feature(custom_derive, plugin)]
-#![plugin(serde_macros)]
-
 extern crate gcc;
 extern crate iron;
 extern crate hubris_syntax;
@@ -8,9 +5,7 @@ extern crate hubris_syntax;
 extern crate log;
 extern crate llvm_sys;
 extern crate readline;
-extern crate rmp_serde;
 extern crate router;
-extern crate serde;
 extern crate term;
 extern crate urlencoded;
 extern crate pretty;
