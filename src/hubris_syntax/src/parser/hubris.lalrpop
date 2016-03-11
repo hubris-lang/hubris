@@ -281,7 +281,7 @@ extern {
         "->" => Tok::Arrow,
         "_" => Tok::Underscore,
         "." => Tok::Period,
-        "DocComment" => Tok::DocComment(<&'input str>),
+        "DocComment" => Tok::DocComment(<String>),
         "Id" => Tok::Id(<&'input str>),
     }
 }

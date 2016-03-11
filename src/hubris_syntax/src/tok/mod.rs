@@ -19,6 +19,7 @@ pub enum ErrorCode {
     UnterminatedStringLiteral,
     UnterminatedCode,
     ExpectedStringLiteral,
+    UnfinishedComment,
 }
 
 fn error<T>(c: ErrorCode, l: usize) -> Result<T,Error> {
@@ -48,7 +49,7 @@ pub enum Tok<'input> {
     //     <s: r"[a-zA-Z_][a-zA-Z0-9_]*"> => s.to_string()
     // };
     Id(&'input str),
-    DocComment(&'input str),
+    DocComment(String),
     StringLiteral(&'input str),
     // NumericLit(&'input str),
 
@@ -88,10 +89,10 @@ pub enum Tok<'input> {
 }
 
 pub struct Tokenizer<'input> {
-    text: &'input str,
+    text: &'input str, // whole input
     chars: CharIndices<'input>,
     lookahead: Option<(usize, char)>,
-    shift: usize,
+    shift: usize, // offset into the input
 }
 
 macro_rules! eof {
@@ -241,8 +242,8 @@ impl<'input> Tokenizer<'input> {
                         }
                         Some((_, '-')) => {
                             match self.bump() {
-                                Some((_, '|')) => {
-                                    Some(self.doc_comment())
+                                Some((idx1, '|')) => {
+                                    Some(self.doc_comment(idx1+1))
                                 }
                                 // This case makes it feel like we will need to move away
                                 // from LALRPOP at some point towards a custom parser.
@@ -321,15 +322,50 @@ impl<'input> Tokenizer<'input> {
         }
     }
 
+    // Pops one character of input
     fn bump(&mut self) -> Option<(usize, char)> {
         self.lookahead = self.chars.next();
         self.lookahead
     }
 
-    fn doc_comment(&mut self) -> Result<Spanned<Tok<'input>>, Error> {
-        let res = self.take_until(|c| c == '\n');
-        // &self.text
-        Ok((0, DocComment("doc comment"), 1))
+    // parses a multiline doc comment starting at idx0
+    // --| This is an
+    // -- example doc comment
+    fn doc_comment(&mut self, idx0: usize) -> Result<Spanned<Tok<'input>>, Error> {
+        let mut comment = String::new();
+        let mut off = idx0;
+        match self.take_until(|c| c == '\n') {
+                Some(idx1) => {
+                    self.bump(); // get rid of the newline
+                    let r = &self.text[off .. idx1];
+                    comment.push_str(r);
+                    off = idx1 + 1;
+                },
+                None => {
+                    try!(error(UnfinishedComment, idx0));
+                }
+        }
+
+        // TODO: this should use lookahead properly
+        while self.text.len() - off >= 2 &&
+            &self.text[off .. off + 2] == "--" {
+            self.bump(); // skip --
+            self.bump();
+            let idx0 = off + 2;
+            match self.take_until(|c| c == '\n') {
+                Some(idx1) => {
+                    self.bump(); // get rid of the newline
+                    let r = &self.text[idx0 .. idx1];
+                    comment.push_str(r);
+                    off = idx1 +1;
+                },
+                None => {
+                    try!(error(UnfinishedComment, idx0));
+                }
+            }
+        }
+
+        Ok((0, DocComment(comment), 1))
     }
 
     fn string_literal(&mut self, idx0: usize) -> Result<Spanned<Tok<'input>>, Error> {
