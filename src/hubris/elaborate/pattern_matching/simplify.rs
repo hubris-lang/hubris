@@ -16,13 +16,40 @@ pub enum SimpleMatchArm {
     Term(ast::Term),
 }
 
+impl Pretty for SimpleMatchArm {
+    fn pretty(&self) -> Doc {
+        use self::SimpleMatchArm::*;
+
+        match self {
+            &Match(ref m) => m.pretty(),
+            &Term(ref t) => t.pretty()
+        }
+    }
+}
+
+impl Display for SimpleMatchArm {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        format(self, formatter)
+    }
+}
+
+
 pub enum SimplePattern {
-    Dummy,
+    Constructor(ast::Name, Vec<ast::Name>),
+    Name(ast::Name),
 }
 
 impl Pretty for SimplePattern {
     fn pretty(&self) -> Doc {
-        panic!()
+        use self::SimplePattern::*;
+
+        match self {
+            &Constructor(ref n, ref ns) => {
+                let ns: Vec<_> = ns.iter().map(|x| parens(x.pretty())).collect();
+                n.pretty() + seperate(&ns[..], &" ".pretty())
+            },
+            &Name(ref n) => n.pretty()
+        }
     }
 }
 
@@ -39,7 +66,7 @@ pub struct SimpleCase {
 
 impl Pretty for SimpleCase {
     fn pretty(&self) -> Doc {
-        panic!()
+        "| ".pretty() + self.pattern.pretty() + " => ".pretty() + self.rhs.pretty()
     }
 }
 
@@ -72,35 +99,52 @@ impl Display for SimpleMatch {
 }
 
 pub fn simplify_match(scrutinee: ast::Term, cases: Vec<ast::Case>) -> SimpleMatch {
-    //let mut simple_cases = vec![];
-    for (key, group) in cases.into_iter().group_by(|c| unapply(&c.pattern).0) {
-        println!("key {}", key);
-        if group.len() == 1 {
-            let element = group[0].clone();
-            println!("key for 1 {}", element);
-        } else {
-            let cases = group.iter().map(|c| unapply(&c.pattern));
-            for (ctor, pats) in cases {
-                println!("{}", ctor);
-                for pat in pats {
-                    println!("{}", pat);
+    let mut simple_cases = vec![];
+
+    for (pat_head, cases) in cases.into_iter().group_by(|c| unapply(&c.pattern).0) {
+        let case_and_sub_pats : Vec<_> =
+            cases.iter()
+                 .map(|c| (c, unapply(&c.pattern).1))
+                 .collect();
+
+        let mut pattern_sets = vec![];
+        if case_and_sub_pats.len() > 0 {
+            let pat_number = case_and_sub_pats[0].1.len();
+            let mut i = 0;
+            while i < pat_number {
+                let mut patterns = vec![];
+                for &(ref case, ref sub_pats) in &case_and_sub_pats {
+                    patterns.push(sub_pats[i].clone());
+                    println!("{}", sub_pats[i]);
                 }
+                pattern_sets.push(patterns);
+                i += 1;
+            }
+        } else {
+            panic!()
+        }
+
+        for set in &pattern_sets {
+            println!("-----");
+            for p in set {
+                println!("pat: {}", p);
             }
         }
-        // let ector = match try!(self.elab_cx.elaborate_name(key)) {
-        //     core::Term::Var { name } => name,
-        //     _ => panic!()
-        // };
-        // let ty = ctor_map.remove(&ector).unwrap();
-        // println!("{} : {}", ector, ty);
-        // if group.len() > 1 {
-        //     for case in group {
-        //         println!("case {:?}", case);
-        //     }
-        //     //let mut names = vec![];
-        //     //self.simplify_patterns(ty, ector, &mut names, &group[..], case.rh
-        // } else {
-        //     ;
+
+        let names =
+            (0..pattern_sets.len())
+                .map(|i| ast::Name::from_str(&format!("a{}", i)[..]))
+                .collect();
+
+        // let rhs =
+        let simple_case = SimpleCase {
+            pattern: SimplePattern::Constructor(pat_head, names),
+            rhs: SimpleMatchArm::Term(ast::Term::Type),
+        };
+
+        println!("simple_case: {}", simple_case);
+
+        simple_cases.push(simple_case);
     }
     panic!()
 }
