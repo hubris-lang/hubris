@@ -219,5 +219,6 @@ pub fn elaborate_pattern_match<'ecx>(
         cases: Vec<ast::Case>) -> Result<Term, Error> {
     let mut pmcx = PatternMatchCx::new(elab_cx);
     let simplified_match = simplify_match(scrutinee, cases);
+    println!("simplified_match: {}", simplified_match);
     panic!()
 }

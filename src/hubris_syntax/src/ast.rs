@@ -266,17 +266,7 @@ impl Pretty for Term {
         match self {
             &Var { ref name, .. } => name.pretty(),
             &App { ref fun, ref arg, .. } => {
-                panic!()
-                // let pretty_fun = match &**fun {
-                //     complex @ &Term::Lambda { .. } =>
-                //         parens(complex.pretty()),
-                //     t => t.pretty()
-                // };
-                //
-                // match &**arg {
-                //     &Term::App { .. } => pretty_fun + " ".pretty() + parens(arg.pretty()),
-                //     _ => pretty_fun + " ".pretty() + arg.pretty(),
-                // }
+                fun.pretty() + " ".pretty() + parens(arg.pretty())
             }
             &Forall { ref binders, ref term, .. } => {
                 panic!()
@@ -318,13 +308,16 @@ impl Pretty for Term {
                 // "fun ".pretty() + pretty_binders(binders.as_slice()) + " => ".pretty() + cursor.pretty()
             }
             &Let { .. } => panic!(),
-            &Match { .. } => panic!(),
+            &Match { ref scrutinee, ref cases, .. } => {
+                let cases : Vec<_> = cases.iter().map(|x| x.pretty()).collect();
+                "match ".pretty() + scrutinee.pretty() + " with\n".pretty() +
+                seperate(&cases[..], &"\n".pretty()) + "\nend".pretty()
+            }
             &Literal { .. } => panic!(),
             &Type => Doc::text("Type"),
         }
     }
 }
-
 
 impl HasSpan for Term {
     fn get_span(&self) -> Span {
@@ -374,7 +367,7 @@ impl Display for Case {
 impl Pretty for Case {
     fn pretty(&self) -> Doc {
         use self::Term::*;
-        panic!()
+        "| ".pretty() + self.pattern.pretty() + " => ".pretty() + self.rhs.pretty()
     }
 }
 

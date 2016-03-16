@@ -1,4 +1,4 @@
-use super::super::super::ast::{self};
+use super::super::super::ast::{self, Span};
 use super::super::super::core::{self, Term};
 
 use std::collections::HashMap;
@@ -87,8 +87,8 @@ pub struct SimpleMatch {
 impl Pretty for SimpleMatch {
     fn pretty(&self) -> Doc {
         let cases : Vec<_> = self.cases.iter().map(|x| x.pretty()).collect();
-        "match ".pretty() + self.scrutinee.pretty() + " with {\n".pretty() +
-        seperate(&cases[..], &"\n".pretty()) + "end".pretty()
+        "match ".pretty() + self.scrutinee.pretty() + " with\n".pretty() +
+        seperate(&cases[..], &"\n".pretty()) + "\nend".pretty()
     }
 }
 
@@ -107,16 +107,24 @@ pub fn simplify_match(scrutinee: ast::Term, cases: Vec<ast::Case>) -> SimpleMatc
                  .map(|c| (c, unapply(&c.pattern).1))
                  .collect();
 
+
+        let mut names = vec![];
         let mut pattern_sets = vec![];
+
         if case_and_sub_pats.len() > 0 {
             let pat_number = case_and_sub_pats[0].1.len();
+
             let mut i = 0;
+            let mut j = 0;
+            
             while i < pat_number {
                 let mut patterns = vec![];
                 for &(ref case, ref sub_pats) in &case_and_sub_pats {
                     patterns.push(sub_pats[i].clone());
                     println!("{}", sub_pats[i]);
+                    j += 1;
                 }
+                names.push(ast::Name::from_str(&format!("a{}", j)));
                 pattern_sets.push(patterns);
                 i += 1;
             }
@@ -131,22 +139,54 @@ pub fn simplify_match(scrutinee: ast::Term, cases: Vec<ast::Case>) -> SimpleMatc
             }
         }
 
-        let names =
-            (0..pattern_sets.len())
-                .map(|i| ast::Name::from_str(&format!("a{}", i)[..]))
-                .collect();
+        let rhses : Vec<_> = cases.iter().map(|x| &x.rhs).collect();
+        let rhs = construct_pattern_match(&names[..], &pattern_sets[..], &rhses[..]);
 
-        // let rhs =
         let simple_case = SimpleCase {
             pattern: SimplePattern::Constructor(pat_head, names),
-            rhs: SimpleMatchArm::Term(ast::Term::Type),
+            rhs: rhs,
         };
 
         println!("simple_case: {}", simple_case);
 
         simple_cases.push(simple_case);
     }
-    panic!()
+
+    SimpleMatch {
+        scrutinee: scrutinee,
+        cases: simple_cases,
+        pattern_type: PatternType::Cases,
+    }
+}
+
+fn construct_pattern_match(names: &[ast::Name], pattern_sets: &[Vec<ast::Pattern>], rhss: &[&ast::Term]) -> SimpleMatchArm {
+    assert_eq!(names.len(), pattern_sets.len());
+    if names.len() == 0 && pattern_sets.len() == 0 {
+        SimpleMatchArm::Term(rhss[0].clone())
+    } else {
+        let cases : Vec<_> =
+            pattern_sets[0]
+                .iter()
+                .enumerate()
+                .map(|(i, x)|
+                    ast::Case {
+                        pattern: x.clone(),
+                        rhs: rhss[i].clone(),
+                        span: Span::dummy(),
+                }).collect();
+
+        let mat = ast::Term::Match {
+            scrutinee: Box::new(ast::Term::Var { name: names[0].clone() }),
+            cases: cases.clone(),
+            span: Span::dummy(),
+        };
+
+        let simple_match = simplify_match(
+            ast::Term::Var { name: names[0].clone() },
+            cases);
+
+        SimpleMatchArm::Match(simple_match)
+    }
 }
 
 fn unapply(pattern: &ast::Pattern) -> (ast::Name, Vec<ast::Pattern>) {
