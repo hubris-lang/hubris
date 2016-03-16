@@ -215,7 +215,7 @@ impl Repl {
                     match self.elab_cx.ty_cx.unfold_name(&name).ok() {
                         None => println!("could not find a definition for {}", name),
                         Some(t) => {
-                            Doc::render(&t.pretty(), 80, &mut stdout());
+                            try!(Doc::render(&t.pretty(), 80, &mut stdout()))
                         }
                     }
                 }

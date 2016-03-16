@@ -651,7 +651,6 @@ impl Pretty for Term {
 
 impl Display for Term {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-
         format(self, formatter)
     }
 }

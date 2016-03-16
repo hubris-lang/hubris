@@ -2,7 +2,7 @@ use std::fmt::{self, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
-use super::pretty::*;
+use pretty::*;
 
 pub use parser::SourceMap;
 
@@ -253,6 +253,79 @@ pub enum Term {
     Type,
 }
 
+impl Display for Term {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        format(self, formatter)
+    }
+}
+
+impl Pretty for Term {
+    fn pretty(&self) -> Doc {
+        use self::Term::*;
+
+        match self {
+            &Var { ref name, .. } => name.pretty(),
+            &App { ref fun, ref arg, .. } => {
+                panic!()
+                // let pretty_fun = match &**fun {
+                //     complex @ &Term::Lambda { .. } =>
+                //         parens(complex.pretty()),
+                //     t => t.pretty()
+                // };
+                //
+                // match &**arg {
+                //     &Term::App { .. } => pretty_fun + " ".pretty() + parens(arg.pretty()),
+                //     _ => pretty_fun + " ".pretty() + arg.pretty(),
+                // }
+            }
+            &Forall { ref binders, ref term, .. } => {
+                panic!()
+                // if binder.name.is_placeholder() {
+                //     let p = match &*binder.ty {
+                //         &Forall {..} => parens(binder.ty.pretty()) + " -> ".pretty(),
+                //         _ => binder.ty.pretty() + " -> ".pretty(),
+                //     };
+                //     p + term.pretty()
+                // } else {
+                //     let mut cursor = &**term;
+                //     let mut binders = Vec::new();
+                //     binders.push(binder);
+                //     while let &Term::Forall { ref binder, ref term, .. } = cursor {
+                //         // This is because we only want to pretty print the chunk of
+                //         // binders up to a placeholder name.
+                //         if binder.name.is_placeholder() { break; }
+                //         binders.push(binder);
+                //         cursor = term;
+                //     }
+                //     "forall ".pretty() + pretty_binders(binders.as_slice()) +
+                //         ", ".pretty() + cursor.pretty()
+                // }
+            }
+            &Lambda { ref args, ref body, .. } => {
+                panic!()
+                // // Now we pretty print the function with the collesced binders.
+                // let mut cursor = &**body;
+                // let mut binders = Vec::new();
+                // binders.push(binder);
+                // while let &Term::Lambda { ref binder, ref body, .. } = cursor {
+                //     // This is because we only want to pretty print the chunk of
+                //     // binders up to a placeholder name.
+                //     if binder.name.is_placeholder() { break; }
+                //     binders.push(binder);
+                //     cursor = body;
+                // }
+                //
+                // "fun ".pretty() + pretty_binders(binders.as_slice()) + " => ".pretty() + cursor.pretty()
+            }
+            &Let { .. } => panic!(),
+            &Match { .. } => panic!(),
+            &Literal { .. } => panic!(),
+            &Type => Doc::text("Type"),
+        }
+    }
+}
+
+
 impl HasSpan for Term {
     fn get_span(&self) -> Span {
         use self::Term::*;
@@ -292,11 +365,44 @@ pub struct Case {
     pub rhs: Term,
 }
 
+impl Display for Case {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        format(self, formatter)
+    }
+}
+
+impl Pretty for Case {
+    fn pretty(&self) -> Doc {
+        use self::Term::*;
+        panic!()
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Pattern {
     Name(Name),
     Constructor(Name, Vec<Pattern>),
     Placeholder,
+}
+
+impl Display for Pattern {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        format(self, formatter)
+    }
+}
+
+impl Pretty for Pattern {
+    fn pretty(&self) -> Doc {
+        use self::Pattern::*;
+        match self {
+            &Name(ref n) => n.pretty(),
+            &Constructor(ref n, ref pats) => {
+                let pats: Vec<_> = pats.iter().map(|p| parens(p.pretty())).collect();
+                n.pretty() + seperate(&pats[..], &" ".pretty())
+            }
+            &Placeholder => "_".pretty(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

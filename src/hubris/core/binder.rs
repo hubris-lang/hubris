@@ -2,7 +2,6 @@ use super::name::Name;
 use super::term::Term;
 
 use super::super::pretty::*;
-use super::super::itertools::Itertools;
 
 #[derive(Debug, Copy, Clone, PartialEq, Hash, Eq)]
 pub enum BindingMode {

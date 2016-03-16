@@ -6,9 +6,21 @@ inductive Prod (A : Type) (B : Type)
   | MkProd : A -> B -> Prod A B
 end
 
+inductive Nat
+  | Z : Nat
+  | S : Nat -> Nat
+end
+
+def add (n m : Nat) : Nat :=
+  match MkProd n m with
+  | MkProd Z mp => mp
+  | MkProd (S np) mp => add np mp
+  end
+end
+
 def first {A B : Type} (p : Prod A B) : A :=
   match p with
-  | MkProd a _ => a
+  | MkProd a b => a
   end
 end
 

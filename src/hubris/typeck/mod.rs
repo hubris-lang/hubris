@@ -523,8 +523,7 @@ impl TyCtxt {
             }
         }
 
-        let mut solver =
-            try!(solver::Solver::new(self, infer_cs));
+       let solver = try!(solver::Solver::new(self, infer_cs));
 
         let solutions = try!(solver.solve());
 
