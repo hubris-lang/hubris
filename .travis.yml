@@ -1,6 +1,6 @@
 language: rust
 rust:
-  - nightly
+  - stable
 sudo: false
 addons:
   apt:
@@ -14,3 +14,6 @@ addons:
     - libedit-dev
 env:
   - LLVM_CONFIG="llvm-config-3.6"
+script:
+  - cargo test
+  - cargo run --bin test-hubris
