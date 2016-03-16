@@ -1,0 +1,6 @@
+module Free
+
+inductive Free (F : Type -> Type) (A : Type) : Type
+  | Pure : A -> Free F A
+  | MkFree : (F (Free F A)) -> Free F A
+end
