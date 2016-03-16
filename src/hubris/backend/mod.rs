@@ -1,17 +1,5 @@
-use std::collections::HashMap;
-use std::env;
 use std::fmt::Debug;
-use std::fs::{File};
-use std::io;
-use std::io::Write;
-use std::process::Command;
-use std::path::{Path, PathBuf};
-
-use core;
-use llvm;
-use llvm_sys;
-
-use llvm_sys::prelude::LLVMValueRef;
+use std::path::{Path};
 
 #[derive(Debug, Clone)]
 enum Error {

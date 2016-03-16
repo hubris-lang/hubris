@@ -58,7 +58,7 @@ pub struct SessionData {
     /// we have handed out.
     module_id_counter: usize,
     /// The set of things that have been imported.
-    imports: HashSet<Name>,
+    imported_files: HashSet<PathBuf>,
     /// An index from module id to source map.
     source_maps: HashMap<ModuleId, SourceMap>,
 }
@@ -81,7 +81,7 @@ impl Session   {
             data: Rc::new(RefCell::new(SessionData {
                 terminal: term::stdout().unwrap(), // Not sure about this, we can revisit it later.
                 module_id_counter: 0,
-                imports: HashSet::new(),
+                imported_files: HashSet::new(),
                 source_maps: HashMap::new(),
             })),
             ty: SessionType::Repl { loaded_file: None },
@@ -93,7 +93,7 @@ impl Session   {
             data: Rc::new(RefCell::new(SessionData {
                 terminal: term::stdout().unwrap(), // Not sure about this, we can revisit it later.
                 module_id_counter: 0,
-                imports: HashSet::new(),
+                imported_files: HashSet::new(),
                 source_maps: HashMap::new(),
             })),
             ty: SessionType::Compiler { root_file: path.to_owned() }
@@ -197,7 +197,8 @@ impl Session   {
     }
 
     pub fn is_loaded(&self, path: &Path) -> bool {
-        false
+        let session_data = self.data.borrow();
+        session_data.imported_files.contains(path)
     }
 }
 

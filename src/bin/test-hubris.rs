@@ -35,7 +35,7 @@ fn run_tests_in_dir(path: &Path, expected_outcome: Outcome) -> io::Result<()> {
 
         match expected_outcome {
             Outcome::Fail => match result {
-                Err(e) => {},
+                Err(_) => {},
                 Ok(_) => {
                     should_of_failed.push(test.to_owned());
                 }

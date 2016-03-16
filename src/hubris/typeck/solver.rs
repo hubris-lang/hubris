@@ -109,10 +109,10 @@ impl<'tcx> Solver<'tcx> {
     }
 
     pub fn visit_unification(&mut self, r: Term, s: Term, j: Justification, category: ConstraintCategory) -> Result<(), Error> {
-        println!("visit_unification: r={} s={}", r, s);
+        debug!("visit_unification: r={} s={}", r, s);
 
         for (m, sol) in &self.solution_mapping {
-            println!("solution: {}={}", m, sol.0);
+            debug!("solution: {}={}", m, sol.0);
         }
 
         // Find the correct meta-variable to solve for,
@@ -131,7 +131,7 @@ impl<'tcx> Solver<'tcx> {
             _ => panic!("one of these should be stuck otherwise the constraint should be gone already I think?"),
         };
 
-        println!("meta {}", meta);
+        debug!("meta {}", meta);
         // See if we have a solution in the solution map,
         // if we have a solution for ?m we should substitute
         // it in both terms and reconstruct the equality
@@ -151,7 +151,7 @@ impl<'tcx> Solver<'tcx> {
 
             Ok(())
         } else if category == ConstraintCategory::Pattern {
-            println!("r: {} u: {}", r, s);
+            debug!("r: {} u: {}", r, s);
             // left or right?
             let meta = match r.head().unwrap_or_else(|| s.head().unwrap()) {
                 Term::Var { name } => name,
@@ -160,7 +160,7 @@ impl<'tcx> Solver<'tcx> {
 
             let locals = r.args().unwrap_or(vec![]);
 
-            println!("meta {}", meta);
+            debug!("meta {}", meta);
             // There is a case here I'm not sure about
             // what if the meta variable we solve has been
             // also applied to non-local constants?
@@ -192,7 +192,7 @@ impl<'tcx> Solver<'tcx> {
 
             Ok(())
         } else {
-            println!("category: {:?}", category);
+            debug!("category: {:?}", category);
 
             let cat_constraint = CategorizedConstraint {
                 category: category,
@@ -214,12 +214,12 @@ impl<'tcx> Solver<'tcx> {
     }
 
     pub fn simplify(&self, t: Term, u: Term, j: Justification) -> Result<Vec<CategorizedConstraint>, Error> {
-        println!("simplify: t={} u={}", t, u);
+        debug!("simplify: t={} u={}", t, u);
         // Case 1: t and u are precisely the same term
         // unification constraints of this form incur
         // no constraints since this is discharge-able here.
         if t == u {
-            println!("equal");
+            debug!("equal");
             return Ok(vec![]);
         }
 
@@ -227,10 +227,10 @@ impl<'tcx> Solver<'tcx> {
         // we reduce t ==> t' and create a constraint
         // between t' and u (t' = u).
         else if t.is_bi_reducible() {
-            println!("reduce");
+            debug!("reduce");
             self.simplify(try!(self.ty_cx.eval(&t)), u, j)
         } else if u.is_bi_reducible() {
-            println!("reduce");
+            debug!("reduce");
             self.simplify(t, try!(self.ty_cx.eval(&u)), j)
         }
 
@@ -239,7 +239,7 @@ impl<'tcx> Solver<'tcx> {
         // arguments for example l s_1 .. s_n = l t_1 .. t_n
         // creates (s_1 = t_1, j) ... (s_n = t_n, j).
         else if t.head_is_local() && u.head_is_local() && t.head() == u.head() {
-            println!("inside local head t={} u={}", t, u);
+            debug!("inside local head t={} u={}", t, u);
             let t_args = t.args().unwrap().into_iter();
             let u_args = u.args().unwrap().into_iter();
 
@@ -255,7 +255,7 @@ impl<'tcx> Solver<'tcx> {
         else if t.head_is_global() &&
                 u.head_is_global() &&
                 t.head() == u.head() {
-            println!("head is global");
+            debug!("head is global");
 
             let f = t.head().unwrap();
 
@@ -297,7 +297,7 @@ impl<'tcx> Solver<'tcx> {
         // }
 
         else if t.is_forall() && u.is_forall() {
-            println!("forall");
+            debug!("forall");
             match (t, u) {
                 (Term::Forall { binder: binder1, term: term1, .. },
                  Term::Forall { binder: binder2, term: term2, .. }) => {
@@ -365,7 +365,7 @@ impl<'tcx> Solver<'tcx> {
     // The set of constraints should probably be a lazy list.
     fn process(&self, cs: Vec<CategorizedConstraint>, j: Justification) {
         // for c in &self.constraints {
-        //     println!("{:?}", c);
+        //     debug!("{:?}", c);
         //     match c.constraint {
         //         Constraint::Choice(..) => panic!("can't process choice constraints"),
         //         Constraint::Unification(..) => {
@@ -381,12 +381,12 @@ impl<'tcx> Solver<'tcx> {
 
     pub fn solve(mut self) -> Result<HashMap<Name, (Term, Justification)>, Error> {
         while let Some(c) = self.constraints.pop() {
-            println!("{:?}", c);
+            debug!("{:?}", c);
             match c.constraint {
                 Constraint::Choice(..) => panic!("can't process choice constraints"),
                 Constraint::Unification(t, u, j) => {
                     for (m, s) in &self.solution_mapping {
-                        println!("{} {}", m, s.0)
+                        debug!("{} {}", m, s.0)
                     }
                     match c.category {
                         ConstraintCategory::FlexFlex => {
@@ -402,7 +402,7 @@ impl<'tcx> Solver<'tcx> {
                             };
 
                             if self.solution_for(&t_head) == self.solution_for(&u_head) {
-                                println!("t {} u {}", t_head, u_head);
+                                debug!("t {} u {}", t_head, u_head);
                             } else {
                                 panic!("flex-flex solution is not eq")
                             }
