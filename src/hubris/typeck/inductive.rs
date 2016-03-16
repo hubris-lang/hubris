@@ -117,7 +117,7 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
         let ctor_ty_with_params =
             self.with_params(ctor.1.clone());
 
-        // println!("ctor_ty_with_params: {}", ctor_ty_with_params);
+        // debug!("ctor_ty_with_params: {}", ctor_ty_with_params);
 
         let mut i = 0;
         let mut binders = Vec::new();
@@ -151,7 +151,7 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
                           .collect(),
                 };
 
-                // println!("type to get indicies from: {}", ty);
+                // debug!("type to get indicies from: {}", ty);
 
                 // Add the ctor to the end of the list and we are going to build an
                 // application of the form C indicies (Ctor args)
@@ -285,7 +285,7 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
     pub fn construct_computation_rule(&self) -> Result<ComputationRule, Error> {
         Ok(Box::new(|cx: &TyCtxt, term: Term| {
             // BUG WARNING: this code IS NOT general enough
-            println!("term {}", term);
+            debug!("term {}", term);
             let (head, args) = term.uncurry();
             let ty_name = match &head {
                 &Term::Var { ref name } => match name {
@@ -298,10 +298,10 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
                 _ => panic!()
             };
 
-            println!("ty_name: {}", ty_name);
+            debug!("ty_name: {}", ty_name);
             let scrutinee = &args[args.len() - 1];
             let scrutinee = try!(cx.eval(scrutinee));
-            println!("scrutinee: {}", scrutinee);
+            debug!("scrutinee: {}", scrutinee);
             let (scrut_ctor, scrut_args) = scrutinee.uncurry();
 
             match cx.types.get(&ty_name) {
@@ -358,15 +358,15 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
                             //     premise.binders()
                             //            .unwrap();
                             //
-                            // println!("premise: {}", premise);
-                            // println!("scurtinee: {}", scrutinee);
+                            // debug!("premise: {}", premise);
+                            // debug!("scurtinee: {}", scrutinee);
                             //
                             // let mut term_args = vec![];
                             // let mut recursor_args = vec![];
                             //
                             // for (arg, ty) in args.zip(tys.into_iter()) {
-                            //     println!("arg : {}", arg);
-                            //     println!("ty : {}", ty);
+                            //     debug!("arg : {}", arg);
+                            //     debug!("ty : {}", ty);
                             //     if ty.head().unwrap() == ty_name.to_term() {
                             //         let rec =
                             //         Recursor(
@@ -435,7 +435,7 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
             body: body,
         };
 
-        println!("{}", def);
+        debug!("{}", def);
 
         try!(self.ty_cx.declare_def(&def));
 
@@ -466,7 +466,7 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
                    .iter()
                    .map(|ctor| {
                        let p = try!(self.minor_premise_for(&ind_hyp , ctor));
-                       println!("{}", p);
+                       debug!("{}", p);
                        Ok(self.ty_cx.local_with_repr("".to_string(), p))
                    })
                    .collect();
@@ -496,7 +496,7 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
             for premise in minor_premises {
                 let ty = try!(self.ty_cx.type_infer_term(&premise.to_term()));
                 let mut ty = ty.0;
-                println!("{} {}", premise, ty);
+                debug!("{} {}", premise, ty);
                 let mut locals = vec![];
                 while let Term::Forall { binder, term, .. } = ty {
                     locals.push(self.ty_cx.local(binder));
@@ -504,10 +504,10 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
                 }
 
                 for local in locals.iter().rev() {
-                    println!("{}", local);
+                    debug!("{}", local);
                 }
                 // If this argument is recursive we should skip it
-                println!("{}", Term::apply_all(premise.to_term(), vec![]))
+                debug!("{}", Term::apply_all(premise.to_term(), vec![]))
             }
 
             let body =
@@ -524,7 +524,7 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
                 body: body,
             };
 
-            println!("{}", def);
+            debug!("{}", def);
 
             // match self.ty_cx.declare_def(&def)) {
             //     Err(e) => panic!("type checking a generated def failed, this is an interal error {:?}", e)

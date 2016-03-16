@@ -1,5 +1,4 @@
-use super::super::super::ast::{self, Span};
-use super::super::super::core::{self, Term};
+use hubris::ast::{self, Span};
 
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};

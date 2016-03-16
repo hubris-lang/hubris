@@ -374,7 +374,7 @@ impl TyCtxt {
     }
 
     pub fn whnf(&self, term: &Term) -> CkResult {
-        println!("whnf: {}", term);
+        debug!("whnf: {}", term);
         match term {
             &Term::App { ref fun, ref arg, span } => {
                 let efun = try!(self.whnf(fun)).0;
@@ -403,7 +403,7 @@ impl TyCtxt {
 
         let result = match term {
             app @ &App { .. } => {
-                println!("eval (apply): app={}", app);
+                debug!("eval (apply): app={}", app);
                 let span = app.get_span();
                 let (head, args) = app.uncurry();
 
@@ -513,7 +513,7 @@ impl TyCtxt {
                             infer_ty.clone(),
                             ty.clone()));
 
-                println!("inferred {} expected {}", infer_ty, ty);
+                debug!("inferred {} expected {}", infer_ty, ty);
 
                 infer_cs.push(
                     Constraint::Unification(
@@ -528,7 +528,7 @@ impl TyCtxt {
         let solutions = try!(solver.solve());
 
         for sol in &solutions {
-            println!("{}", (sol.1).0);
+            debug!("{}", (sol.1).0);
         }
 
         // Finally use the solutions given to us by the solver or
@@ -609,7 +609,7 @@ impl TyCtxt {
                                     arg_ty.clone()));
 
 
-                        println!("{} {}", arg_ty, binder.ty);
+                        debug!("{} {}", arg_ty, binder.ty);
 
                         constraints.push(
                             Constraint::Unification(

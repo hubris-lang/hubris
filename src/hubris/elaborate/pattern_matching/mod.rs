@@ -1,7 +1,6 @@
 use super::super::ast::{self};
 use super::super::core::{self, Term};
 use super::{LocalElabCx, Error};
-use super::super::itertools::Itertools;
 
 use std::collections::HashMap;
 
