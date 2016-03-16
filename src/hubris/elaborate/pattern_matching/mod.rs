@@ -205,13 +205,55 @@ impl<'ecx, 'cx: 'ecx>PatternMatchCx<'ecx, 'cx> {
 
         Ok(result)
     }
-}
 
-// pub fn elaborate_top_level_pattern_match<'ecx>(
-//         elab_cx: &mut LocalElabCx<'ecx>,
-//         scrutinee: Vec<ast::Term>
-//         cases: Vec<Vec<ast::Case>>) -> Result<Term, Error> {
-//     let escrutinee = try!(elab_cx.elaborate_term(scrutinee));
+
+    fn elaborate_simple_match(&mut self, simple_match: SimpleMatch) -> Result<core::Term, Error> {
+        let SimpleMatch {
+            scrutinee,
+            cases,
+            pattern_type,
+        } = simple_match;
+
+        let escrutinee = try!(self.elab_cx.elaborate_term(scrutinee));
+
+        let (inductive_ty, args) =
+            try!(self.elab_cx.cx.ty_cx.type_check_term(&escrutinee, None)).1.uncurry();
+
+        let inductive_ty = match inductive_ty {
+            Term::Var { name } => name,
+            _ => panic!()
+        };
+
+        let datatype = match self.elab_cx.cx.ty_cx.types.get(&inductive_ty) {
+            None => panic!("can't fine dt decl"),
+            Some(dt) => dt.clone(),
+        };
+
+        let ctor_map : HashMap<_, _> =
+            datatype.ctors
+                    .clone()
+                    .into_iter()
+                    .collect();
+
+        let cases : Vec<_> = try!(cases.into_iter().map(|c| self.elaborate_simple_case(c)).collect());
+
+         for case in &cases {
+            println!("core case: {}", case.1);
+         }
+
+         panic!()
+    }
+
+    fn elaborate_simple_case(&mut self, simple_case: SimpleCase) -> Result<(core::Name, core::Term), Error> {
+        let SimpleCase {
+            pattern,
+            rhs,
+        } = simple_case;
+
+        panic!()
+        // self.enter_pattern_scope(pattern
+    }
+}
 
 pub fn elaborate_pattern_match<'ecx>(
         elab_cx: &mut LocalElabCx<'ecx>,
@@ -220,5 +262,5 @@ pub fn elaborate_pattern_match<'ecx>(
     let mut pmcx = PatternMatchCx::new(elab_cx);
     let simplified_match = simplify_match(scrutinee, cases);
     println!("simplified_match: {}", simplified_match);
-    panic!()
+    pmcx.elaborate_simple_match(simplified_match)
 }

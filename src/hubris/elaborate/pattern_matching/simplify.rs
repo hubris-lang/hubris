@@ -60,8 +60,8 @@ impl Display for SimplePattern {
 }
 
 pub struct SimpleCase {
-    pattern: SimplePattern,
-    rhs: SimpleMatchArm,
+    pub pattern: SimplePattern,
+    pub rhs: SimpleMatchArm,
 }
 
 impl Pretty for SimpleCase {
@@ -79,9 +79,9 @@ impl Display for SimpleCase {
 // A struct representing a simple pattern match, i.e
 // one that can not have nested patterns.
 pub struct SimpleMatch {
-    scrutinee: ast::Term,
-    cases: Vec<SimpleCase>,
-    pattern_type: PatternType,
+    pub scrutinee: ast::Term,
+    pub cases: Vec<SimpleCase>,
+    pub pattern_type: PatternType,
 }
 
 impl Pretty for SimpleMatch {
@@ -116,7 +116,7 @@ pub fn simplify_match(scrutinee: ast::Term, cases: Vec<ast::Case>) -> SimpleMatc
 
             let mut i = 0;
             let mut j = 0;
-            
+
             while i < pat_number {
                 let mut patterns = vec![];
                 for &(ref case, ref sub_pats) in &case_and_sub_pats {
