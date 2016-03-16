@@ -16,9 +16,8 @@ pub mod ast {
     pub use hubris_syntax::ast::*;
 }
 
-// pub mod backend;
+pub mod backend;
 pub mod core;
-// pub mod cps;
 pub mod elaborate;
 pub mod llvm;
 

@@ -24,7 +24,7 @@ Hubris, version 0.0.1.
 Usage:
     hubris repl [<file>]
     hubris server
-    hubris <file> [--output=<exe>]
+    hubris <file> [--output=<exe> --log=<logfile>]
     hubris (-h | --help)
     hubris --version
 
@@ -37,6 +37,7 @@ Options:
 struct Args {
     arg_file: Option<String>,
     flag_output: Option<String>,
+    flag_logging: Option<String>,
     flag_version: bool,
     cmd_server: bool,
     cmd_repl: bool,
