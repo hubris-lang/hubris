@@ -22,13 +22,13 @@ You can find more in depth documentation in our slowly growing
 
 ## Development
 
-Currently development of Hubris is done using the nightly version of Rust. 
+Currently development of Hubris is done using the stable version of Rust. 
 For instructions on how to install it go [here](https://www.rust-lang.org/downloads.html). 
 You can also try Brian's great [multirust](https://github.com/brson/multirust) which 
 is the recommended way of installing Rust.
 
 If you have `multirust` you can switch to the appropriate version like so:
-`multirust override nightly`
+`multirust override stbale`
 
 You can build Hubris with `cargo` using the standard commands, `build`, `test`,
 etc.
