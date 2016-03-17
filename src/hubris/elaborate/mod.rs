@@ -149,9 +149,7 @@ impl ElabCx {
 
     pub fn elaborate_import(&mut self, name: ast::Name) -> Result<core::Name, Error> {
         let core_name = to_qualified_name(name).unwrap();
-        let main_file = self.ty_cx.session.root_file().to_owned();
-        let load_path = main_file.parent().unwrap();
-        try!(self.ty_cx.load_import(load_path, &core_name));
+        try!(self.ty_cx.load_import(&core_name));
         Ok(core_name)
     }
 

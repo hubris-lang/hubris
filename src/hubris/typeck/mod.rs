@@ -128,27 +128,35 @@ impl TyCtxt {
         self.axioms.contains_key(name) || self.definitions.contains_key(name)
     }
 
-    pub fn load_import(&mut self, path: &Path, name: &Name) -> Result<(), Error> {
-        debug!("load_import: path={} module={}", path.display(), name);
+    pub fn load_import(&mut self, name: &Name) -> Result<(), Error> {
+        debug!("load_import: module_name={}", name);
         let file_suffix = match name_to_path(name) {
             None => panic!(),
             Some(f) => f,
         };
 
-        let file_to_load = path.join(file_suffix);
-        debug!("load_import: file_to_load={}", file_to_load.display());
+        let file_to_load = self.session.resolve_path(&file_suffix);
+
+        self.load_import_from_path(&file_to_load)
+    }
+
+    pub fn load_import_from_path(&mut self, file_to_load: &Path) -> Result<(), Error> {
+        debug!("load_import_from_path: file_to_load={}", file_to_load.display());
 
         if !self.session.is_loaded(&file_to_load) {
             let id = self.session.next_module_id();
             let parser = try!(parser::from_file(&file_to_load, id));
             let module = try!(parser.parse());
 
+            // Add a source map for error reporting
             self.session.add_source_map_for(id, parser.source_map);
 
+            // Construct a new elaboration context for this module.
             let mut ecx = elaborate::ElabCx::from_module(
                 module,
                 self.session.clone());
 
+            // Elaborate the module
             let emodule =
                 ecx.elaborate_module();
 

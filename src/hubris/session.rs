@@ -84,7 +84,7 @@ impl Session   {
                 module_id_counter: 0,
                 imported_files: HashSet::new(),
                 source_maps: HashMap::new(),
-                load_paths: Vec::new(),
+                load_paths: vec![PathBuf::from("/Users/jroesch/.hubris/lib")],
             })),
             ty: SessionType::Repl { loaded_file: None },
         }
@@ -97,7 +97,7 @@ impl Session   {
                 module_id_counter: 0,
                 imported_files: HashSet::new(),
                 source_maps: HashMap::new(),
-                load_paths: Vec::new(),
+                load_paths: vec![PathBuf::from("/Users/jroesch/.hubris/lib")],
             })),
             ty: SessionType::Compiler { root_file: path.to_owned() }
         }
@@ -202,6 +202,10 @@ impl Session   {
     pub fn is_loaded(&self, path: &Path) -> bool {
         let session_data = self.data.borrow();
         session_data.imported_files.contains(path)
+    }
+
+    pub fn resolve_path(&self, path: &Path) -> PathBuf {
+        self.data.borrow().load_paths[0].join(path)
     }
 }
 

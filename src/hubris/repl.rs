@@ -81,6 +81,7 @@ enum Command {
     Unknown(String),
     TypeOf(String),
     Def(String),
+    Import(String),
     Help,
 }
 
@@ -151,8 +152,7 @@ impl Repl {
             // Add it to the history
             readline::add_history(input.as_ref());
 
-            match self.repl_interation(input) {
-                // please make me look better
+            match self.repl_iteration(input) {
                 Err(e) => {
                     try!(self.report(e));
                 },
@@ -170,7 +170,7 @@ impl Repl {
         Ok(())
     }
 
-    pub fn repl_interation(&mut self, input: String) -> Result<Cont, Error> {
+    pub fn repl_iteration(&mut self, input: String) -> Result<Cont, Error> {
         if input.len() <= 0 {
             // do nothing
         } else if &input[0..1] == ":" {
@@ -208,6 +208,15 @@ impl Repl {
                             try!(Doc::render(&t.pretty(), 80, &mut stdout()))
                         }
                     }
+                }
+                Command::Import(path) => {
+                    // Properly strip white space
+                    let full_path =
+                        self.elab_cx
+                            .ty_cx.session
+                            .resolve_path(&PathBuf::from(path.trim()));
+                            
+                    try!(self.elab_cx.ty_cx.load_import_from_path(&full_path));
                 }
                 Command::Help => println!("{}", HELP_MESSAGE),
                 // Command::Debug =>
@@ -263,6 +272,8 @@ impl Repl {
             Command::Help
         } else if "def".starts_with(command) {
             Command::Def(arg.to_string())
+        } else if "import".starts_with(command) {
+            Command::Import(arg.to_string())
         } else {
             Command::Unknown(command_text.to_string())
         }
