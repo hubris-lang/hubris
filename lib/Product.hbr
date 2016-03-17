@@ -14,7 +14,8 @@ end
 def add (n m : Nat) : Nat :=
   match MkProd n m with
   | MkProd Z mp => mp
-  | MkProd (S np) mp => add np mp
+  | MkProd (S np) (S mp) => add np mp
+  | MkProd (S wp) mp => add np mp
   end
 end
 

@@ -84,7 +84,7 @@ impl Parser {
                     Some((start, token, end)) => {
                         Error::UnrecognizedToken {
                             location: Span::new(start, end),
-                            token: format!("{:?}", token),
+                            token: format!("`{}`", token),
                             expected: expected,
                         }
                     }
@@ -93,7 +93,7 @@ impl Parser {
             ParseError::ExtraToken { token } => {
                 let (start, t, end) = token;
                 Error::ExtraTokens { location: Span::new(start, end),
-                                     token: format!("{:?}", t) }
+                                     token: format!("{}", t) }
             },
             ParseError::User { error: tok::Error { location, code } } =>
                 Error::TokenizerError {

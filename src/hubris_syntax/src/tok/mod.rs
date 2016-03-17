@@ -1,5 +1,6 @@
 //! A tokenizer for use in LALRPOP itself.
 
+use std::fmt::{self, Display};
 use std::str::CharIndices;
 use unicode_xid::UnicodeXID;
 
@@ -63,8 +64,6 @@ pub enum Tok<'input> {
     DotDot,
     Equals,
     EqualsEquals,
-    EqualsGreaterThanCode(&'input str),
-    EqualsGreaterThanQuestionCode(&'input str),
     EqualsGreaterThanLookahead,
     EqualsGreaterThanLookbehind,
     FatArrow,
@@ -86,6 +85,67 @@ pub enum Tok<'input> {
     Star,
     TildeTilde,
     Underscore,
+}
+
+impl<'input> Display for Tok<'input> {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        use self::Tok::*;
+
+        match self {
+            &Def => write!(formatter, "def"),
+            &Axiom => write!(formatter, "axiom"),
+            &End => write!(formatter, "end"),
+            &Extern => write!(formatter, "extern"),
+            &Forall => write!(formatter, "forall"),
+            &Fun => write!(formatter, "fun"),
+            &Inductive => write!(formatter, "inductive"),
+            &In => write!(formatter, "in"),
+            &Import => write!(formatter, "import"),
+            &Let => write!(formatter, "let"),
+            &Match => write!(formatter, "match"),
+            &Module => write!(formatter, "module"),
+            &Type => write!(formatter, "type"),
+            &With => write!(formatter, "with"),
+            _ => panic!(),
+    //         Id(&'input str),
+    //         DocComment(String),
+    //         StringLiteral(&'input str),
+    // // NumericLit(&'input str),
+    //         Arrow,
+    //         Bar,
+    //         BangEquals,
+    //         Colon,
+    //         ColonColon,
+    //         ColonEq,
+    //         Comma,
+    //         DotDot,
+    //         Equals,
+    //         EqualsEquals,
+    //         EqualsGreaterThanCode(&'input str),
+    //         EqualsGreaterThanQuestionCode(&'input str),
+    //         EqualsGreaterThanLookahead,
+    //         EqualsGreaterThanLookbehind,
+    //         FatArrow,
+    //         Hash,
+    //         GreaterThan,
+    //         LeftBrace,
+    //         LeftBracket,
+    //         LeftParen,
+    //         LessThan,
+    //         Lookahead, // @L
+    //         Lookbehind, // @R
+    //         Period,
+    //         Plus,
+    //         Question,
+    //         RightBrace,
+    //         RightBracket,
+    //         RightParen,
+    //         Semi,
+    //         Star,
+    //         TildeTilde,
+    //         Underscore,
+        }
+    }
 }
 
 pub struct Tokenizer<'input> {

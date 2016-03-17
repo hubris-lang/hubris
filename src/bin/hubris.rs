@@ -7,6 +7,7 @@ extern crate docopt;
 
 use docopt::Docopt;
 use std::path::PathBuf;
+use std::process;
 use std::io;
 
 use hubris::session::{Session, HasSession, Reportable};
@@ -61,25 +62,20 @@ fn driver(args: Args) -> io::Result<()> {
         println!("Starting Server...");
         hubris::server::run();
     } else if args.cmd_repl {
-        match args.arg_file {
-            None => { panic!() }
-            Some(file_path) => {
-                let file_path = PathBuf::from(file_path);
-                if !file_path.is_file() {
-                    println!("hubris: file {} does not exist", file_path.display())
-                } else {
-                    // Clean this up, repl should only take a session as an arguument,
-                    // and we should use try or something here to deal with errors
-                    // then match and report them once at the top.
-                    let session = Session::from_root(&file_path);
-                    match hubris::repl::Repl::from_path(session.clone(), &Some(file_path)) {
-                        Err(e) => session.report(e).unwrap(),
-                        Ok(repl) => match repl.start() {
-                            Err(e) => session.report(e).unwrap(),
-                            Ok(_) => {}
-                        }
-                    }
-                }
+        let session = args.arg_file.map(|file_path| {
+            let file_path = PathBuf::from(file_path);
+            if !file_path.is_file() {
+                    println!("hubris: file {} does not exist", file_path.display());
+                    process::exit(1);
+            }
+            Session::from_root(&file_path)
+        }).unwrap_or(Session::empty());
+
+        match hubris::repl::Repl::from_session(session.clone()) {
+            Err(e) => session.report(e).unwrap(),
+            Ok(repl) => match repl.start() {
+                Err(e) => session.report(e).unwrap(),
+                Ok(_) => {}
             }
         }
     } else {

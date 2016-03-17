@@ -101,46 +101,37 @@ fn split_command(command_text: &str) -> (&str, &str) {
 }
 
 impl Repl {
-    pub fn from_path(session: Session, file: &Option<PathBuf>) -> Result<Repl, Error> {
-        match file {
-            &None => {
-                let ecx = ElabCx::from_module(
-                    ast::Module::empty(),
-                    session.clone());
+    pub fn from_session(session: Session) -> Result<Repl, Error> {
+        let id = session.next_module_id();
 
-                Ok(Repl {
-                    elab_cx: ecx,
-                    session: session,
-                })
-            }
-            &Some(ref file_path) => {
-                let id = session.next_module_id();
+        let mut ecx = if !session.root_file().is_dir() {
+            let parser =
+                try!(parser::from_file(session.root_file(), id));
 
-                let parser =
-                    try!(parser::from_file(file_path, id));
+            let module = try!(parser.parse());
 
-                let module =
-                    try!(parser.parse());
+            session.add_source_map_for(id, parser.source_map);
 
-                session.add_source_map_for(id, parser.source_map);
+            ElabCx::from_module(
+                module,
+                session.clone())
+        } else {
+            ElabCx::from_module(
+                ast::Module::empty(),
+                session.clone())
+        };
 
-                let mut ecx = ElabCx::from_module(
-                    module,
-                    session.clone());
-
-                // Ensure that if a type error occurs here we report it, ideally
-                // the REPL should launch anyways.
-                match ecx.elaborate_module() {
-                    Err(e) => { try!(ecx.report(e)) },
-                    Ok(_) => {}
-                }
-
-                Ok(Repl {
-                    elab_cx: ecx,
-                    session: session,
-                })
-            }
+        // Ensure that if a type error occurs here we report it, ideally
+        // the REPL should launch anyways.
+        match ecx.elaborate_module() {
+            Err(e) => { try!(ecx.report(e)) },
+            Ok(_) => {}
         }
+
+        Ok(Repl {
+            elab_cx: ecx,
+            session: session,
+        })
     }
 
     /// Starts the read-eval-print-loop for querying the language.
@@ -187,9 +178,8 @@ impl Repl {
             match cmd {
                 Command::Quit => return Ok(Cont::Quit),
                 Command::Reload => {
-                    let path = self.session.root_file().to_owned();
                     let new_repl =
-                        try!(Repl::from_path(self.session.clone(), &Some(path)));
+                        try!(Repl::from_session(self.session.clone()));
                     *self = new_repl;
                 }
                 Command::Unknown(u) => return Err(Error::UnknownCommand(u)),

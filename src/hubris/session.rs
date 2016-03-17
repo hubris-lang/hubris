@@ -1,5 +1,4 @@
 use super::ast::{Span, SourceMap, ModuleId};
-use super::core::Name;
 
 use std::cell::RefCell;
 use std::collections::{HashSet, HashMap};
@@ -61,6 +60,8 @@ pub struct SessionData {
     imported_files: HashSet<PathBuf>,
     /// An index from module id to source map.
     source_maps: HashMap<ModuleId, SourceMap>,
+    /// The set of paths to load files from.
+    load_paths: Vec<PathBuf>,
 }
 
 #[derive(Clone)]
@@ -83,6 +84,7 @@ impl Session   {
                 module_id_counter: 0,
                 imported_files: HashSet::new(),
                 source_maps: HashMap::new(),
+                load_paths: Vec::new(),
             })),
             ty: SessionType::Repl { loaded_file: None },
         }
@@ -95,6 +97,7 @@ impl Session   {
                 module_id_counter: 0,
                 imported_files: HashSet::new(),
                 source_maps: HashMap::new(),
+                load_paths: Vec::new(),
             })),
             ty: SessionType::Compiler { root_file: path.to_owned() }
         }
