@@ -30,6 +30,9 @@ is the recommended way of installing Rust.
 If you have `multirust` you can switch to the appropriate version like so:
 `multirust override stbale`
 
+You will also need OpenSSL and LLVM installed on your machine, we are working
+on making the setup more automatic. 
+
 You can build Hubris with `cargo` using the standard commands, `build`, `test`,
 etc.
 
