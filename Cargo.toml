@@ -15,14 +15,14 @@ path = "src/bin/hubris.rs"
 name = "test-hubris"
 path = "src/bin/test-hubris.rs"
 
+[features]
+llvm-backend = ["llvm-sys"]
+
 [dependencies.hubris_syntax]
 path = "src/hubris_syntax"
 
 [dependencies.readline]
 git = "https://github.com/hubris-lang/rust-readline"
-
-[dependencies.llvm-sys]
-git = "https://github.com/hubris-lang/llvm-sys.rs"
 
 [dependencies.pretty]
 git = "https://github.com/hubris-lang/pretty"
@@ -43,3 +43,7 @@ rustc-serialize = "0.3"
 term = "*"
 urlencoded = "*"
 itertools = "*"
+
+[dependencies.llvm-sys]
+git = "https://github.com/hubris-lang/llvm-sys.rs"
+optional = true

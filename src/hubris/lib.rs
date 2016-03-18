@@ -1,8 +1,11 @@
+#[macro_use]
+extern crate cfg_if;
 extern crate gcc;
 extern crate iron;
 extern crate hubris_syntax;
 #[macro_use]
 extern crate log;
+#[cfg(feature = "llvm-backend")]
 extern crate llvm_sys;
 extern crate readline;
 extern crate router;
@@ -19,6 +22,8 @@ pub mod ast {
 pub mod backend;
 pub mod core;
 pub mod elaborate;
+
+#[cfg(feature = "llvm-backend")]
 pub mod llvm;
 
 pub mod parser {

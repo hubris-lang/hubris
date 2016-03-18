@@ -5,7 +5,8 @@ use super::session::{Session, Reportable, HasSession};
 use super::ast::{self, ModuleId, SourceMap};
 use super::typeck;
 
-use std::io::{self, stdout};
+use std::error::Error as TraitError;
+use std::io::{self, ErrorKind, stdout};
 use std::path::{PathBuf};
 use readline;
 
@@ -15,11 +16,12 @@ use term;
 
 const HELP_MESSAGE: &'static str = r#"
 Commands:
-    :help        Show this message
-    :type <term> Infer the type of <term>
-    :reload      Reload the session
-    :def         Print a debug representation of a term
-    :quit        Exit
+    :help          Show this message
+    :type <term>   Infer the type of <term>
+    :reload        Reload the session
+    :def           Print a debug representation of a term
+    :import <path> Import the module found at <path>
+    :quit          Exit
 "#;
 
 pub struct Repl {
@@ -215,8 +217,20 @@ impl Repl {
                         self.elab_cx
                             .ty_cx.session
                             .resolve_path(&PathBuf::from(path.trim()));
-                            
-                    try!(self.elab_cx.ty_cx.load_import_from_path(&full_path));
+
+                    match self.elab_cx.ty_cx.load_import_from_path(&full_path) {
+                        Err(e) => {
+                            match self.report(e) {
+                                Err(e) => match e.kind() {
+                                    ErrorKind::NotFound =>
+                                        println!("file not found: {}", full_path.display()),
+                                    e => panic!("{:?}", e),
+                                },
+                                Ok(_) => (),
+                            }
+                        },
+                        Ok(_) => ()
+                    }
                 }
                 Command::Help => println!("{}", HELP_MESSAGE),
                 // Command::Debug =>
