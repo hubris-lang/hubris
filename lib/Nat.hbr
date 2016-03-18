@@ -1,7 +1,7 @@
 module Nat
 
 import Unit
-import Product
+-- import Product
 
 inductive Nat
   | Z : Nat
@@ -9,23 +9,26 @@ inductive Nat
 end
 
 def add (n m : Nat) : Nat :=
-  Nat.rec _ m (fun (_ : Nat) (pN : Nat) => S pN) n
+  match n with
+    | Z => m
+    | S np => S (add np m)
+  end
 end
-
-def below {C : Nat -> Type} (n : Nat) : Type :=
-    Nat.rec
-    _
-    Star
-    (fun (m : Nat) (proof : Type) => MkProd (C m) proof)
-    n
- end
-
-def below_rec_on {C : Nat -> Type} (n : Nat) (BelowP : forall (n : Nat), C n) : C n :=
-  first (Nat.rec
-    (MkProd (Nat.rec _ (BelowP Z Star) Star))
-    (fun (a : Nat) (bp : Prod (C a) (below a)) => MkProd (BelowP (S a) bp) bp)
-    n)
-end
+--
+-- def below {C : Nat -> Type} (n : Nat) : Type :=
+--     Nat.rec
+--     _
+--     Star
+--     (fun (m : Nat) (proof : Type) => MkProd (C m) proof)
+--     n
+--  end
+--
+-- def below_rec_on {C : Nat -> Type} (n : Nat) (BelowP : forall (n : Nat), C n) : C n :=
+--   first (Nat.rec
+--     (MkProd (Nat.rec _ (BelowP Z Star) Star))
+--     (fun (a : Nat) (bp : Prod (C a) (below a)) => MkProd (BelowP (S a) bp) bp)
+--     n)
+-- end
 
 -- def main : Nat :=
 --  (fun (A : Type) => A) Z

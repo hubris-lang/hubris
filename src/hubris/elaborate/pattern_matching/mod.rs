@@ -19,11 +19,12 @@ impl<'ecx, 'cx: 'ecx>PatternMatchCx<'ecx, 'cx> {
         }
     }
 
+    #[inline]
     fn enter_pattern_scope<F, R>(&mut self,
                                  name_and_type: Vec<(ast::Name, core::Term)>,
                                  body: F)
                                  -> Result<R, Error>
-        where F: FnOnce(&mut LocalElabCx, Vec<core::Name>) -> Result<R, Error>
+        where F: FnOnce(&mut PatternMatchCx, Vec<core::Name>) -> Result<R, Error>
     {
         let mut locals = vec![];
 
@@ -50,7 +51,7 @@ impl<'ecx, 'cx: 'ecx>PatternMatchCx<'ecx, 'cx> {
             locals.push(local);
         }
 
-        let result = try!(body(&mut self.elab_cx, locals));
+        let result = try!(body(self, locals));
 
         // Restore the previous context.
         self.elab_cx.locals = old_context;
@@ -69,12 +70,14 @@ impl<'ecx, 'cx: 'ecx>PatternMatchCx<'ecx, 'cx> {
 
         let escrutinee = try!(self.elab_cx.elaborate_term(scrutinee));
 
-        let (inductive_ty, args) =
-            try!(self.elab_cx.cx.ty_cx.type_check_term(&escrutinee, None)).1.uncurry();
+        let scrutinee_ty =
+            try!(self.elab_cx.cx.ty_cx.type_check_term(&escrutinee, None)).1;
+
+        let (inductive_ty, args) = scrutinee_ty.uncurry();
 
         let inductive_ty = match inductive_ty {
             Term::Var { name } => name,
-            _ => panic!()
+            other => panic!("{}", other),
         };
 
         let datatype = match self.elab_cx.cx.ty_cx.types.get(&inductive_ty) {
@@ -88,23 +91,86 @@ impl<'ecx, 'cx: 'ecx>PatternMatchCx<'ecx, 'cx> {
                     .into_iter()
                     .collect();
 
-        let cases : Vec<_> = try!(cases.into_iter().map(|c| self.elaborate_simple_case(c)).collect());
+        let cases : Vec<_> =
+            try!(cases.into_iter()
+                      .map(|c| self.elaborate_simple_case(c, &scrutinee_ty, &ctor_map))
+                      .collect());
 
          for case in &cases {
-            println!("core case: {}", case.1);
+            println!("core case: {}", case);
          }
 
          panic!()
     }
 
-    fn elaborate_simple_case(&mut self, simple_case: SimpleCase) -> Result<(core::Name, core::Term), Error> {
+    fn simple_pattern_binders(&mut self,
+                              simple_pattern: SimplePattern,
+                              scrutinee_ty: &core::Term,
+                              ctor_map: &HashMap<core::Name, core::Term>) -> Result<Vec<(ast::Name, core::Term)>, Error> {
+        match simple_pattern {
+            SimplePattern::Name(n) => {
+                let elab_name = try!(self.elab_cx.cx.elaborate_global_name(n.clone()));
+
+                match ctor_map.get(&elab_name) {
+                    None => return Ok(vec![(n, scrutinee_ty.clone())]),
+                    Some(ctor_ty) => {
+                        // Need to do error checking here
+                        return Ok(vec![]);
+                    }
+                }
+            }
+            SimplePattern::Constructor(ctor, args) => {
+                let elab_name = try!(self.elab_cx.cx.elaborate_global_name(ctor.clone()));
+
+                match ctor_map.get(&elab_name) {
+                    None => return Ok(vec![(ctor.clone(), scrutinee_ty.clone())]),
+                    Some(ctor_ty) => {
+                        println!("{:?}", ctor_ty.binders());
+                        let binders =ctor_ty.binders()
+                                            .unwrap_or(vec![])
+                                            .iter()
+                                            .skip(2)
+                                            .cloned()
+                                            .zip(args.into_iter())
+                                            .map(|(t, n)| {
+                                                (n, t.clone())
+                                            }).collect();
+
+                        return Ok(binders);
+                    }
+                }
+            }
+        }
+    }
+
+    fn elaborate_simple_case(&mut self,
+                             simple_case: SimpleCase,
+                             scrutinee_ty: &core::Term,
+                             ctor_map: &HashMap<core::Name, core::Term>) -> Result<core::Term, Error> {
         let SimpleCase {
             pattern,
             rhs,
         } = simple_case;
 
-        panic!()
-        // self.enter_pattern_scope(pattern
+        println!("pattern: {} rhs: {}", pattern, rhs);
+
+        let binders = try!(self.simple_pattern_binders(
+            pattern,
+            scrutinee_ty,
+            ctor_map));
+
+        for &(ref n, ref ty) in &binders {
+            println!("{} {}", n, ty);
+        }
+
+        self.enter_pattern_scope(binders, move |pat_cx, names| {
+            match rhs {
+                SimpleMatchArm::Term(rhs) =>
+                    Ok(Term::abstract_lambda(names, try!(pat_cx.elab_cx.elaborate_term(rhs)))),
+                SimpleMatchArm::Match(mat) =>
+                    pat_cx.elaborate_simple_match(mat)
+            }
+        })
     }
 }
 
