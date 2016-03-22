@@ -55,6 +55,7 @@ pub enum Tok<'input> {
     // NumericLit(&'input str),
 
     Arrow,
+    At,
     Bar,
     BangEquals,
     Colon,
@@ -64,8 +65,6 @@ pub enum Tok<'input> {
     DotDot,
     Equals,
     EqualsEquals,
-    EqualsGreaterThanLookahead,
-    EqualsGreaterThanLookbehind,
     FatArrow,
     Hash,
     GreaterThan,
@@ -73,8 +72,6 @@ pub enum Tok<'input> {
     LeftBracket,
     LeftParen,
     LessThan,
-    Lookahead, // @L
-    Lookbehind, // @R
     Period,
     Plus,
     Question,
@@ -106,44 +103,37 @@ impl<'input> Display for Tok<'input> {
             &Module => write!(formatter, "module"),
             &Type => write!(formatter, "type"),
             &With => write!(formatter, "with"),
-            _ => panic!(),
-    //         Id(&'input str),
-    //         DocComment(String),
-    //         StringLiteral(&'input str),
-    // // NumericLit(&'input str),
-    //         Arrow,
-    //         Bar,
-    //         BangEquals,
-    //         Colon,
-    //         ColonColon,
-    //         ColonEq,
-    //         Comma,
-    //         DotDot,
-    //         Equals,
-    //         EqualsEquals,
-    //         EqualsGreaterThanCode(&'input str),
-    //         EqualsGreaterThanQuestionCode(&'input str),
-    //         EqualsGreaterThanLookahead,
-    //         EqualsGreaterThanLookbehind,
-    //         FatArrow,
-    //         Hash,
-    //         GreaterThan,
-    //         LeftBrace,
-    //         LeftBracket,
-    //         LeftParen,
-    //         LessThan,
-    //         Lookahead, // @L
-    //         Lookbehind, // @R
-    //         Period,
-    //         Plus,
-    //         Question,
-    //         RightBrace,
-    //         RightBracket,
-    //         RightParen,
-    //         Semi,
-    //         Star,
-    //         TildeTilde,
-    //         Underscore,
+            &Id(id) => write!(formatter, "{}", id),
+            &DocComment(_) => panic!(),
+            &StringLiteral(lit) => write!(formatter, "{}", lit),
+            &At => write!(formatter, "@"),
+            &Arrow => write!(formatter, "->"),
+            &Bar => write!(formatter, "|"),
+            &BangEquals => write!(formatter, "!="),
+            &Colon => write!(formatter, ":"),
+            &ColonColon => write!(formatter, "::"),
+            &ColonEq => write!(formatter, ":="),
+            &Comma => write!(formatter, ","),
+            &DotDot => write!(formatter, ".."),
+            &Equals => write!(formatter, "="),
+            &EqualsEquals => write!(formatter, "=="),
+            &FatArrow => write!(formatter, "=>"),
+            &Hash => write!(formatter, "#"),
+            &GreaterThan => write!(formatter, ">"),
+            &LeftBrace => write!(formatter, "{{"),
+            &LeftBracket => write!(formatter, "["),
+            &LeftParen => write!(formatter, "("),
+            &LessThan => write!(formatter, "<"),
+            &Period => write!(formatter, "."),
+            &Plus => write!(formatter, "+"),
+            &Question => write!(formatter, "?"),
+            &RightBrace => write!(formatter, "}}"),
+            &RightBracket => write!(formatter, "]"),
+            &RightParen => write!(formatter, ")"),
+            &Semi => write!(formatter, ";"),
+            &Star => write!(formatter, "*"),
+            &TildeTilde => write!(formatter, "~~"),
+            &Underscore => write!(formatter, "_"),
         }
     }
 }
@@ -276,19 +266,8 @@ impl<'input> Tokenizer<'input> {
                     Some(Ok((idx0, LessThan, idx0+1)))
                 }
                 Some((idx0, '@')) => {
-                    match self.bump() {
-                        Some((idx1, 'L')) => {
-                            self.bump();
-                            Some(Ok((idx0, Lookahead, idx1+1)))
-                        }
-                        Some((idx1, 'R')) => {
-                            self.bump();
-                            Some(Ok((idx0, Lookbehind, idx1+1)))
-                        }
-                        _ => {
-                            Some(error(UnrecognizedToken, idx0))
-                        }
-                    }
+                    self.bump();
+                    Some(Ok((idx0, At, idx0+1)))
                 }
                 Some((idx0, '+')) => {
                     self.bump();
