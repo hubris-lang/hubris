@@ -226,10 +226,10 @@ impl<'tcx> Solver<'tcx> {
         // Case 2: if t can beta/iota reduce to then
         // we reduce t ==> t' and create a constraint
         // between t' and u (t' = u).
-        else if t.is_bi_reducible() {
+        else if self.ty_cx.is_bi_reducible(&t) {
             debug!("reduce");
             self.simplify(try!(self.ty_cx.eval(&t)), u, j)
-        } else if u.is_bi_reducible() {
+        } else if self.ty_cx.is_bi_reducible(&u) {
             debug!("reduce");
             self.simplify(t, try!(self.ty_cx.eval(&u)), j)
         }
@@ -301,9 +301,6 @@ impl<'tcx> Solver<'tcx> {
             match (t, u) {
                 (Term::Forall { binder: binder1, term: term1, .. },
                  Term::Forall { binder: binder2, term: term2, .. }) => {
-                     let name1 = binder1.name.clone();
-                     let name2 = binder2.name;
-
                      let ty1 = binder1.ty.clone();
                      let ty2 = binder2.ty;
 

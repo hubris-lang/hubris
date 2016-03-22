@@ -524,13 +524,9 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
                 body: body,
             };
 
-            debug!("{}", def);
+            println!("{}", def);
 
-            // match self.ty_cx.declare_def(&def)) {
-            //     Err(e) => panic!("type checking a generated def failed, this is an interal error {:?}", e)
-            // }
-
-            Ok(())
+            self.ty_cx.declare_def(&def)
         }
 }
 

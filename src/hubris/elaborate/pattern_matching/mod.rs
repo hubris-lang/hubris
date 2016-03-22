@@ -8,6 +8,7 @@ struct PatternMatchCx<'ecx, 'cx: 'ecx> {
     elab_cx: &'ecx mut LocalElabCx<'cx>,
 }
 
+mod renamer;
 mod simplify;
 
 use self::simplify::*;
@@ -100,7 +101,12 @@ impl<'ecx, 'cx: 'ecx>PatternMatchCx<'ecx, 'cx> {
             println!("core case: {}", case);
          }
 
-         panic!()
+         match pattern_type  {
+             PatternType::Cases => {
+                let cases_on = inductive_ty.in_scope("cases_on".to_string()).unwrap();
+                Ok(Term::apply_all(cases_on.to_term(), cases))
+             }
+         }
     }
 
     fn simple_pattern_binders(&mut self,
@@ -129,7 +135,7 @@ impl<'ecx, 'cx: 'ecx>PatternMatchCx<'ecx, 'cx> {
                         let binders =ctor_ty.binders()
                                             .unwrap_or(vec![])
                                             .iter()
-                                            .skip(2)
+                                            .skip(2) // Need to thread through params
                                             .cloned()
                                             .zip(args.into_iter())
                                             .map(|(t, n)| {

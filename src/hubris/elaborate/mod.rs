@@ -108,7 +108,8 @@ impl ElabCx {
                         self.constructors.insert(ctor.0.clone());
                     }
                 }
-                &ast::Item::Import(ref n) => imports.push(try!(self.elaborate_import(n.clone()))),
+                &ast::Item::Import(ref n) =>
+                    imports.push(try!(self.elaborate_import(n.clone()))),
                 _ => {}
             }
 
@@ -118,21 +119,14 @@ impl ElabCx {
                 Ok(edef) => match edef {
                     None => {},
                     Some(edef) => {
-                        match &edef {
-                            &core::Item::Data(ref d) => try!(self.ty_cx.declare_datatype(d)),
-                            &core::Item::Fn(ref f) => try!(self.ty_cx.declare_def(f)),
-                            &core::Item::Extern(ref e) => self.ty_cx.declare_extern(e),
-                            &core::Item::Axiom(ref ax) => self.ty_cx.declare_axiom(ax),
-                        }
-
                         defs.push(edef);
                     }
                 }
             }
         }
 
-        if errors.len() != 0 {
-            Err(Error::Many(errors))
+        if errors.len() > 0 {
+            return Err(Error::Many(errors))
         } else {
             let module = core::Module {
                 file_name: self.ty_cx.session.root_file().to_owned(),

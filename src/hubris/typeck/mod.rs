@@ -477,6 +477,16 @@ impl TyCtxt {
         result
     }
 
+    /// Check whether a term is beta/iota reducible.
+    pub fn is_bi_reducible(&self, term: &Term) -> bool {
+        let (head, args) = term.uncurry();
+        if args.len() > 0 {
+            !head.is_meta() && !(head.head_is_global() || head.head_is_local()) && term.is_app()
+        } else {
+            false
+        }
+    }
+
     pub fn computation_rule(&self, name: &Name) -> Option<&ComputationRule> {
         self.axioms.get(name).and_then(|x| x.computation_rule.as_ref())
     }
@@ -564,7 +574,7 @@ impl TyCtxt {
 
         if tp.is_forall() {
             Ok((tp, cs))
-        } else if let Some(m) = tp.is_stuck() {
+        } else if let Some(_) = tp.is_stuck() {
             panic!()
         } else {
             Err(Error::ExpectedFunction(sp, term))

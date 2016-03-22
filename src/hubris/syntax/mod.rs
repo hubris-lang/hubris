@@ -2,6 +2,8 @@ use super::parser::{Error};
 use session::{Session, Reportable};
 use std::io;
 
+pub use hubris_syntax::*;
+
 impl Reportable for Error {
     fn report(self, session: &Session) -> io::Result<()> {
         match self {

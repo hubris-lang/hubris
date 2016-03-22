@@ -145,7 +145,7 @@ impl Display for AssertedBy {
         match self {
             &Application(span, ref u, ref t) =>
                 write!(formatter, "applied {} to {}", u, t),
-            &ExpectedFound(ref infer_ty, ref ty) =>
+            &ExpectedFound(ref ty, ref infer_ty) =>
                 write!(formatter, "expected {} found {}", ty, infer_ty),
         }
     }
@@ -180,6 +180,7 @@ impl PartialOrd for CategorizedConstraint {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Ord)]
 pub enum ConstraintCategory {
     Delta,

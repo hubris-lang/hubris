@@ -1,10 +1,10 @@
 use std::fmt::Debug;
 use std::path::{Path};
 
-#[derive(Debug, Clone)]
-enum Error {
-    UnknownSymbol(String),
-}
+// #[derive(Debug, Clone)]
+// enum Error {
+//     UnknownSymbol(String),
+// }
 
 type Module = ();
 
