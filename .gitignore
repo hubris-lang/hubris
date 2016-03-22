@@ -1,5 +1,5 @@
 target
-Cargo.lock
+src/hubris_syntax/Cargo.lock
 src/hubris_syntax/src/parser/hubris.rs
 *.ll
 *.s
