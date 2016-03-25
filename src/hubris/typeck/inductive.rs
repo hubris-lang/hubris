@@ -2,21 +2,27 @@ use super::{TyCtxt, ComputationRule, Error};
 use super::super::core::*;
 //use super::name_generator::*;
 
-/// A context with the needed state to deal with operations that process an inductive definition.
+/// `InductiveCx` packages the state needed state to process an inductive definition.
 pub struct InductiveCx<'i, 'tcx> {
     ty_cx: &'tcx mut TyCtxt,
     inductive_ty: &'i Data,
     ind_hyp: Name,
 }
 
-// struct Recursor {
-//     motif: Term,
-//     parameters: Vec<Term>
-//     minor_premises: Vec<Term>,
-//     major_premise: Term,
-// }
+/// `Recursor` describes the recursor for a inductive type, each field
+/// is split here, enabling easy manipulation of recursors.
+struct Recursor {
+    motif: Name,
+    parameters: Vec<Name>,
+    minor_premises: Vec<Name>,
+    major_premise: Term,
+    ty: Term,
+    name: Name,
+    computation_rule: ComputationRule,
+}
 
 impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
+    ///
     fn new(ty_cx: &'tcx mut TyCtxt, inductive_ty: &'i Data) -> InductiveCx<'i, 'tcx> {
 
         let mut rcx = InductiveCx {
@@ -31,7 +37,7 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
         rcx
     }
 
-    fn  make_ind_hyp_ty(&self) -> Term {
+    fn make_ind_hyp_ty(&self) -> Term {
         let mut pi =
             self.with_params(self.inductive_ty.ty.clone());
         let  result =
@@ -210,10 +216,10 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
                   c_for_ctor)))
     }
 
-    pub fn construct_recursor(&self,
-                              minor_premises: Vec<Name>,
-                              major_premise_args: Vec<Name>,
-                              major_premise: Term) -> Term {
+    pub fn construct_recursor_ty(&self,
+                                minor_premises: Vec<Name>,
+                                major_premise_args: Vec<Name>,
+                                major_premise: Term) -> Term {
         let ind_hyp = self.ind_hyp.clone();
         let params =
             self.inductive_ty
@@ -392,6 +398,50 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
         }))
     }
 
+    fn recursor(&mut self) -> Result<Recursor, Error> {
+        let motif = self.ind_hyp.clone();
+
+        let params =
+            self.inductive_ty
+                .parameters
+                .clone();
+
+        let minor_premises: Result<_, Error> =
+            self.inductive_ty.ctors
+                             .iter()
+                             .map(|ctor| {
+                                 let p = try!(self.minor_premise_for(&motif, ctor));
+                                 Ok(self.ty_cx.local_with_repr("".to_string(), p))
+                             })
+                             .collect();
+
+        let minor_premises: Vec<_> = try!(minor_premises);
+
+        let (tys, major_premise) =
+            self.major_premise();
+
+        let recursor_ty =
+            self.construct_recursor_ty(
+                minor_premises.clone(),
+                tys,
+                major_premise.clone());
+
+        let recursor_name =
+            self.inductive_ty.name.in_scope("rec".to_string()).unwrap();
+
+        let computation_rule = try!(self.construct_computation_rule());
+
+        Ok(Recursor {
+            motif: motif,
+            parameters: params,
+            minor_premises: minor_premises,
+            major_premise: major_premise,
+            ty: recursor_ty,
+            name: recursor_name,
+            computation_rule: computation_rule,
+        })
+    }
+
     pub fn make_below(&mut self) -> Result<(), Error> {
         let name = self.inductive_ty
                        .name
@@ -473,18 +523,25 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
 
             let minor_premises : Vec<Name> = try!(minor_premises);
 
+            let scrut =
+                self.ty_cx.local_with_repr(
+                    "n".to_string(),
+                    Term::apply_all(
+                        self.inductive_ty.name.to_term(),
+                       params_as_terms.clone()));
+
             let ty =
                 Term::abstract_pi_implicit(
                     params.clone(),
                     Term::abstract_pi_implicit(
                         vec![self.ind_hyp.clone()],
                         Term::abstract_pi(
-                            minor_premises.clone(),
-                            Term::apply_all(
-                                self.ind_hyp.to_term(),
-                                vec![Term::apply_all(
-                                    self.inductive_ty.name.to_term(),
-                                    params_as_terms.clone())]))));
+                            vec![scrut.clone()],
+                            Term::abstract_pi(
+                                minor_premises.clone(),
+                                Term::apply_all(
+                                    self.ind_hyp.to_term(),
+                                    vec![scrut.to_term()])))));
 
             let rec =
                 self.inductive_ty
@@ -492,30 +549,40 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
                     .in_scope("rec".to_string())
                     .unwrap();
 
-            // let mut body_premise = vec![];
-            for premise in minor_premises {
+            let mut rec_args = vec![];
+            for premise in minor_premises.clone() {
                 let ty = try!(self.ty_cx.type_infer_term(&premise.to_term()));
                 let mut ty = ty.0;
-                debug!("{} {}", premise, ty);
+                // println!("premise={} ty={}", premise, ty);
                 let mut locals = vec![];
                 while let Term::Forall { binder, term, .. } = ty {
-                    locals.push(self.ty_cx.local(binder));
+                    locals.push(self.ty_cx.local(binder).with_repr("f".to_string()));
                     ty = *term;
                 }
 
                 for local in locals.iter().rev() {
-                    debug!("{}", local);
+                    // println!("{}", local);
                 }
                 // If this argument is recursive we should skip it
-                debug!("{}", Term::apply_all(premise.to_term(), vec![]))
+                // println!("transformed: {}", Term::apply_all(premise.to_term(), vec![]));
+                rec_args.push(premise.with_repr("f".to_string()));
             }
+
+            let mut recursor_args = params_as_terms.clone();
+            recursor_args.push(self.ind_hyp.to_term());
+            recursor_args.extend(rec_args.clone().into_iter().map(|x| x.to_term()));
+            recursor_args.push(scrut.to_term());
 
             let body =
                 Term::abstract_lambda(
                     params.clone(),
-                    Term::apply_all(
-                        rec.to_term(),
-                        params_as_terms));
+                    Term::abstract_lambda(
+                        vec![self.ind_hyp.clone(), scrut],
+                        Term::abstract_lambda(
+                            rec_args.clone(),
+                            Term::apply_all(
+                                rec.to_term(),
+                                recursor_args))));
 
             let def = Function {
                 name: name,
@@ -524,8 +591,7 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
                 body: body,
             };
 
-            println!("{}", def);
-
+            // println!("{}", def);
             self.ty_cx.declare_def(&def)
         }
 }
@@ -533,43 +599,17 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
 /// Construct a recursor for `data_type`.
 pub fn make_recursor(ty_cx: &mut TyCtxt, data_type: &Data) -> Result<(), Error> {
     let mut rcx = InductiveCx::new(ty_cx, data_type);
+    let recursor = try!(rcx.recursor());
 
-    let ind_hyp = rcx.ind_hyp.clone();
-
-    let minor_premises: Result<_, Error> =
-        data_type.ctors
-                 .iter()
-                 .map(|ctor| {
-                     let p = try!(rcx.minor_premise_for(&ind_hyp, ctor));
-                     Ok(rcx.ty_cx.local_with_repr("".to_string(), p))
-                 })
-                 .collect();
-
-    let minor_premises = try!(minor_premises);
-
-    let (tys, major_premise) =
-        rcx.major_premise();
-
-    let recursor_ty =
-        rcx.construct_recursor(
-            minor_premises,
-            tys,
-            major_premise);
-
-    let recursor_name = data_type.name.in_scope("rec".to_string()).unwrap();
-
-    let computation_rule = try!(rcx.construct_computation_rule());
-
-    // Construct the recursor.
+    // Add an axiom with the recursor type, and the associated computation rule.
     rcx.ty_cx
        .axioms
-       .insert(recursor_name, super::Axiom {
-           ty: recursor_ty,
-           computation_rule: Some(computation_rule),
+       .insert(recursor.name, super::Axiom {
+           ty: recursor.ty,
+           computation_rule: Some(recursor.computation_rule),
        });
 
     // Now setup all the automatically generated constructs.
-    // try!(rcx.make_below());
     try!(rcx.make_cases_on());
 
     Ok(())

@@ -156,14 +156,16 @@ impl ElabCx {
                 try!(self.ty_cx.declare_datatype(&edata));
                 Ok(Some(core::Item::Data(edata)))
             }
-            ast::Item::Def(f) => {
-                let efn = core::Item::Fn(try!(self.elaborate_fn(f)));
-                debug!("elaborate_def: fn={}", efn);
-                Ok(Some(efn))
+            ast::Item::Def(def) => {
+                let edef = try!(self.elaborate_fn(def));
+                try!(self.ty_cx.declare_def(&edef));
+                debug!("elaborate_def: def={}", edef);
+                Ok(Some(core::Item::Fn(edef)))
             }
             ast::Item::Axiom(ax) => {
-                let ax = core::Item::Axiom(try!(self.elaborate_axiom(ax)));
-                Ok(Some(ax))
+                let eax = try!(self.elaborate_axiom(ax));
+                self.ty_cx.declare_axiom(&eax);
+                Ok(Some(core::Item::Axiom(eax)))
             }
             ast::Item::Extern(e) => {
                 let ext = core::Item::Extern(try!(self.elaborate_extern(e)));
@@ -325,7 +327,7 @@ impl<'ecx> LocalElabCx<'ecx> {
                     ast::BindingMode::Implicit => core::BindingMode::Implicit,
                     ast::BindingMode::Explicit => core::BindingMode::Explicit,
                 };
-                // TODO: Fix this
+
                 let local = self.cx.ty_cx.local_with_repr_and_mode(repr, eterm, binding_info);
 
                 self.locals.insert(name, local.clone());
@@ -367,8 +369,12 @@ impl<'ecx> LocalElabCx<'ecx> {
             if binder.is_implicit() {
                 let implicit_arg =
                     try!(self.implicit_argument(*binder.ty));
+                // It is important any time we do an application to simulate it
+                // at the type level by instantiating the body of the type,
+                // if not this results in constraints that are not subst.
+                // correctly.
+                fun_ty = term.instantiate(&implicit_arg);
                 result = core::Term::apply(result, implicit_arg);
-                fun_ty = *term;
             } else {
                 break;
             }

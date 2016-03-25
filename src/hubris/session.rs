@@ -193,8 +193,24 @@ impl Session   {
             .. } = &mut *session_data;
 
         try!(terminal.fg(color::RED));
-        try!(writeln!(terminal, "{}", message));
+        try!(write!(terminal, "error: "));
         try!(terminal.reset());
+        try!(writeln!(terminal, "{}", message));
+        try!(terminal.flush());
+        Ok(())
+    }
+
+    pub fn internal_error(&self, message: String) -> io::Result<()> {
+        let mut session_data = self.data.borrow_mut();
+        let &mut SessionData {
+            ref mut terminal,
+            ref mut source_maps,
+            .. } = &mut *session_data;
+
+        try!(terminal.fg(color::RED));
+        try!(write!(terminal, "internal error: "));
+        try!(terminal.reset());
+        try!(writeln!(terminal, "{}", message));
         try!(terminal.flush());
         Ok(())
     }

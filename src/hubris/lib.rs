@@ -41,6 +41,7 @@ use std::path::{PathBuf, Path};
 use std::io;
 
 use self::session::{HasSession, Reportable};
+use self::backend::{Backend, Rust};
 
 #[derive(Debug)]
 pub enum Error {
@@ -87,7 +88,7 @@ impl Reportable for Error {
     }
 }
 
-pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> Result<(), Error> {
+pub fn compile_file<T: AsRef<Path>>(path: T, output: Option<PathBuf>) -> Result<(), Error> {
     let module_id = ast::ModuleId(0);
     let parser = try!(parser::from_file(path.as_ref(), module_id));
     let module = try!(parser.parse());
@@ -105,22 +106,20 @@ pub fn compile_file<T: AsRef<Path>>(path: T, _output: Option<PathBuf>) -> Result
             module,
             session);
 
-    let emodule = ecx.elaborate_module();
+    let core_module = ecx.elaborate_module();
 
-    match emodule {
-        Err(e) => try!(ecx.report(e)),
-        Ok(_) => {},
-    }
+    match core_module {
+        Err(e) => { try!(ecx.report(e)); },
+        Ok(core_module) => {
+            {
+                let main = try!(ecx.ty_cx.get_main_body());
+                let result = try!(ecx.ty_cx.eval(main));
+                println!("main={}", result);
+            }
 
-    {
-        let main = try!(ecx.ty_cx.get_main_body());
-        let result = try!(ecx.ty_cx.eval(main));
-        println!("main={}", result);
-    }
+            Rust::create_executable(&core_module, output);
+       }
+   }
 
-    // let cps_module = cps::from_core_module(emodule);
-    // println!("{:?}", cps_module);
-
-    // backend::create_executable(&cps_module, output);
-    Ok(())
+   Ok(())
 }

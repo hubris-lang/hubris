@@ -414,14 +414,21 @@ impl Term {
         }).unwrap_or(false)
     }
 
-    /// Check whether a term is beta/iota reducible.
-    pub fn is_bi_reducible(&self) -> bool {
+    pub fn is_constant(&self) -> bool {
+        // Get at the term's head. 
         let (head, args) = self.uncurry();
+
+        // If this is an application it's not a constant
         if args.len() > 0 {
-            // I think this needs to be smarter
-            !head.is_meta() && !head.head_is_global()
-        } else {
-            false
+            return false;
+        }
+
+        // Otherwise just peak at the head of the term, since there are no args,
+        // and see if it is a constant.
+        match head {
+            // TODO: what does it mean to be a constant
+            Term::Var { name } => name.is_local() || name.is_qual(),
+            _ => false
         }
     }
 

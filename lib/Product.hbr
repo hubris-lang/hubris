@@ -1,18 +1,10 @@
 module Product
 
--- import Unit
+import Unit
 
 inductive Prod (A : Type) (B : Type)
   | MkProd : A -> B -> Prod A B
 end
-
--- def add (n m : Nat) : Nat :=
---   match MkProd n m with
---   | MkProd Z mp => mp
---   | MkProd (S np) (S mp) => add np mp
---   | MkProd (S wp) mp => add np mp
---   end
--- end
 
 def first {A B : Type} (p : Prod A B) : A :=
   match p with
@@ -20,8 +12,12 @@ def first {A B : Type} (p : Prod A B) : A :=
   end
 end
 
--- def second {A B} (p : Prod A B) : B :=
---   match p with
---   | Prod _ b => b
---   end
--- end
+def second {A B : Type} (p : Prod A B) : B :=
+  match p with
+  | MkProd a b => b
+  end
+end
+
+def main : Unit :=
+  first (MkProd Star Star)
+end

@@ -188,6 +188,7 @@ impl Repl {
                 Command::TypeOf(t) => {
                     let term = try!(self.preprocess_term(t));
                     let typed = try!(self.type_check_term(&term)).1;
+                    let typed = try!(self.elab_cx.ty_cx.eval(&typed));
                     println!("{}", typed)
                 }
                 Command::Def(name) => {
@@ -257,10 +258,21 @@ impl Repl {
     }
 
     fn type_check_term(&mut self, term: &core::Term) -> Result<(core::Term, core::Term), Error> {
-        let (term, ty) = try!(self.elab_cx.ty_cx.type_check_term(&term, None));
-        let ty = try!(self.elab_cx.ty_cx.eval(&ty));
-
-        Ok((term, ty))
+        match self.elab_cx.ty_cx.type_check_term(&term, None) {
+            Err(typeck::Error::Solver(err)) => {
+                println!("unable to solve metavars");
+                try!(self.report(err));
+                let ty = try!(self.elab_cx.ty_cx.type_infer_term(&term));
+                Ok((term.clone(), ty.0))
+            }
+            Err(e) => Err(From::from(e)),
+            Ok((term, ty)) => {
+                let ty = try!(self.elab_cx.ty_cx.eval(&ty));
+                Ok((term, ty))
+            }
+        }
+        // let result = try!(self.elab_cx.ty_cx.type_check_term(&term, None));
+        // Ok(result)
     }
 
     fn handle_input(&mut self, source: String) -> Result<(), Error> {

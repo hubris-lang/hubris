@@ -56,21 +56,21 @@ fn main() {
 }
 
 fn driver(args: Args) -> io::Result<()> {
+    let session = args.arg_file.clone().map(|file_path| {
+        let file_path = PathBuf::from(file_path);
+        if !file_path.is_file() {
+                println!("hubris: file {} does not exist", file_path.display());
+                process::exit(1);
+        }
+        Session::from_root(&file_path)
+    }).unwrap_or(Session::empty());
+
     if args.flag_version {
         println!("hubris 0.1.0");
     } else if args.cmd_server {
         println!("Starting Server...");
         hubris::server::run();
     } else if args.cmd_repl {
-        let session = args.arg_file.map(|file_path| {
-            let file_path = PathBuf::from(file_path);
-            if !file_path.is_file() {
-                    println!("hubris: file {} does not exist", file_path.display());
-                    process::exit(1);
-            }
-            Session::from_root(&file_path)
-        }).unwrap_or(Session::empty());
-
         match hubris::repl::Repl::from_session(session.clone()) {
             Err(e) => session.report(e).unwrap(),
             Ok(repl) => match repl.start() {
@@ -95,7 +95,7 @@ fn driver(args: Args) -> io::Result<()> {
                                           args.flag_output.map(|p| PathBuf::from(p)));
 
         match result {
-            Err(e) => panic!("failed with {:?}", e),
+            Err(e) => try!(session.report(e)),
             Ok(_) => {}
         }
     }

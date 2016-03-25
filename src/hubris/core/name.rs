@@ -71,6 +71,15 @@ impl Name {
         }
     }
 
+    pub fn is_qual(&self) -> bool {
+        use self::Name::*;
+
+        match self {
+            &Qual { .. } => true,
+            _ => false,
+        }
+    }
+
     pub fn qualified(components: Vec<String>) -> Name {
         Name::Qual {
             span: Span::dummy(),
@@ -98,6 +107,23 @@ impl Name {
             &Name::Local { binding_info: BindingMode::Implicit, .. } => true,
             _ => false,
         }
+    }
+
+    pub fn with_repr(mut self, new_repr: String) -> Name {
+        use self::Name::*;
+
+        match &mut self {
+            &mut DeBruijn { ref mut repr, .. } =>
+                *repr = new_repr,
+            &mut Qual { .. } =>
+                panic!("error"),
+            &mut Local { ref mut repr, .. } =>
+                *repr = new_repr,
+            &mut Meta { .. } =>
+                panic!("error"),
+        }
+
+        self
     }
 }
 
@@ -152,7 +178,7 @@ impl Pretty for Name {
         use self::Name::*;
 
         match self {
-            &DeBruijn { ref repr, .. } => repr.pretty(),
+            &DeBruijn { ref repr, ref index, .. } => repr.pretty(), // Doc::text(format!("{}", index)),
             &Qual { ref components, .. } => {
                 if components.len() == 1 {
                     components[0].pretty()

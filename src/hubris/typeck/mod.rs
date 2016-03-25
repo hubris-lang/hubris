@@ -290,7 +290,12 @@ impl TyCtxt {
         match self.definitions.get(name) {
             None => {
                 match self.axioms.get(name) {
-                    None => Err(Error::UnknownVariable(name.clone())),
+                    None => {
+                        for (ref n, _) in &self.definitions {
+                            println!("name: {}", n);
+                        }
+                        Err(Error::UnknownVariable(name.clone()))
+                    }
                     Some(t) => Ok(&t.ty),
                 }
             }
@@ -472,9 +477,11 @@ impl TyCtxt {
             &Term::Type => Ok(Term::Type)
         };
 
-        debug!("eval result {:?}", result);
+        let result = try!(result);
 
-        result
+        debug!("eval: result={}", result);
+
+        Ok(result)
     }
 
     /// Check whether a term is beta/iota reducible.
@@ -514,10 +521,9 @@ impl TyCtxt {
         }
     }
 
-    pub fn type_check_term(
-            &mut self,
-            term: &Term,
-            expected_ty: Option<Term>) -> Result<(Term, Term), Error> {
+    pub fn type_check_term(&mut self,
+                           term: &Term,
+                           expected_ty: Option<Term>) -> Result<(Term, Term), Error> {
         debug!("type_check_term: term={}", term);
 
         let (infer_ty, mut infer_cs) = try!(self.type_infer_term(term));
@@ -541,18 +547,19 @@ impl TyCtxt {
             }
         }
 
-       let solver = try!(solver::Solver::new(self, infer_cs));
+        let solver = try!(solver::Solver::new(self, infer_cs));
 
         let solutions = try!(solver.solve());
 
-        for sol in &solutions {
-            debug!("{}", (sol.1).0);
+        for (meta, sol) in &solutions {
+            debug!("solutions: meta={} {}", meta, sol.0);
         }
 
         // Finally use the solutions given to us by the solver or
         // throw an error if there is not a solution for a meta-var
         // occurring in them
         let new_term = try!(replace_metavars(term.clone(), &solutions));
+        let infer_ty = try!(replace_metavars(infer_ty.clone(), &solutions));
 
         Ok((new_term, expected_ty.unwrap_or(infer_ty)))
     }
@@ -561,7 +568,7 @@ impl TyCtxt {
         if term.is_sort() {
             return Ok(constrain(term, vec![]));
         } else {
-            panic!()
+            panic!("ensure sort {}", term);
         }
     }
 
@@ -582,7 +589,8 @@ impl TyCtxt {
     }
 
     pub fn type_infer_term(&mut self, term: &Term) -> CkResult {
-        match term {
+        debug!("type_infer_term: term={}", term);
+        let result = match term {
             &Term::Var { ref name, .. } => {
                 match name {
                     &Name::Local { ref ty, .. } =>
@@ -616,7 +624,9 @@ impl TyCtxt {
                     Term::Forall { binder, term, .. } => {
                         let (arg_ty, arg_cs) =
                             try!(self.type_infer_term(arg));
-                        let term = try!(self.eval(&term.instantiate(arg)));
+
+                        let term = term.instantiate(arg);
+
                         constraints.extend(arg_cs.into_iter());
 
                         let just =
@@ -627,7 +637,7 @@ impl TyCtxt {
                                     arg_ty.clone()));
 
 
-                        debug!("{} {}", arg_ty, binder.ty);
+                        debug!("{} = {}", arg_ty, binder.ty);
 
                         constraints.push(
                             Constraint::Unification(
@@ -654,6 +664,7 @@ impl TyCtxt {
                 let term = term.instantiate(&local.to_term());
 
                 let (sort, ty_cs) = try!(self.type_infer_term(&*ty));
+                println!("before forall sort");
                 let (_, sort_cs) = try!(self.ensure_sort(sort));
                 constraints.extend(ty_cs.into_iter());
                 constraints.extend(sort_cs.into_iter());
@@ -694,7 +705,11 @@ impl TyCtxt {
             }
             &Term::Type =>
                 Ok(constrain(Term::Type, vec![])),
-        }
+        };
+
+        let (t, cs) = try!(result);
+        debug!("type_infer_term: term={}, infer_ty={}", term, t);
+        Ok((t, cs))
     }
 
     pub fn evaluate(&self, term: &Term) -> Term {

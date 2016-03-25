@@ -97,14 +97,22 @@ impl<'ecx, 'cx: 'ecx>PatternMatchCx<'ecx, 'cx> {
                       .map(|c| self.elaborate_simple_case(c, &scrutinee_ty, &ctor_map))
                       .collect());
 
-         for case in &cases {
-            println!("core case: {}", case);
-         }
+        // let cases : Vec<_> =
+        //     cases.into_iter()
+        //          .map(|c| { println!("core case: {}", c); Term::apply_all(c, args.clone()) })
+        //          .collect();
+
+        // println!("core case: {}", case);
 
          match pattern_type  {
              PatternType::Cases => {
                 let cases_on = inductive_ty.in_scope("cases_on".to_string()).unwrap();
-                Ok(Term::apply_all(cases_on.to_term(), cases))
+                let head = try!(self.elab_cx.apply_implicit_args(cases_on.to_term()));
+                let mut args = vec![escrutinee];
+                args.extend(cases.into_iter());
+                let result = Term::apply_all(head, args);
+                println!("elaborated_match: {}", result);
+                Ok(result)
              }
          }
     }
@@ -113,6 +121,7 @@ impl<'ecx, 'cx: 'ecx>PatternMatchCx<'ecx, 'cx> {
                               simple_pattern: SimplePattern,
                               scrutinee_ty: &core::Term,
                               ctor_map: &HashMap<core::Name, core::Term>) -> Result<Vec<(ast::Name, core::Term)>, Error> {
+
         match simple_pattern {
             SimplePattern::Name(n) => {
                 let elab_name = try!(self.elab_cx.cx.elaborate_global_name(n.clone()));
@@ -129,18 +138,31 @@ impl<'ecx, 'cx: 'ecx>PatternMatchCx<'ecx, 'cx> {
                 let elab_name = try!(self.elab_cx.cx.elaborate_global_name(ctor.clone()));
 
                 match ctor_map.get(&elab_name) {
-                    None => return Ok(vec![(ctor.clone(), scrutinee_ty.clone())]),
+                    None => panic!("not the right"), // return Ok(vec![(ctor.clone(), scrutinee_ty.clone())]),
                     Some(ctor_ty) => {
                         println!("{:?}", ctor_ty.binders());
-                        let binders =ctor_ty.binders()
-                                            .unwrap_or(vec![])
-                                            .iter()
-                                            .skip(2) // Need to thread through params
-                                            .cloned()
-                                            .zip(args.into_iter())
-                                            .map(|(t, n)| {
-                                                (n, t.clone())
-                                            }).collect();
+                        let (inductive_ty, i_args) = scrutinee_ty.uncurry();
+                        let mut ctor_ty = ctor_ty.clone();
+
+                        for arg in i_args {
+                            match ctor_ty {
+                                Term::Forall { term, .. } => {
+                                    println!("arg {}", arg);
+                                    ctor_ty = term.instantiate(&arg);
+                                }
+                                _ => panic!()
+                            }
+                        }
+
+                        println!("ctor_ty {}", ctor_ty);
+                        let binders = ctor_ty.binders()
+                                             .unwrap_or(vec![])
+                                             .iter()
+                                             .cloned()
+                                             .zip(args.into_iter())
+                                             .map(|(t, n)| {
+                                                 (n, t.clone())
+                                             }).collect();
 
                         return Ok(binders);
                     }

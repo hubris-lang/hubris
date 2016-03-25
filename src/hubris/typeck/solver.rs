@@ -14,6 +14,7 @@ pub struct Choice {
     solution_mapping: HashMap<Name, (Term, Justification)>,
     assumption_justification: Justification,
     constraint_justification: Justification,
+    list: (),
 }
 
 pub struct Solver<'tcx> {
@@ -29,6 +30,8 @@ pub enum Error {
     Simplification(Justification),
     Justification(Justification),
     TypeCk(Box<super::Error>),
+    NoSolution(Vec<Name>, Term),
+    Many(Vec<Error>),
 }
 
 impl From<super::Error> for Error {
@@ -51,8 +54,19 @@ impl Reportable for Error {
                             format!("expected type `{}` found `{}`", ty, infer_ty)),
                 },
                 Justification::Assumption => cx.error("assumption".to_string()),
-                j @ Justification::Join(_, _) => cx.error(format!("{}", j)),
+                j @ Justification::Join(_, _) => panic!(), // cx.error(format!("{}", j)),
             },
+            Error::NoSolution(ns, term) => {
+                // TODO: fix this
+                cx.error(format!("unable to find a solution for {} in {}", ns[0], term))
+            }
+            Error::Many(errs) => {
+                for err in errs {
+                    try!(err.report(cx));
+                }
+
+                Ok(())
+            }
             _ => panic!()
         }
     }
@@ -74,6 +88,7 @@ impl<'tcx> Solver<'tcx> {
     pub fn new(ty_cx: &'tcx mut TyCtxt, cs: ConstraintSeq) -> Result<Solver, Error> {
         let mut solver = Solver::empty(ty_cx);
         for c in cs {
+            // debug!("Solver::new: c={}", c);
             match &c {
                 &Constraint::Unification(ref t, ref u, ref j) => {
                     let simple_cs =
@@ -106,6 +121,10 @@ impl<'tcx> Solver<'tcx> {
 
     pub fn solution_for(&self, name: &Name) -> Option<(Term, Justification)> {
         self.solution_mapping.get(name).map(|x| x.clone())
+    }
+
+    pub fn add_solution(&mut self, name: Name, solution: (Term, Justification)) {
+        self.solution_mapping.insert(name, solution);
     }
 
     pub fn visit_unification(&mut self, r: Term, s: Term, j: Justification, category: ConstraintCategory) -> Result<(), Error> {
@@ -152,14 +171,15 @@ impl<'tcx> Solver<'tcx> {
             Ok(())
         } else if category == ConstraintCategory::Pattern {
             debug!("r: {} u: {}", r, s);
-            // left or right?
-            let meta = match r.head().unwrap_or_else(|| s.head().unwrap()) {
+
+            let (meta, locals) = r.uncurry();
+
+            let meta = match meta {
                 Term::Var { name } => name,
-                _ => panic!("mis-idetnfied pattern constraint")
+                _ => panic!(),
             };
 
-            let locals = r.args().unwrap_or(vec![]);
-
+            assert!(meta.is_meta());
             debug!("meta {}", meta);
             // There is a case here I'm not sure about
             // what if the meta variable we solve has been
@@ -167,15 +187,29 @@ impl<'tcx> Solver<'tcx> {
 
             // Currently we just filter map, and don't
             // abstract over those.
-            let locals: Vec<_> =
-                locals.into_iter().filter_map(|l|
+            let locals: Result<Vec<_>, Error> =
+                locals.into_iter().map(|l|
                 match l {
-                    Term::Var { ref name } if name.is_local() => Some(name.clone()),
-                    Term::Var { .. } => None,
-                    _ => panic!("mis-idetnfied pattern constraint")
+                    Term::Var { ref name } if (name.is_local()) => Ok(name.clone()),
+                    Term::Var { ref name } if name.is_qual() => {
+                        let ty= try!(self.ty_cx.type_infer_term(&name.to_term()));
+                        Ok(self.ty_cx.local_with_repr("_".to_string(), ty.0))
+                    }
+                    _ => panic!("mis-identified pattern constraint")
                 }).collect();
 
+            // TI breaks here, this is dumb.
+            let locals = try!(locals);
+
+            for local in &locals {
+                println!("local={:?}", local);
+            }
+
+            println!("rhs: {}", s);
+
             let solution = Term::abstract_lambda(locals, s);
+
+            println!("soultion: {} ", solution);
 
             assert!(meta.is_meta());
 
@@ -217,9 +251,9 @@ impl<'tcx> Solver<'tcx> {
         debug!("simplify: t={} u={}", t, u);
         // Case 1: t and u are precisely the same term
         // unification constraints of this form incur
-        // no constraints since this is discharge-able here.
+        // no more constraints since this is discharge-able here.
         if t == u {
-            debug!("equal");
+            // debug!("exactly equal");
             return Ok(vec![]);
         }
 
@@ -257,17 +291,20 @@ impl<'tcx> Solver<'tcx> {
                 t.head() == u.head() {
             debug!("head is global");
 
-            let f = t.head().unwrap();
+            let (f, f_args) = t.uncurry();
+            let (g, g_args) = u.uncurry();
+
+            if f_args.len() == 0 && g_args.len() == 0 {
+                panic!()
+            }
 
             let t_args_meta_free =
-                t.args().map(|args|
-                    args.iter().all(|a| !a.is_meta())).unwrap_or(false);
+                f_args.iter().all(|a| !a.is_meta());
 
             let u_args_meta_free =
-                u.args().map(|args|
-                    args.iter().all(|a| !a.is_meta())).unwrap_or(false);
+                g_args.iter().all(|a| !a.is_meta());
 
-            if f.is_bi_reducible() &&
+            if self.ty_cx.is_bi_reducible(&f) &&
                t_args_meta_free &&
                u_args_meta_free {
                 panic!("var are free")
@@ -275,12 +312,11 @@ impl<'tcx> Solver<'tcx> {
                     // } else if !f.reducible() {
                     //     t.args = u.args
                     // } else { panic!() }
-            } else if !f.is_bi_reducible() {
-                Ok(t.args().unwrap()
-                 .into_iter()
-                 .zip(u.args().unwrap().into_iter())
-                 .map(|(t_i, s_i)| Constraint::Unification(t_i, s_i, j.clone()).categorize())
-                 .collect())
+            } else if !self.ty_cx.is_bi_reducible(&f) {
+                Ok(f_args.into_iter()
+                         .zip(g_args.into_iter())
+                         .map(|(t_i, s_i)| Constraint::Unification(t_i, s_i, j.clone()).categorize())
+                         .collect())
             } else {
                 panic!("f is reducible but metavars are ")
             }
@@ -297,7 +333,7 @@ impl<'tcx> Solver<'tcx> {
         // }
 
         else if t.is_forall() && u.is_forall() {
-            debug!("forall");
+            debug!("inside forall");
             match (t, u) {
                 (Term::Forall { binder: binder1, term: term1, .. },
                  Term::Forall { binder: binder2, term: term2, .. }) => {
@@ -333,18 +369,20 @@ impl<'tcx> Solver<'tcx> {
     /// error reporting where we want to show the simplest term possible.
     fn eval_justification(&self, j: Justification) -> Result<Justification, Error> {
         use super::constraint::Justification::*;
-        // panic!("{:?}", j);
+        // Since we are already doing error reporting, we will just use this to accumulate
+        // the meta-vars that can't be subst, and do nothing with them.
+        let mut errs = vec![];
         let j = match j {
             Asserted(by) => Asserted(match by {
                 AssertedBy::Application(span, t, u) => {
-                    let t = try!(self.ty_cx.eval(&try!(replace_metavars(t, &self.solution_mapping))));
-                    let u = try!(self.ty_cx.eval(&try!(replace_metavars(u, &self.solution_mapping))));
+                    let t = try!(self.ty_cx.eval(&replace_metavars_with_err(t, &self.solution_mapping, &mut errs)));
+                    let u = try!(self.ty_cx.eval(&replace_metavars_with_err(u, &self.solution_mapping, &mut errs)));
 
                     AssertedBy::Application(span, t, u)
                 }
                 AssertedBy::ExpectedFound(t, u) => {
-                    let t = try!(self.ty_cx.eval(&try!(replace_metavars(t, &self.solution_mapping))));
-                    let u = try!(self.ty_cx.eval(&try!(replace_metavars(u, &self.solution_mapping))));
+                    let t = try!(self.ty_cx.eval(&replace_metavars_with_err(t, &self.solution_mapping, &mut errs)));
+                    let u = try!(self.ty_cx.eval(&replace_metavars_with_err(u, &self.solution_mapping, &mut errs)));
 
                     AssertedBy::ExpectedFound(t, u)
                 }
@@ -360,32 +398,72 @@ impl<'tcx> Solver<'tcx> {
     }
 
     // The set of constraints should probably be a lazy list.
-    fn process(&self, cs: Vec<CategorizedConstraint>, j: Justification) {
-        // for c in &self.constraints {
-        //     debug!("{:?}", c);
-        //     match c.constraint {
-        //         Constraint::Choice(..) => panic!("can't process choice constraints"),
-        //         Constraint::Unification(..) => {
-        //             match c.category {
-        //
-        //             }
-        //         }
-        //
-        //     }
-        // }
-        // assert!(self.constraints.len() > 0);
+    fn process(&self, cs: &mut Iterator<Item=CategorizedConstraint>, j: Justification) -> Result<(), Error> {
+        match cs.next() {
+            None => self.resolve(j),
+            Some(c) => panic!(),
+        }
     }
 
+    // /// Create a case split (choice point) by storing the current solver state with
+    // /// the arguments provided.
+    // fn case_split(&mut self, j_a: Justification, j_c: Justification, list: () ) {
+    //
+    // }
     pub fn solve(mut self) -> Result<HashMap<Name, (Term, Justification)>, Error> {
         while let Some(c) = self.constraints.pop() {
-            debug!("{:?}", c);
+            debug!("Solver::solve: constraint={}", c.constraint);
             match c.constraint {
-                Constraint::Choice(..) => panic!("can't process choice constraints"),
+                Constraint::Choice(term, ty, f, j) =>
+                    // self.process(f(term, ty, subst), j)
+                    panic!(),
                 Constraint::Unification(t, u, j) => {
                     for (m, s) in &self.solution_mapping {
                         debug!("{} {}", m, s.0)
                     }
                     match c.category {
+                        ConstraintCategory::Delta => {
+                            panic!("can't handle delta constraints yet")
+                        }
+                        ConstraintCategory::QuasiPattern |
+                        ConstraintCategory::FlexRigid => {
+                            let (t_head, t_args) = t.uncurry();
+                            let (u_head, u_args) = u.uncurry();
+
+                            let term = u_head;
+
+                            let bound_vars = t_args.clone();
+
+                            for arg in u_args {
+                                println!("{}", arg)
+                            }
+
+
+                            println!("t_head {}", t_head);
+                            let infer_ty = try!(self.ty_cx.type_infer_term(&t_head));
+
+                            let t_head = match t_head {
+                                Term::Var { name } => name,
+                                _ => panic!()
+                            };
+
+                            let locals =
+                                infer_ty.0.binders()
+                                          .unwrap()
+                                          .into_iter()
+                                          .map(|t| self.ty_cx.local_with_repr("x".to_string(), t.clone()))
+                                          .collect();
+
+                            let solution = Term::abstract_lambda(locals, term);
+                            println!("infer_ty {}", infer_ty.0);
+
+                            for arg in bound_vars {
+                                println!("to_bind: {}", arg);
+                            }
+
+                            println!("sol {}; {} = {}", solution, t_head, u);
+                            self.add_solution(t_head, (solution, j));
+                        }
                         ConstraintCategory::FlexFlex => {
                             // Need to clean this code up
                             let t_head = match t.head().unwrap() {
@@ -404,13 +482,24 @@ impl<'tcx> Solver<'tcx> {
                                 panic!("flex-flex solution is not eq")
                             }
                         }
-                        cat => panic!("solver can't handle {:?} {} = {} by {:?}", cat, t, u, j)
+                        ConstraintCategory::Pattern => {
+                            panic!("solver failure pattern constraints should never reach here")
+                        }
+                        ConstraintCategory::Recursor => {
+                            panic!("can't handle recursor constraints yet")
+                        }
+                        ConstraintCategory::OnDemand  => {
+                            panic!("can't handle on demand constraints yet")
+                        }
+                        ConstraintCategory::Ready |
+                        ConstraintCategory::Regular |
+                        ConstraintCategory::Postponed => {
+                            panic!("unification constraints should never be one of these")
+                        }
                     }
                 }
             }
         }
-
-
         Ok(self.solution_mapping)
     }
 
@@ -419,46 +508,65 @@ impl<'tcx> Solver<'tcx> {
     }
 }
 
-pub fn replace_metavars(t: Term, subst_map: &HashMap<Name, (Term, Justification)>) -> Result<Term, Error> {
+pub fn replace_metavars(
+        term: Term,
+        subst_map: &HashMap<Name, (Term, Justification)>) -> Result<Term, Error> {
+    let mut errs = vec![];
+    let term = replace_metavars_with_err(term, subst_map, &mut errs);
+
+    if errs.len() > 0 {
+        Err(Error::NoSolution(errs, term))
+    } else {
+        Ok(term)
+    }
+}
+
+pub fn replace_metavars_with_err(
+        t: Term, subst_map: &HashMap<Name, (Term, Justification)>,
+        errs: &mut Vec<Name>) -> Term {
     use core::Term::*;
 
     match t {
         App { fun, arg, span } => {
-            Ok(App {
-                fun: Box::new(try!(replace_metavars(*fun, subst_map))),
-                arg: Box::new(try!(replace_metavars(*arg, subst_map))),
+            App {
+                fun: Box::new(replace_metavars_with_err(*fun, subst_map, errs)),
+                arg: Box::new(replace_metavars_with_err(*arg, subst_map, errs)),
                 span: span,
-            })
+            }
         }
         Forall { binder, term, span } => {
-            Ok(Forall {
-                binder: try!(subst_meta_binder(binder, subst_map)),
-                term: Box::new(try!(replace_metavars(*term, subst_map))),
+            Forall {
+                binder: subst_meta_binder(binder, subst_map, errs),
+                term: Box::new((replace_metavars_with_err(*term, subst_map, errs))),
                 span: span,
-            })
+            }
         }
         Lambda { binder, body, span } => {
-            Ok(Lambda {
-                binder: try!(subst_meta_binder(binder, subst_map)),
-                body: Box::new(try!(replace_metavars(*body, subst_map))),
+            Lambda {
+                binder: subst_meta_binder(binder, subst_map, errs),
+                body: Box::new(replace_metavars_with_err(*body, subst_map, errs)),
                 span: span,
-            })
+            }
         }
         Var { ref name } if name.is_meta() => {
             match subst_map.get(&name) {
-                None => panic!("no solution found for {}", name),
-                Some(x) => Ok(x.clone().0)
+                None => {
+                    errs.push(name.clone());
+                    name.to_term()
+                },
+                Some(x) => x.clone().0
             }
 
         }
-        v @ Var { .. } => Ok(v),
-        Type => Ok(Type),
+        v @ Var { .. } => v,
+        Type => Type,
     }
 }
 
 pub fn subst_meta_binder(
         mut b: Binder,
-        subst_map: &HashMap<Name, (Term, Justification)>) -> Result<Binder, Error> {
-    b.ty = Box::new(try!(replace_metavars(*b.ty, subst_map)));
-    Ok(b)
+        subst_map: &HashMap<Name, (Term, Justification)>,
+        errs: &mut Vec<Name>) -> Binder {
+    b.ty = Box::new(replace_metavars_with_err(*b.ty, subst_map, errs));
+    b
 }
