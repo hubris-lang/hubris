@@ -76,8 +76,10 @@ impl Display for Item {
     }
 }
 
+pub type Function = Def;
+
 #[derive(Debug, Clone, PartialEq)]
-pub struct Function {
+pub struct Def {
     pub name: Name,
     pub args: Vec<Name>,
     pub ret_ty: Term,

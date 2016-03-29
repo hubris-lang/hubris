@@ -3,6 +3,7 @@ use super::TyCtxt;
 use super::constraint::*;
 use super::super::session::{HasSession, Session, Reportable};
 use core::{Term, Binder, Name};
+use util::*;
 
 use std::collections::{BinaryHeap, HashMap};
 use std::io;
@@ -253,6 +254,7 @@ impl<'tcx> Solver<'tcx> {
         // unification constraints of this form incur
         // no more constraints since this is discharge-able here.
         if t == u {
+            debug!("simplify: equal case");
             // debug!("exactly equal");
             return Ok(vec![]);
         }
@@ -260,11 +262,16 @@ impl<'tcx> Solver<'tcx> {
         // Case 2: if t can beta/iota reduce to then
         // we reduce t ==> t' and create a constraint
         // between t' and u (t' = u).
-        else if self.ty_cx.is_bi_reducible(&t) {
-            debug!("reduce");
+        else if self.ty_cx.is_bi_reducible(&t) &&
+                self.ty_cx.is_bi_reducible(&u) {
+            debug!("simplify: reduce case (both)");
+            self.simplify(try!(self.ty_cx.eval(&t)),
+                          try!(self.ty_cx.eval(&u)), j)
+        } else if self.ty_cx.is_bi_reducible(&t) {
+            debug!("simplify: reduce case (t)");
             self.simplify(try!(self.ty_cx.eval(&t)), u, j)
         } else if self.ty_cx.is_bi_reducible(&u) {
-            debug!("reduce");
+            debug!("simplify: reduce case (u)");
             self.simplify(t, try!(self.ty_cx.eval(&u)), j)
         }
 
@@ -298,13 +305,15 @@ impl<'tcx> Solver<'tcx> {
                 panic!()
             }
 
+            // THERE IS A BUG HERE!
             let t_args_meta_free =
                 f_args.iter().all(|a| !a.is_meta());
 
             let u_args_meta_free =
                 g_args.iter().all(|a| !a.is_meta());
 
-            if self.ty_cx.is_bi_reducible(&f) &&
+            if (self.ty_cx.is_bi_reducible(&t) ||
+                self.ty_cx.is_bi_reducible(&u))  &&
                t_args_meta_free &&
                u_args_meta_free {
                 panic!("var are free")
@@ -312,11 +321,13 @@ impl<'tcx> Solver<'tcx> {
                     // } else if !f.reducible() {
                     //     t.args = u.args
                     // } else { panic!() }
-            } else if !self.ty_cx.is_bi_reducible(&f) {
-                Ok(f_args.into_iter()
-                         .zip(g_args.into_iter())
-                         .map(|(t_i, s_i)| Constraint::Unification(t_i, s_i, j.clone()).categorize())
-                         .collect())
+            } else if !self.ty_cx.is_bi_reducible(&f) && f == g {
+                let mut cs = vec![];
+                for (t_i, s_i) in f_args.into_iter().zip(g_args.into_iter()) {
+                    debug!("arg_equal {} {}", t_i, s_i);
+                    cs.extend(try!(self.simplify(t_i, s_i, j.clone())).into_iter());
+                }
+                Ok(cs)
             } else {
                 panic!("f is reducible but metavars are ")
             }
@@ -359,6 +370,7 @@ impl<'tcx> Solver<'tcx> {
                 Ok(vec![Constraint::Unification(t, u, j).categorize()])
             } else {
                 let j = try!(self.eval_justification(j));
+                panic!("{} {}", t, u);
                 Err(Error::Justification(j))
             }
         }
@@ -554,7 +566,8 @@ pub fn replace_metavars_with_err(
                     errs.push(name.clone());
                     name.to_term()
                 },
-                Some(x) => x.clone().0
+                // Not an effcient approach, should normalize the map up-front
+                Some(x) => replace_metavars_with_err(x.clone().0, subst_map, errs)
             }
 
         }

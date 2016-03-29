@@ -510,6 +510,7 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
 
             let inductive_ty = self.inductive_ty;
             let ind_hyp = self.ind_hyp.clone();
+            println!("ind_hyp = {}", Term::abstract_pi(vec![ind_hyp.clone()], Term::Type));
 
             let minor_premises: Result<_, Error> =
                 inductive_ty.ctors

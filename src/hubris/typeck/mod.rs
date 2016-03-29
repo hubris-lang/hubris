@@ -486,9 +486,10 @@ impl TyCtxt {
 
     /// Check whether a term is beta/iota reducible.
     pub fn is_bi_reducible(&self, term: &Term) -> bool {
+        debug!("is_bi_reducible: term={}", term);
         let (head, args) = term.uncurry();
         if args.len() > 0 {
-            !head.is_meta() && !(head.head_is_global() || head.head_is_local()) && term.is_app()
+            !head.is_meta() && !head.is_constant() && term.is_app()
         } else {
             false
         }
@@ -559,6 +560,9 @@ impl TyCtxt {
         // throw an error if there is not a solution for a meta-var
         // occurring in them
         let new_term = try!(replace_metavars(term.clone(), &solutions));
+
+        debug!("term={}\nnew_term={}", term, new_term);
+
         let infer_ty = try!(replace_metavars(infer_ty.clone(), &solutions));
 
         Ok((new_term, expected_ty.unwrap_or(infer_ty)))
@@ -794,4 +798,10 @@ fn name_to_path(name: &Name) -> Option<PathBuf> {
         }
         _ => None,
     }
+}
+
+#[test]
+fn test_is_bi_reducible() {
+    let ty_cx = TyCtxt::new();
+    panic!()
 }

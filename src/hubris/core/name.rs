@@ -189,9 +189,9 @@ impl Pretty for Name {
                 }
             }
             &Meta { number, .. } => Doc::text(format!("?{}", number)),
-            &Local { ref repr, .. } => {
+            &Local { ref repr, ref number, .. } => {
                 // try!(write!(formatter, "{}(local {} : {})", repr, number, ty))
-                repr.pretty()
+                repr.pretty() + parens(Doc::text(format!("{}", number)))
             }
         }
     }

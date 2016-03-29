@@ -192,8 +192,10 @@ impl Repl {
                     println!("{}", typed)
                 }
                 Command::Def(name) => {
-                    let parser = parser::from_string(name, ast::ModuleId(0)).unwrap();
-                    let name = try!(parser.parse_name());
+                    let name = match try!(self.preprocess_term(name)) {
+                        core::Term::Var { name } => name,
+                        _ => panic!()
+                    };
 
                     // Not really sure why I put this code here ...
                     //
@@ -203,7 +205,6 @@ impl Repl {
                     //     _ => panic!()
                     // }
 
-                    let name = try!(self.elab_cx.elaborate_global_name(name));
 
                     match self.elab_cx.ty_cx.unfold_name(&name).ok() {
                         None => println!("could not find a definition for {}", name),

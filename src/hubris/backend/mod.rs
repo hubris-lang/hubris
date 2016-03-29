@@ -6,11 +6,9 @@ use super::core;
 //     UnknownSymbol(String),
 // }
 
-type Module = ();
-
 /// A trait that describes the interface to a particular compiler backend.
 pub trait Backend {
-    fn create_executable<P: AsRef<Path> + Debug>(module: &core::Module, output: Option<P>);
+    fn create_executable<P: AsRef<Path> + Debug>(module: core::Module, output: Option<P>);
 }
 
 pub struct Rust;
@@ -29,12 +27,27 @@ enum Term {
     DummyTerm
 }
 
-fn lower_module(module: &core::Module) -> Module {
-
+fn lower_module(module: core::Module) -> Module {
+    Module {
+        definitions:
+            module.defs
+                  .into_iter()
+                  .filter_map(|i| match i {
+                      core::Item::Fn(d) => Some(lower_def(d)),
+                      _ => None,
+                  })
+                  .collect()
+    }
 }
 
+fn lower_def(def: core::Def) -> Definition {
+    panic!("{}", def);
+}
+
+
 impl Backend for Rust {
-    fn create_executable<P: AsRef<Path> + Debug>(module: &core::Module, output: Option<P>) {
-        panic!()
+    fn create_executable<P: AsRef<Path> + Debug>(module: core::Module, output: Option<P>) {
+        let m = lower_module(module);
+        panic!();
     }
 }

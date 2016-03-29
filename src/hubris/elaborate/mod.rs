@@ -229,16 +229,22 @@ impl ElabCx {
 
             debug!("elaborate_fn: ty={} body={}", ty, ebody);
 
+            let body = core::Term::abstract_lambda(args.clone(), ebody);
+            let ret_ty = core::Term::abstract_pi(args.clone(), ty);
+            // Clear up the whole elaboration vs. decl appraochh,
+            // not happy with it right now.
+            let (body, ret_ty) = try!(lcx.cx.ty_cx.type_check_term(&body, Some(ret_ty)));
+
             Ok(core::Function {
                 name: name,
                 args: args.clone(),
                 // We compute the full type of the function here
                 // by taking the return type and abstracting
                 // over the arguments.
-                ret_ty: core::Term::abstract_pi(args.clone(), ty),
+                ret_ty: ret_ty,
                 // We construct a lambda representing the body
                 // with all of the function's parameters abstracted.
-                body: core::Term::abstract_lambda(args, ebody),
+                body: body,
             })
         })
     }
@@ -263,7 +269,16 @@ impl ElabCx {
 
     pub fn elaborate_global_name(&mut self, n: ast::Name) -> Result<core::Name, Error> {
         match n.repr.clone() {
-            ast::NameKind::Qualified(_) => Err(Error::UnexpectedQualifiedName),
+            ast::NameKind::Qualified(components) => {
+                let qn = core::Name::Qual {
+                    span: n.span,
+                    components: components,
+                };
+
+                self.globals.insert(n.clone(), qn.clone());
+
+                Ok(qn)
+            }
             ast::NameKind::Unqualified(name) => {
                 let qn = core::Name::Qual {
                     span: n.span,

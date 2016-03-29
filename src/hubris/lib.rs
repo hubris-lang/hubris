@@ -35,7 +35,7 @@ pub mod server;
 pub mod session;
 pub mod typeck;
 pub mod syntax;
-
+pub mod util;
 
 use std::path::{PathBuf, Path};
 use std::io;
@@ -117,7 +117,7 @@ pub fn compile_file<T: AsRef<Path>>(path: T, output: Option<PathBuf>) -> Result<
                 println!("main={}", result);
             }
 
-            Rust::create_executable(&core_module, output);
+            Rust::create_executable(core_module, output);
        }
    }
 

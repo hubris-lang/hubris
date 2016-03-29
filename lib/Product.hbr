@@ -6,18 +6,23 @@ inductive Prod (A : Type) (B : Type)
   | MkProd : A -> B -> Prod A B
 end
 
-def first {A B : Type} (p : Prod A B) : A :=
-  match p with
-  | MkProd a b => a
-  end
-end
+-- def cases_on {A : Type} {B : Type} {C : Prod A B -> Type} 
+--              (n : Prod A B)  (P_1 : forall (a0 : A) (a1 : B), C (MkProd A B a0 a1)) -> C n :=
+--    Prod.rec C
+-- def first {A B : Type} (p : Prod A B) : A :=
+--   -- Prod.rec (fun (p : Prod A B) => A) (fun (a : A) (b : B) => a) p
+--   (Prod.cases_on p) (fun (a : A) (b : B) => a)
+--   -- match p with
+--   -- | MkProd a b => a
+--   -- end
+-- end
 
-def second {A B : Type} (p : Prod A B) : B :=
-  match p with
-  | MkProd a b => b
-  end
-end
+-- def second {A B : Type} (p : Prod A B) : B :=
+--   match p with
+--   | MkProd a b => b
+--   end
+-- end
 
-def main : Unit :=
-  first (MkProd Star Star)
-end
+-- def main : Unit :=
+--   first (MkProd Star Star)
+-- end
