@@ -119,7 +119,7 @@ pub fn walk_term<'v, V: Visitor<'v>>(visitor: &mut V, term: &'v Term) {
             visitor.visit_span(span);
             visitor.visit_literal(lit);
         }
-        &Var { ref name } =>
+        &Var { ref name, .. } =>
             visitor.visit_name(name),
         &Match { ref span, ref scrutinee, ref cases } => {
             visitor.visit_span(span);

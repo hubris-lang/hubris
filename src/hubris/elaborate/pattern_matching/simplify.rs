@@ -228,7 +228,7 @@ pub fn simplify_pattern(pattern: ast::Pattern, mut rhs: SimpleMatchArm) -> Simpl
                 let arg_name = ast::Name::from_str(&format!("a{}", i)[..]);
                 arg_names.push(arg_name.clone());
                 rhs = SimpleMatchArm::Match(SimpleMatch {
-                    scrutinee: ast::Term::Var { name: arg_name },
+                    scrutinee: ast::Term::Var { name: arg_name, implicit: false },
                     cases: vec![simplify_pattern(pat_arg, rhs)],
                     pattern_type: PatternType::Cases,
                 })

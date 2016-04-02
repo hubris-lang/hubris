@@ -411,18 +411,35 @@ impl<'ecx> LocalElabCx<'ecx> {
             ast::Term::Match { scrutinee, cases, span } => {
                 elaborate_pattern_match(self, *scrutinee, cases)
             }
-            ast::Term::App { fun, arg, span } => {
-                let efun = try!(self.elaborate_term(*fun));
-                let earg = try!(self.elaborate_term(*arg));
+            app @ ast::Term::App { .. } => {
+                let span = app.get_span();
+                let (head, args) = app.uncurry();
 
-                let efun = try!(self.apply_implicit_args(efun));
-                let earg = try!(self.apply_implicit_args(earg));
+                let implicit = match &head {
+                    &ast::Term::Var { implicit, .. } => implicit,
+                    _ => true,
+                };
 
-                Ok(core::Term::App {
-                    span: span,
-                    fun: Box::new(efun),
-                    arg: Box::new(earg),
-                })
+                let efun = try!(self.elaborate_term(head));
+
+                let mut eargs = vec![];
+
+                for arg in args {
+                    let earg = try!(self.elaborate_term(arg));
+                    eargs.push(try!(self.apply_implicit_args(earg)));
+                }
+
+                let efun = if implicit {
+                    try!(self.apply_implicit_args(efun))
+                } else {
+                    efun
+                };
+
+                let mut app = core::Term::apply_all(efun, eargs);
+
+                app.set_span(span);
+
+                Ok(app)
             }
             ast::Term::Forall { binders, term, .. } => {
                 self.enter_scope(binders, move |lcx, locals| {

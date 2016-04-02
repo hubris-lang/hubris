@@ -118,7 +118,7 @@ pub fn walk_mut_term<'v, V: VisitorMut<'v>>(visitor: &mut V, term: &'v mut Term)
             visitor.visit_mut_span(span);
             visitor.visit_mut_literal(lit);
         }
-        &mut Var { ref mut name } =>
+        &mut Var { ref mut name, .. } =>
             visitor.visit_mut_name(name),
         &mut Match { ref mut span, ref mut scrutinee, ref mut cases } => {
             visitor.visit_mut_span(span);

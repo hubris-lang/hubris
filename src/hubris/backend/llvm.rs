@@ -282,7 +282,7 @@ pub fn create_executable<P: AsRef<Path> + Debug>(module: &cps::Module, output: O
            .arg(exe)
            .arg(output));
 }
-// 
+//
 // use core;
 // use core::Name;
 //

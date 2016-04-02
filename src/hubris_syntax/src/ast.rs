@@ -244,13 +244,32 @@ pub struct Axiom {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Term {
     Literal { span: Span, lit: Literal },
-    Var { name: Name },
+    Var { name: Name, implicit: bool },
     Match { span: Span, scrutinee: Box<Term>, cases: Vec<Case> },
     App { span: Span, fun: Box<Term>, arg: Box<Term> },
     Forall { span: Span, binders: Vec<Binder>, term: Box<Term> },
     Lambda { span: Span, args: Vec<Binder>, ret_ty: Box<Option<Term>>, body: Box<Term> },
     Let { span: Span, bindings: Vec<(Binder, Term)>, body: Box<Term> },
     Type,
+}
+
+impl Term {
+    pub fn uncurry(&self) -> (Term, Vec<Term>) {
+        use self::Term::*;
+
+        match self {
+            &App { ref fun, ref arg, ..} => {
+                let mut f = &**fun;
+                let mut result = vec![*arg.clone()];
+                while let &App { ref fun, ref arg, .. } = f {
+                    f = &**fun;
+                    result.push(*arg.clone());
+                }
+                (f.clone(), result.into_iter().rev().collect())
+            }
+            t => (t.clone(), vec![])
+        }
+    }
 }
 
 impl Display for Term {
@@ -325,7 +344,7 @@ impl HasSpan for Term {
 
         match self {
             &Literal { span, .. } => span,
-            &Var { ref name } => name.span,
+            &Var { ref name, .. } => name.span,
             &Match { span, .. } => span,
             &App { span, .. } => span,
             &Forall { span, .. } => span,
@@ -340,7 +359,7 @@ impl HasSpan for Term {
 
         match self {
             &mut Literal { ref mut span, .. } => *span = sp,
-            &mut Var { ref mut name } => name.span = sp,
+            &mut Var { ref mut name, .. } => name.span = sp,
             &mut Match { ref mut span, .. } => *span = sp,
             &mut App { ref mut span, .. } => *span = sp,
             &mut Forall { ref mut span, .. } => *span = sp,

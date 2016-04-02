@@ -12,7 +12,7 @@ struct Renamer {
 impl<'v> VisitorMut<'v> for Renamer {
     fn visit_mut_term(&mut self, term: &'v mut Term) {
         let replace = match term {
-            &mut Term::Var { ref name } => {
+            &mut Term::Var { ref name, .. } => {
                 match self.rename_map.get(&name) {
                     None => None,
                     Some(t) => Some(t.clone())

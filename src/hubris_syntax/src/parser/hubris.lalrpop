@@ -192,7 +192,8 @@ Term0: Term = {
 };
 
 Term0US: Term = {
-  <n : Name> => Term::Var { name: n },
+  <n : Name> => Term::Var { name: n, implicit: true },
+  "@" <n : Name> => Term::Var { name: n, implicit: false },
   <m : Match> => Term::Match {
     span: Span::dummy(),
     scrutinee: Box::new(m.0),
@@ -281,6 +282,7 @@ extern {
         "->" => Tok::Arrow,
         "_" => Tok::Underscore,
         "." => Tok::Period,
+        "@" => Tok::At,
         "DocComment" => Tok::DocComment(<String>),
         "Id" => Tok::Id(<&'input str>),
     }
