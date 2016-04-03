@@ -21,6 +21,14 @@ impl Backend for Rust {
         let mut erasure_cx = ErasureCx::new(&ty_cx);
         let mut output_file = File::create(output.unwrap()).unwrap();
 
+        for (name, data) in &ty_cx.types {
+            println!("data: {}", name);
+        }
+
+        for (n, axiom) in &ty_cx.axioms {
+            println!("axiom: {}", n);
+        }
+
         for (n, def) in &ty_cx.definitions {
             let udef = erasure_cx.lower_def(def.clone());
             println!("-----------(lowered)-----------------");
@@ -36,7 +44,18 @@ impl Backend for Rust {
 }
 
 fn name_to_rust(name: &core::Name) -> Doc {
-    name.pretty()
+    match name {
+        &core::Name::Qual { ref components, .. } => {
+            let pieces: Vec<_> =
+                components.iter()
+                          .map(|c| c.pretty())
+                          .collect();
+            seperate(&pieces[..], &"_".pretty())
+        }
+        &core::Name::DeBruijn { ref repr, .. } => repr.pretty(),
+        &core::Name::Local { ref repr, .. } => repr.pretty(),
+        &core::Name::Meta { .. } => panic!(),
+    }
 }
 
 fn def_to_rust(def: &Definition) -> Doc {
@@ -59,19 +78,26 @@ fn def_to_rust(def: &Definition) -> Doc {
     "}\n".pretty()
 }
 
+fn block(value: Doc) -> Doc {
+    "{".pretty() + Doc::newline() +
+        value.nest(4) +
+    "}".pretty()
+}
+
 fn term_to_rust(term: &Term) -> Doc {
     match term {
         &Term::Call(ref f, ref args) => {
             let args : Vec<_> = args.iter().map(|x| term_to_rust(x)).collect();
             term_to_rust(&**f) + parens(seperate(&args[..], &",".pretty()))
         }
-        &Term::Var(ref name) => name.pretty(),
+        &Term::Var(ref name) => name_to_rust(name),
         &Term::Lambda(ref ns, ref body) => {
             let args : Vec<_> =
                 ns.iter()
                   .map(|n| name_to_rust(n) + ": Obj".pretty())
                   .collect();
-            panic!()
+            "|".pretty() + seperate(&args[..], &",".pretty()) + "|".pretty() +
+                block(term_to_rust(body))
         }
         t => panic!("{:?}", t),
     }

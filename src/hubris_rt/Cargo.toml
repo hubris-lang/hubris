@@ -5,3 +5,6 @@ authors = ["Jared Roesch <jroesch@cs.uw.edu>"]
 
 [lib]
 name = "hubris_runtime"
+
+[dependencies]
+lazy_static = "0.1.*"

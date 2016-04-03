@@ -1,27 +1,27 @@
+use std::rc::Rc;
 use std::mem::transmute;
 
-struct Obj {
-    data : *mut usize
+struct ObjValue {
+    ptr: *mut usize,
 }
+
+struct Obj(Rc<ObjValue>);
 
 impl Obj {
-    fn as<T>(&self) -> &T {
-        transmute(self.data)
+    fn from<T>(t: T) -> Obj {
+        unsafe {
+            let boxed_val = Box::new(t);
+
+            let val = ObjValue {
+                ptr: transmute(Box::into_raw(boxed_val)),
+            };
+
+            Obj(Rc::new(val))
+        }
     }
-}
 
-struct Prod {
-    f1: Obj,
-    f2: Obj,
-    f2: Obj,
-    f2: Obj
-}
-
-// fn Prod_main() {
-//
-// }
-
-fn Prod_first(a1 : Obj, a2 : Obj, a3 : Obj) {
-    let p = a3.as<Prod>();
-    
+    fn unbox<T>(&self) -> &T {
+        let ptr: *mut usize = self.0.ptr;
+        unsafe { transmute(ptr) }
+    }
 }
