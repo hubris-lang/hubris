@@ -5,10 +5,10 @@ struct ObjValue {
     ptr: *mut usize,
 }
 
-struct Obj(Rc<ObjValue>);
+pub struct Obj(Rc<ObjValue>);
 
 impl Obj {
-    fn from<T>(t: T) -> Obj {
+    pub fn from<T>(t: T) -> Obj {
         unsafe {
             let boxed_val = Box::new(t);
 
@@ -20,7 +20,7 @@ impl Obj {
         }
     }
 
-    fn unbox<T>(&self) -> &T {
+    pub fn unbox<T>(&self) -> &T {
         let ptr: *mut usize = self.0.ptr;
         unsafe { transmute(ptr) }
     }

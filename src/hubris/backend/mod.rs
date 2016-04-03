@@ -7,8 +7,6 @@ use super::core;
 use super::typeck::TyCtxt;
 use pretty::*;
 
-
-
 /// A trait that describes the interface to a particular compiler backend.
 pub trait Backend {
     fn create_executable<P: AsRef<Path> + Debug>(main: core::Definition, ty_cx: TyCtxt, output: Option<P>);
@@ -21,8 +19,25 @@ impl Backend for Rust {
         let mut erasure_cx = ErasureCx::new(&ty_cx);
         let mut output_file = File::create(output.unwrap()).unwrap();
 
+        // First we declare the runtime as an external crate, and bring all
+        // of its types and functions into scope.
+        output_file.write(&"extern crate rt;\n\nuse rt::*;\n\n".as_bytes()[..]);
+
+        let mut definitions = vec![];
+
+        // We then loop through the types creating definitions for the types and constructors.
+        //
+        // After we fully implement type erasure we should be able to remove the need to ever
+        // have the types exists as runtime values.
+        //
+        // Currently we just generate panics for their bodies since evaluating code like
+        // this should be a bug.
         for (name, data) in &ty_cx.types {
             println!("data: {}", name);
+            definitions.push(Definition {
+                name: name.clone(),
+                body: Term::Panic("a".to_string())
+            });
         }
 
         for (n, axiom) in &ty_cx.axioms {
@@ -30,14 +45,20 @@ impl Backend for Rust {
         }
 
         for (n, def) in &ty_cx.definitions {
-            let udef = erasure_cx.lower_def(def.clone());
+            definitions.push(erasure_cx.lower_def(def.clone()));
+        }
+
+        // We have now produced a set of definitions that we then convert to
+        // Rust code and write to the output file.
+        for def in definitions {
             println!("-----------(lowered)-----------------");
-            println!("{}", udef);
+            println!("{}", def);
             println!("-----------(rust)-----------------");
-            let rust_code = def_to_rust(&udef);
+            let rust_code = def_to_rust(&def);
             let mut v = Vec::new();
             Doc::render(&rust_code, 80, &mut v).unwrap();
             output_file.write(&v[..]);
+            output_file.write(&"\n".as_bytes[..]);
             println!("{}", String::from_utf8(v).unwrap());
         }
     }
@@ -73,7 +94,7 @@ fn def_to_rust(def: &Definition) -> Doc {
 
     "fn ".pretty() +
     name_to_rust(&def.name) +
-    parens(seperate(&args[..], &",".pretty())) + " {\n".pretty() +
+    parens(seperate(&args[..], &",".pretty())) + " -> Obj {\n".pretty() +
         term_to_rust(body) + "\n".pretty() +
     "}\n".pretty()
 }
@@ -82,6 +103,10 @@ fn block(value: Doc) -> Doc {
     "{".pretty() + Doc::newline() +
         value.nest(4) +
     "}".pretty()
+}
+
+fn to_object(value: Doc) -> Doc {
+    "Obj::from".pretty() + parens(value)
 }
 
 fn term_to_rust(term: &Term) -> Doc {
@@ -96,8 +121,11 @@ fn term_to_rust(term: &Term) -> Doc {
                 ns.iter()
                   .map(|n| name_to_rust(n) + ": Obj".pretty())
                   .collect();
-            "|".pretty() + seperate(&args[..], &",".pretty()) + "|".pretty() +
-                block(term_to_rust(body))
+            to_object("|".pretty() + seperate(&args[..], &",".pretty()) + "|".pretty() +
+                block(term_to_rust(body)))
+        }
+        &Term::Panic(ref msg) => {
+            "panic!".pretty() + parens("\"".pretty() + msg.pretty() + "\"".pretty())
         }
         t => panic!("{:?}", t),
     }
@@ -132,12 +160,13 @@ impl Display for Definition {
 
 #[derive(Debug, Clone)]
 enum Term {
-    Local(usize),
+    Local(core::Name, usize),
     Var(core::Name),
     // Free(core::)
     Switch(Rc<Term>),
     Call(Rc<Term>, Vec<Term>),
     Lambda(Vec<core::Name>, Box<Term>),
+    Panic(String),
 }
 
 impl Pretty for Term {
@@ -145,7 +174,7 @@ impl Pretty for Term {
         use self::Term::*;
 
         match self {
-            &Local(i) => panic!(),
+            &Local(_, i) => panic!(),
             &Var(ref name) => name.pretty(),
             &Switch(ref scrut) => panic!(),
             &Call(ref f, ref args) => {
@@ -157,6 +186,7 @@ impl Pretty for Term {
                 f.pretty() + parens(seperate(&pargs[..], &",".pretty()))
             }
             &Lambda(_, ref body) => body.pretty(),
+            &Panic(_) => "panic".pretty(),
         }
     }
 }
