@@ -99,10 +99,10 @@ impl<'ecx, 'cx: 'ecx>PatternMatchCx<'ecx, 'cx> {
 
         // let cases : Vec<_> =
         //     cases.into_iter()
-        //          .map(|c| { println!("core case: {}", c); Term::apply_all(c, args.clone()) })
+        //          .map(|c| { debug!("core case: {}", c); Term::apply_all(c, args.clone()) })
         //          .collect();
 
-        // println!("core case: {}", case);
+        // debug!("core case: {}", case);
 
          match pattern_type  {
              PatternType::Cases => {
@@ -111,7 +111,7 @@ impl<'ecx, 'cx: 'ecx>PatternMatchCx<'ecx, 'cx> {
                 let mut args = vec![escrutinee];
                 args.extend(cases.into_iter());
                 let result = Term::apply_all(head, args);
-                println!("elaborated_match: {}", result);
+                debug!("elaborated_match: {}", result);
                 Ok(result)
              }
          }
@@ -140,21 +140,21 @@ impl<'ecx, 'cx: 'ecx>PatternMatchCx<'ecx, 'cx> {
                 match ctor_map.get(&elab_name) {
                     None => panic!("not the right"), // return Ok(vec![(ctor.clone(), scrutinee_ty.clone())]),
                     Some(ctor_ty) => {
-                        println!("{:?}", ctor_ty.binders());
+                        debug!("{:?}", ctor_ty.binders());
                         let (inductive_ty, i_args) = scrutinee_ty.uncurry();
                         let mut ctor_ty = ctor_ty.clone();
 
                         for arg in i_args {
                             match ctor_ty {
                                 Term::Forall { term, .. } => {
-                                    println!("arg {}", arg);
+                                    debug!("arg {}", arg);
                                     ctor_ty = term.instantiate(&arg);
                                 }
                                 _ => panic!()
                             }
                         }
 
-                        println!("ctor_ty {}", ctor_ty);
+                        debug!("ctor_ty {}", ctor_ty);
                         let binders = ctor_ty.binders()
                                              .unwrap_or(vec![])
                                              .iter()
@@ -180,7 +180,7 @@ impl<'ecx, 'cx: 'ecx>PatternMatchCx<'ecx, 'cx> {
             rhs,
         } = simple_case;
 
-        println!("pattern: {} rhs: {}", pattern, rhs);
+        debug!("pattern: {} rhs: {}", pattern, rhs);
 
         let binders = try!(self.simple_pattern_binders(
             pattern,
@@ -188,7 +188,7 @@ impl<'ecx, 'cx: 'ecx>PatternMatchCx<'ecx, 'cx> {
             ctor_map));
 
         for &(ref n, ref ty) in &binders {
-            println!("{} {}", n, ty);
+            debug!("{} {}", n, ty);
         }
 
         self.enter_pattern_scope(binders, move |pat_cx, names| {
@@ -208,6 +208,6 @@ pub fn elaborate_pattern_match<'ecx>(
         cases: Vec<ast::Case>) -> Result<Term, Error> {
     let mut pmcx = PatternMatchCx::new(elab_cx);
     let simplified_match = simplify_match(scrutinee, cases);
-    println!("simplified_match: {}", simplified_match);
+    debug!("simplified_match: {}", simplified_match);
     pmcx.elaborate_simple_match(simplified_match)
 }

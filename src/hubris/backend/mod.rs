@@ -1,9 +1,13 @@
 use std::fmt::{self, Debug, Formatter, Display};
+use std::fs::File;
 use std::path::{Path};
 use std::rc::Rc;
+use std::io::Write;
 use super::core;
 use super::typeck::TyCtxt;
 use pretty::*;
+
+
 
 /// A trait that describes the interface to a particular compiler backend.
 pub trait Backend {
@@ -15,10 +19,61 @@ pub struct Rust;
 impl Backend for Rust {
     fn create_executable<P: AsRef<Path> + Debug>(main: core::Definition, ty_cx: TyCtxt, output: Option<P>) {
         let mut erasure_cx = ErasureCx::new(&ty_cx);
+        let mut output_file = File::create(output.unwrap()).unwrap();
+
         for (n, def) in &ty_cx.definitions {
             let udef = erasure_cx.lower_def(def.clone());
-            println!("{}", udef)
+            println!("-----------(lowered)-----------------");
+            println!("{}", udef);
+            println!("-----------(rust)-----------------");
+            let rust_code = def_to_rust(&udef);
+            let mut v = Vec::new();
+            Doc::render(&rust_code, 80, &mut v).unwrap();
+            output_file.write(&v[..]);
+            println!("{}", String::from_utf8(v).unwrap());
         }
+    }
+}
+
+fn name_to_rust(name: &core::Name) -> Doc {
+    name.pretty()
+}
+
+fn def_to_rust(def: &Definition) -> Doc {
+    let (args, body) = match &def.body {
+        &Term::Lambda(ref ns, ref body) => {
+            let args : Vec<_> =
+                ns.iter()
+                  .map(|n| name_to_rust(n) + ": Obj".pretty())
+                  .collect();
+
+            (args, &**body)
+        }
+        t => (vec![], t)
+    };
+
+    "fn ".pretty() +
+    name_to_rust(&def.name) +
+    parens(seperate(&args[..], &",".pretty())) + " {\n".pretty() +
+        term_to_rust(body) + "\n".pretty() +
+    "}\n".pretty()
+}
+
+fn term_to_rust(term: &Term) -> Doc {
+    match term {
+        &Term::Call(ref f, ref args) => {
+            let args : Vec<_> = args.iter().map(|x| term_to_rust(x)).collect();
+            term_to_rust(&**f) + parens(seperate(&args[..], &",".pretty()))
+        }
+        &Term::Var(ref name) => name.pretty(),
+        &Term::Lambda(ref ns, ref body) => {
+            let args : Vec<_> =
+                ns.iter()
+                  .map(|n| name_to_rust(n) + ": Obj".pretty())
+                  .collect();
+            panic!()
+        }
+        t => panic!("{:?}", t),
     }
 }
 
@@ -49,6 +104,7 @@ impl Display for Definition {
     }
 }
 
+#[derive(Debug, Clone)]
 enum Term {
     Local(usize),
     Var(core::Name),
@@ -136,10 +192,16 @@ impl<'tcx> ErasureCx<'tcx> {
 
     fn lower_term(&mut self, term: core::Term) -> Term {
         match term {
-            core::Term::Lambda { binder, body, .. } => {
-                println!("binder: {} {}",
-                binder.name, binder.ty);
-                self.lower_term(*body)
+            lam @ core::Term::Lambda { .. } => {
+                let mut final_body = lam;
+                let mut names = vec![];
+                while let core::Term::Lambda { binder, body, .. } = final_body {
+                    println!("binder: {} {}",
+                    binder.name, binder.ty);
+                    names.push(binder.name.clone());
+                    final_body = *body;
+                }
+                Term::Lambda(names, Box::new(self.lower_term(final_body)))
             }
             app @ core::Term::App { .. } => {
                 let (head, args) = app.uncurry();

@@ -511,7 +511,7 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
 
             let inductive_ty = self.inductive_ty;
             let ind_hyp = self.ind_hyp.clone();
-            println!("ind_hyp = {}", Term::abstract_pi(vec![ind_hyp.clone()], Term::Type));
+            debug!("ind_hyp = {}", Term::abstract_pi(vec![ind_hyp.clone()], Term::Type));
 
             let minor_premises: Result<_, Error> =
                 inductive_ty.ctors
@@ -555,7 +555,7 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
             for premise in minor_premises.clone() {
                 let ty = try!(self.ty_cx.type_infer_term(&premise.to_term()));
                 let mut ty = ty.0;
-                // println!("premise={} ty={}", premise, ty);
+                // debug!("premise={} ty={}", premise, ty);
                 let mut locals = vec![];
                 while let Term::Forall { binder, term, .. } = ty {
                     locals.push(self.ty_cx.local(binder).with_repr("f".to_string()));
@@ -563,10 +563,10 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
                 }
 
                 for local in locals.iter().rev() {
-                    // println!("{}", local);
+                    // debug!("{}", local);
                 }
                 // If this argument is recursive we should skip it
-                // println!("transformed: {}", Term::apply_all(premise.to_term(), vec![]));
+                // debug!("transformed: {}", Term::apply_all(premise.to_term(), vec![]));
                 rec_args.push(premise.with_repr("f".to_string()));
             }
 
@@ -594,7 +594,7 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
                 reduction: DeltaReduction::Reducible
             };
 
-            // println!("{}", def);
+            // debug!("{}", def);
             self.ty_cx.declare_def(&def)
         }
 }

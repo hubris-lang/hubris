@@ -642,8 +642,8 @@ impl TyCtxt {
                 let term = term.instantiate(&local.to_term());
 
                 let (sort, ty_cs) = try!(self.type_infer_term(&*ty));
-                println!("before forall sort");
                 let (_, sort_cs) = try!(self.ensure_sort(sort));
+                
                 constraints.extend(ty_cs.into_iter());
                 constraints.extend(sort_cs.into_iter());
 

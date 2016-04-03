@@ -52,14 +52,14 @@ impl Constraint {
 
         match self {
             Unification(t, u, j) => {
-                println!("t: {}", t);
-                println!("u: {}", u);
+                debug!("categorize: t={}", t);
+                debug!("categorize: u={}", u);
 
                 let (t_head, t_args) = t.uncurry();
                 let (u_head, u_args) = u.uncurry();
 
-                println!("t_head: {}", t_head);
-                println!("u_head: {}", u_head);
+                debug!("categorize: t_head={}", t_head);
+                debug!("categorize: u_head={}", u_head);
 
                 // if t_head.is_qual() && u_head.is_qual() && t_head == u_head {
                 //     panic!("delta")
@@ -81,7 +81,7 @@ impl Constraint {
                     let (left_head, left_args) = left.uncurry();
 
                     for left_arg in &left_args {
-                        println!("left_arg: {} {}", left_arg, left_arg.is_constant());
+                        debug!("left_arg: {} {}", left_arg, left_arg.is_constant());
                     }
 
                     let args_are_constants =

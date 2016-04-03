@@ -203,14 +203,14 @@ impl<'tcx> Solver<'tcx> {
             let locals = try!(locals);
 
             for local in &locals {
-                println!("local={:?}", local);
+                debug!("local={:?}", local);
             }
 
-            println!("rhs: {}", s);
+            debug!("rhs: {}", s);
 
             let solution = Term::abstract_lambda(locals, s);
 
-            println!("soultion: {} ", solution);
+            debug!("soultion: {} ", solution);
 
             assert!(meta.is_meta());
 
@@ -447,11 +447,11 @@ impl<'tcx> Solver<'tcx> {
                             let bound_vars = t_args.clone();
 
                             for arg in u_args {
-                                println!("{}", arg)
+                                debug!("{}", arg)
                             }
 
 
-                            println!("t_head {}", t_head);
+                            debug!("t_head {}", t_head);
                             let infer_ty = try!(self.ty_cx.type_infer_term(&t_head));
 
                             let t_head = match t_head {
@@ -467,13 +467,13 @@ impl<'tcx> Solver<'tcx> {
                                           .collect();
 
                             let solution = Term::abstract_lambda(locals, term);
-                            println!("infer_ty {}", infer_ty.0);
+                            debug!("infer_ty {}", infer_ty.0);
 
                             for arg in bound_vars {
-                                println!("to_bind: {}", arg);
+                                debug!("to_bind: {}", arg);
                             }
 
-                            println!("sol {}; {} = {}", solution, t_head, u);
+                            debug!("sol {}; {} = {}", solution, t_head, u);
                             self.add_solution(t_head, (solution, j));
                         }
                         ConstraintCategory::FlexFlex => {

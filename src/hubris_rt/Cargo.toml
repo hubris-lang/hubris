@@ -1,0 +1,7 @@
+[package]
+name = "hubris_runtime"
+version = "0.1.0"
+authors = ["Jared Roesch <jroesch@cs.uw.edu>"]
+
+[lib]
+name = "hubris_runtime"
