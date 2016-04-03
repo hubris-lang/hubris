@@ -2,14 +2,25 @@ use std::fmt::{self, Debug, Formatter, Display};
 use std::path::{Path};
 use std::rc::Rc;
 use super::core;
+use super::typeck::TyCtxt;
 use pretty::*;
 
 /// A trait that describes the interface to a particular compiler backend.
 pub trait Backend {
-    fn create_executable<P: AsRef<Path> + Debug>(module: core::Module, output: Option<P>);
+    fn create_executable<P: AsRef<Path> + Debug>(main: core::Definition, ty_cx: TyCtxt, output: Option<P>);
 }
 
 pub struct Rust;
+
+impl Backend for Rust {
+    fn create_executable<P: AsRef<Path> + Debug>(main: core::Definition, ty_cx: TyCtxt, output: Option<P>) {
+        let mut erasure_cx = ErasureCx::new(&ty_cx);
+        for (n, def) in &ty_cx.definitions {
+            let udef = erasure_cx.lower_def(def.clone());
+            println!("{}", udef)
+        }
+    }
+}
 
 struct Module {
     //constructor: Vec<()>,
@@ -59,9 +70,9 @@ impl Pretty for Term {
                 let pargs =
                     args.iter()
                         .map(|x| x.pretty())
-                        .fold("".pretty(),|a,i| a + i);
+                        .collect::<Vec<_>>();
 
-                f.pretty() + parens(pargs)
+                f.pretty() + parens(seperate(&pargs[..], &",".pretty()))
             }
             &Lambda(_, ref body) => body.pretty(),
         }
@@ -74,81 +85,85 @@ impl Display for Term {
     }
 }
 
-
-fn lower_module(module: core::Module) -> Module {
-    Module {
-        definitions:
-            module.defs
-                  .into_iter()
-                  .filter_map(|i| match i {
-                      core::Item::Fn(d) => Some(lower_def(d)),
-                      _ => None,
-                  })
-                  .collect()
-    }
+/// This context is used to do type erasure, and lowering of `core::Term` to an
+/// untyped lambda calculus.
+struct ErasureCx<'tcx> {
+    ty_cx: &'tcx TyCtxt
 }
 
-fn lower_def(def: core::Def) -> Definition {
-    let core::Def {
-        name,
-        args,
-        ret_ty,
-        body,
-    } = def;
-
-    println!("name: {}", name);
-    println!("ty: {}", ret_ty);
-    println!("body: {}", body);
-
-    let def = Definition {
-        name: name,
-        body: lower_term(body),
-    };
-
-    println!("def: {}", def);
-
-    def
-}
-
-fn lower_term(term: core::Term) -> Term {
-    match term {
-        core::Term::Lambda { binder, body, .. } => {
-            println!("binder: {} {}",
-            binder.name, binder.ty);
-            lower_term(*body)
+impl<'tcx> ErasureCx<'tcx> {
+    pub fn new(ty_cx: &'tcx TyCtxt) -> ErasureCx<'tcx> {
+        ErasureCx {
+            ty_cx: ty_cx
         }
-        app @ core::Term::App { .. } => {
-            let (head, args) = app.uncurry();
-            println!("head: {}", head);
-            let lhead = lower_term(head);
-            for arg in &args {
-                println!("args: {}", arg);
+    }
+
+//     fn lower_module(module: core::Module) -> Module {
+//     Module {
+//         definitions:
+//             module.defs
+//                   .into_iter()
+//                   .filter_map(|i| match i {
+//                       core::Item::Fn(d) => Some(lower_def(d)),
+//                       _ => None,
+//                   })
+//                   .collect()
+//     }
+// }
+
+    fn lower_def(&mut self, def: core::Definition) -> Definition {
+        let core::Definition {
+            name,
+            args,
+            ty,
+            body,
+            reduction,
+        } = def;
+
+        println!("name: {}", name);
+        println!("ty: {}", ty);
+        println!("body: {}", body);
+
+        let def = Definition {
+            name: name,
+            body: self.lower_term(body),
+        };
+
+        println!("def: {}", def);
+
+        def
+    }
+
+    fn lower_term(&mut self, term: core::Term) -> Term {
+        match term {
+            core::Term::Lambda { binder, body, .. } => {
+                println!("binder: {} {}",
+                binder.name, binder.ty);
+                self.lower_term(*body)
             }
+            app @ core::Term::App { .. } => {
+                let (head, args) = app.uncurry();
+                println!("head: {}", head);
+                let lhead = self.lower_term(head);
+                for arg in &args {
+                    println!("args: {}", arg);
+                }
             Term::Call(Rc::new(lhead),
                        args.into_iter()
-                           .map(|arg| lower_term(arg))
+                           .map(|arg| self.lower_term(arg))
                            .collect())
-        }
-        core::Term::Var { name } => {
-            println!("name: {}", name);
-            match name {
-                core::Name::Qual { .. } => {
-                    Term::Var(name)
-                },
-                n => Term::Var(n),
-                //l => panic!("{}", l)
             }
-        }
-        _ => panic!()
-    }
-}
-
-
-impl Backend for Rust {
-    fn create_executable<P: AsRef<Path> + Debug>(module: core::Module, output: Option<P>) {
-        let m = lower_module(module);
-        for def in m.definitions {
-            println!("{}", def)
+            core::Term::Var { name } => {
+                println!("name: {}", name);
+                match name {
+                    core::Name::Qual { .. } => {
+                        Term::Var(name)
+                    },
+                    n => Term::Var(n),
+                    //l => panic!("{}", l)
+                }
+            }
+            _ => panic!()
         }
     }
 }

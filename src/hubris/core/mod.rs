@@ -76,26 +76,34 @@ impl Display for Item {
     }
 }
 
-pub type Function = Def;
+pub type Function = Definition;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Def {
+pub struct Definition {
     pub name: Name,
     pub args: Vec<Name>,
-    pub ret_ty: Term,
+    pub ty: Term,
     pub body: Term,
+    pub reduction: DeltaReduction,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DeltaReduction {
+    Reducible,
+    Semireducible,
+    Irreducible,
 }
 
 impl Pretty for Function {
     fn pretty(&self) -> Doc {
         let &Function {
             ref name,
-            ref ret_ty,
+            ref ty,
             ref body,
             ..
         } = self;
         // TODO: Would you fix this TK?
-        Pretty::pretty("def ") + Pretty::pretty(name) + Pretty::pretty(" : ") + Pretty::pretty(ret_ty) +
+        Pretty::pretty("def ") + Pretty::pretty(name) + Pretty::pretty(" : ") + Pretty::pretty(ty) +
         Pretty::pretty(" := \n") + Pretty::pretty(body) + Pretty::pretty("\nend")
     }
 }

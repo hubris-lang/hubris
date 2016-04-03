@@ -4,6 +4,7 @@ use std::cell::RefCell;
 use std::collections::{HashSet, HashMap};
 use std::env;
 use std::path::{PathBuf, Path};
+use std::process;
 use std::io;
 use std::rc::Rc;
 use std::io::prelude::*;
@@ -78,26 +79,42 @@ pub enum SessionType {
 
 impl Session   {
     pub fn empty() -> Session {
+        let home = match env::home_dir() {
+            None => {
+                println!("hubris: unable to locate home directory");
+                process::exit(1);
+            }
+            Some(h) => h
+        };
+
         Session {
             data: Rc::new(RefCell::new(SessionData {
                 terminal: term::stdout().unwrap(), // Not sure about this, we can revisit it later.
                 module_id_counter: 0,
                 imported_files: HashSet::new(),
                 source_maps: HashMap::new(),
-                load_paths: vec![PathBuf::from("/Users/jroesch/.hubris/lib")],
+                load_paths: vec![home.join(".hubris/lib")],
             })),
             ty: SessionType::Repl { loaded_file: None },
         }
     }
 
     pub fn from_root(path: &Path) -> Session {
+        let home = match env::home_dir() {
+            None => {
+                println!("hubris: unable to locate home directory");
+                process::exit(1);
+            }
+            Some(h) => h
+        };
+
         Session {
             data: Rc::new(RefCell::new(SessionData {
                 terminal: term::stdout().unwrap(), // Not sure about this, we can revisit it later.
                 module_id_counter: 0,
                 imported_files: HashSet::new(),
                 source_maps: HashMap::new(),
-                load_paths: vec![PathBuf::from("/Users/jroesch/.hubris/lib")],
+                load_paths: vec![home.join(".hubris/lib")],
             })),
             ty: SessionType::Compiler { root_file: path.to_owned() }
         }

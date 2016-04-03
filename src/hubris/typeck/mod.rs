@@ -5,8 +5,8 @@ mod solver;
 
 use core::{
     self, Name,
-    Term, Binder, Item, Function, Data,
-    Module, Extern, BindingMode};
+    Term, Binder, Item, Definition, Data,
+    Module, Extern, BindingMode, DeltaReduction};
 use super::ast::{Span, HasSpan};
 use super::parser;
 use super::session::{HasSession, Session, Reportable};
@@ -19,19 +19,6 @@ use term::{stdout, StdoutTerminal};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{PathBuf, Path};
-
-pub enum DeltaReduction {
-    Reducible,
-    Semireducible,
-    Irreducible,
-}
-
-/// A definition
-pub struct Definition {
-    ty: Term,
-    term: Term,
-    reduction: DeltaReduction,
-}
 
 pub type ComputationRule = Box<Fn(&TyCtxt, Term) -> Result<Term, Error>>;
 
@@ -51,27 +38,14 @@ impl Axiom {
     }
 }
 
-impl Definition {
-    fn new(ty: Term, term: Term) -> Definition {
-        Definition {
-            ty: ty,
-            term: term,
-            reduction: DeltaReduction::Reducible,
-        }
-    }
-}
 /// A global context for type checking containing the necessary information
 /// needed across type checking all definitions.
 pub struct TyCtxt {
     // We keep these around right now, but I'm not sure if we should.
     pub types: HashMap<Name, Data>,
-    functions: HashMap<Name, Function>,
-
     pub axioms: HashMap<Name, Axiom>,
-    definitions: HashMap<Name, Definition>,
-
+    pub definitions: HashMap<Name, Definition>,
     pub session: Session,
-
     local_counter: RefCell<usize>,
     pub terminal: Box<StdoutTerminal>,
 }
@@ -82,7 +56,6 @@ impl TyCtxt {
     pub fn empty() -> TyCtxt {
         TyCtxt {
             types: HashMap::new(),
-            functions: HashMap::new(),
             axioms: HashMap::new(),
             definitions: HashMap::new(),
             session: Session::empty(),
@@ -160,7 +133,7 @@ impl TyCtxt {
             let emodule =
                 ecx.elaborate_module();
 
-            // Should find a way to gracefully exit, or report error and continue function
+            // Should find a way to gracefully exit, or report error and continue Definition
             match emodule {
                 Err(e) => {
                     try!(ecx.report(e));
@@ -180,7 +153,6 @@ impl TyCtxt {
     pub fn merge(&mut self, ty_cx: TyCtxt) -> Result<(), Error> {
         let TyCtxt {
             types,
-            functions,
             axioms,
             definitions,
             ..
@@ -190,12 +162,6 @@ impl TyCtxt {
 
         for (n, ty) in types {
             if let Some(_) = self.types.insert(n.clone(), ty) {
-                errors.push(Error::NameExists(n))
-            }
-        }
-
-        for (n, fun) in functions {
-            if let Some(_) = self.functions.insert(n.clone(), fun) {
                 errors.push(Error::NameExists(n))
             }
         }
@@ -220,10 +186,10 @@ impl TyCtxt {
         }
     }
 
-    pub fn get_main_body(&self) -> Result<&Term, Error> {
-        match self.functions.get(&Name::from_str("main")) {
+    pub fn get_main(&self) -> Result<&Definition, Error> {
+        match self.definitions.get(&Name::from_str("main")) {
             None => Err(Error::NoMain),
-            Some(ref f) => Ok(&f.body),
+            Some(f) => Ok(f),
         }
     }
 
@@ -244,13 +210,21 @@ impl TyCtxt {
         }
 
         inductive::make_recursor(self, data_type)
+
+        // let mut generated_definitions = vec![];
+        // try!(inductive::make_recursor(self, data_type, &mut generated_definitions))
+        //
+        // for def in generated_definitions {}
     }
 
-    pub fn declare_def(&mut self, f: &Function) -> Result<(), Error> {
-        self.functions.insert(f.name.clone(), f.clone());
-        let (term, ty) = try!(self.type_check_term(&f.body, Some(f.ret_ty.clone())));
-        let def = Definition::new(ty, term);
-        self.definitions.insert(f.name.clone(), def);
+    pub fn declare_def(&mut self, def: &Definition) -> Result<(), Error> {
+        let (term, ty) = try!(self.type_check_term(&def.body, Some(def.ty.clone())));
+
+        let mut def = def.clone();
+        def.body = term;
+        def.ty = ty;
+
+        self.definitions.insert(def.name.clone(), def);
 
         Ok(())
     }
@@ -274,12 +248,12 @@ impl TyCtxt {
         debug!("type_check_def: def={}", def);
         match def {
             &Item::Fn(ref fun) => {
-                let &Function {
-                    ref ret_ty,
+                let &Definition {
+                    ref ty,
                     ref body, ..
                 } = fun;
 
-                try!(self.type_check_term(&body, Some(ret_ty.clone())));
+                try!(self.type_check_term(&body, Some(ty.clone())));
                 Ok(())
             }
             _ => Ok(()),
@@ -349,7 +323,7 @@ impl TyCtxt {
                 // Or we can't implement this
                 match self.definitions.get(q) {
                     None => Ok(n.to_term()), // panic!("failed to lookup name {}", q),
-                    Some(t) => Ok(t.term.clone()),
+                    Some(t) => Ok(t.body.clone()),
                 }
             }
             &DeBruijn { .. } |

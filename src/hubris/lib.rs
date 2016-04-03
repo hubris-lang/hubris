@@ -111,13 +111,8 @@ pub fn compile_file<T: AsRef<Path>>(path: T, output: Option<PathBuf>) -> Result<
     match core_module {
         Err(e) => { try!(ecx.report(e)); },
         Ok(core_module) => {
-            {
-                let main = try!(ecx.ty_cx.get_main_body());
-                let result = try!(ecx.ty_cx.eval(main));
-                println!("main={}", result);
-            }
-
-            Rust::create_executable(core_module, output);
+            let main = try!(ecx.ty_cx.get_main()).clone();
+            Rust::create_executable(main.clone(), ecx.ty_cx, output);
        }
    }
 

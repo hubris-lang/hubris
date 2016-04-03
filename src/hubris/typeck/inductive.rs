@@ -481,8 +481,9 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
         let def = Function {
             name: name,
             args: vec![],
-            ret_ty: ty,
+            ty: ty,
             body: body,
+            reduction: DeltaReduction::Reducible,
         };
 
         debug!("{}", def);
@@ -588,8 +589,9 @@ impl<'i, 'tcx> InductiveCx<'i, 'tcx> {
             let def = Function {
                 name: name,
                 args: vec![],
-                ret_ty: ty,
+                ty: ty,
                 body: body,
+                reduction: DeltaReduction::Reducible
             };
 
             // println!("{}", def);
